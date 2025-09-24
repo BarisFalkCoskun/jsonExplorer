@@ -14,6 +14,8 @@ import { m as motion } from "motion/react";
 import { type Columns } from "components/system/Files/FileManager/Columns/constants";
 import StyledFigure from "components/system/Files/FileEntry/StyledFigure";
 import SubIcons from "components/system/Files/FileEntry/SubIcons";
+import { useMongoDBIcon } from "components/system/Files/FileEntry/useMongoDBIcon";
+import ImageNavigation from "components/system/Files/FileEntry/ImageNavigation";
 import {
   getCachedIconUrl,
   getCachedShortcut,
@@ -179,7 +181,22 @@ const FileEntry: FC<FileEntryProps> = ({
     writeFile,
   } = useFileSystem();
   const [showInFileManager, setShowInFileManager] = useState(false);
+  const [showImageNavigation, setShowImageNavigation] = useState(false);
   const { formats, sizes } = useTheme();
+
+  // MongoDB icon integration
+  const mongoDBIcon = useMongoDBIcon(path);
+  const {
+    isMongoDocument,
+    images,
+    currentImageIndex,
+    hasNavigationArrows,
+    canGoToPrevious,
+    canGoToNext,
+    getCurrentImageUrl,
+    goToPreviousImage,
+    goToNextImage,
+  } = mongoDBIcon;
   const listView = useMemo(() => view === "list", [view]);
   const detailsView = useMemo(() => view === "details", [view]);
   const fileName = useMemo(() => basename(path), [path]);
@@ -331,7 +348,14 @@ const FileEntry: FC<FileEntryProps> = ({
   const onMouseOverButton = useCallback(() => {
     if (listView && isDirectory) preloadImages();
     createTooltip().then(setTooltip);
-  }, [createTooltip, isDirectory, listView, preloadImages]);
+    if (isMongoDocument && hasNavigationArrows) {
+      setShowImageNavigation(true);
+    }
+  }, [createTooltip, isDirectory, listView, preloadImages, isMongoDocument, hasNavigationArrows]);
+
+  const onMouseLeaveButton = useCallback(() => {
+    setShowImageNavigation(false);
+  }, []);
   const lockWidthStyle = useMemo(
     () => ({ maxWidth: columnWidth, minWidth: columnWidth }),
     [columnWidth]
@@ -343,6 +367,15 @@ const FileEntry: FC<FileEntryProps> = ({
     },
     [fileActions, setRenaming]
   );
+
+  // Determine the icon source - use MongoDB image if available, otherwise use default icon
+  const iconSource = useMemo(() => {
+    if (isMongoDocument) {
+      const mongoImageUrl = getCurrentImageUrl();
+      return mongoImageUrl || icon;
+    }
+    return icon;
+  }, [isMongoDocument, getCurrentImageUrl, icon]);
 
   useEffect(() => {
     if (
@@ -588,6 +621,7 @@ const FileEntry: FC<FileEntryProps> = ({
         ref={buttonRef}
         aria-label={name}
         onMouseOverCapture={onMouseOverButton}
+        onMouseLeave={onMouseLeaveButton}
         title={tooltip}
         {...(listView && { ...LIST_VIEW_ANIMATION, as: motion.button })}
         {...useDoubleClick(doubleClickHandler, listView)}
@@ -619,14 +653,27 @@ const FileEntry: FC<FileEntryProps> = ({
             role: "heading",
           })}
         >
-          <Icon
-            ref={iconRef}
-            $eager={loadIconImmediately}
-            $moving={pasteList[path] === "move"}
-            alt=""
-            src={icon}
-            {...FileEntryIconSize[view]}
-          />
+          <div style={{ position: 'relative' }}>
+            <Icon
+              ref={iconRef}
+              $eager={loadIconImmediately}
+              $moving={pasteList[path] === "move"}
+              alt=""
+              src={iconSource}
+              {...FileEntryIconSize[view]}
+            />
+            {isMongoDocument && hasNavigationArrows && (
+              <ImageNavigation
+                show={showImageNavigation}
+                canGoToPrevious={canGoToPrevious}
+                canGoToNext={canGoToNext}
+                currentIndex={currentImageIndex}
+                totalImages={images.length}
+                onPrevious={goToPreviousImage}
+                onNext={goToNextImage}
+              />
+            )}
+          </div>
           <SubIcons
             alt=""
             icon={icon}

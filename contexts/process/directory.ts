@@ -27,6 +27,20 @@ const directory: Processes = {
     icon: "/System/Icons/unknown.webp",
     title: "Open With",
   },
+  MongoDB: {
+    Component: dynamic(() => import("components/system/Dialogs/MongoDB")),
+    allowResizing: false,
+    backgroundColor: "#FFF",
+    defaultSize: {
+      height: 500,
+      width: 500,
+    },
+    dialogProcess: true,
+    hideMaximizeButton: true,
+    hideMinimizeButton: true,
+    icon: "/System/Icons/unknown.webp",
+    title: "MongoDB Connection",
+  },
   Photos: {
     Component: dynamic(() => import("components/apps/Photos")),
     backgroundColor: "#222",

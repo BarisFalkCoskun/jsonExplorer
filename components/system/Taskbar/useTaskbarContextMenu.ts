@@ -55,6 +55,10 @@ const useTaskbarContextMenu = (onStartButton = false): ContextMenuCapture => {
               action: () => open("Run"),
               label: "Run",
             },
+            {
+              action: () => open("MongoDB"),
+              label: "MongoDB Connection",
+            },
             MENU_SEPERATOR
           );
         } else {

@@ -41,7 +41,7 @@ const nextConfig = {
       ],
     },
   ],
-  output: "export",
+  // output: "export", // Temporarily disabled to enable API routes for MongoDB integration
   productionBrowserSourceMaps: false,
   reactProductionProfiling: false,
   reactStrictMode: !isProduction,
