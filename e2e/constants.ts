@@ -68,17 +68,10 @@ export const EXCLUDED_CONSOLE_LOGS = (
       "Blocked autofocusing on a form control in a cross-origin subframe.",
       "Failed to load resource: the server responded with a status of 404 (Not Found)",
       'Error: "Content-Security-Policy:',
-      "an ancestor violates the following Content Security Policy directive",
-      // Messenger
-      "WebSocket connection to 'wss://public.relaying.io/' failed:"
+      "an ancestor violates the following Content Security Policy directive"
     );
 
-    if (browserName === "firefox") {
-      excludedConsoleLogs.push(
-        // Messenger
-        "Firefox can’t establish a connection to the server at wss://"
-      );
-    } else if (browserName === "webkit") {
+    if (browserName === "webkit") {
       excludedConsoleLogs.push(
         // TIC-80
         "Unable to initialize SDL Audio: -1, No audio context available",
@@ -245,7 +238,6 @@ export const START_MENU_APPS = [
   /^DevTools$/,
   /^IRC$/,
   /^Marked$/,
-  /^Messenger$/,
   /^Monaco Editor$/,
   /^Paint$/,
   /^PDF$/,

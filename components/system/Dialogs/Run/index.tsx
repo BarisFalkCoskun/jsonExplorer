@@ -86,13 +86,9 @@ const Run: FC<ComponentProcessProps> = ({ id }) => {
           resourceUrl.length > 0 ? resourceUrl.join(" ") : resourcePid;
       }
 
-      const isNostr = resourcePath.startsWith("nostr:");
-
-      if (isNostr) open("Messenger", { url: resourcePath });
-
       const isIpfs = resourcePath.startsWith("ipfs://");
 
-      if (resourceExists || isNostr || isIpfs || (await exists(resourcePath))) {
+      if (resourceExists || isIpfs || (await exists(resourcePath))) {
         if (isIpfs) {
           try {
             const ipfsData = await getIpfsResource(resourcePath);

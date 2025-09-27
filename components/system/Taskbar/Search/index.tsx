@@ -74,7 +74,7 @@ type TabData = {
 
 export const NO_RESULTS = "NO_RESULTS";
 
-const SUGGESTED = ["FileExplorer", "Terminal", "Messenger", "Browser", "Paint"];
+const SUGGESTED = ["FileExplorer", "Terminal", "Browser", "Paint"];
 
 const GAMES: string[] = [];
 
