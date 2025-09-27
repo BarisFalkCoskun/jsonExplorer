@@ -69,7 +69,6 @@ This project is greatly augmented by code from the open source community. Thank 
 ## App Libraries
 
 - [Boxedwine](https://github.com/danoon2/Boxedwine)
-- [ClassiCube](https://github.com/UnknownShadow200/ClassiCube)
 - [DX-Ball](https://habr.com/en/post/147339/)
 - [emulatorjs](https://github.com/ethanaobrien/emulatorjs)
 - [Eruda](https://github.com/liriliri/eruda)
