@@ -4,11 +4,6 @@ import {
   type ChatCompletionMessageParam,
   type MLCEngine,
 } from "@mlc-ai/web-llm";
-import { type StableDiffusionConfig } from "components/apps/StableDiffusion/types";
-import {
-  runStableDiffusion,
-  libs as StableDiffusionLibs,
-} from "components/system/Desktop/Wallpapers/StableDiffusion";
 import {
   type WorkerMessage,
   type ConvoStyles,
@@ -146,93 +141,61 @@ globalThis.addEventListener(
           summarizer = await globalThis.ai.summarizer.create();
         }
 
-        if (data.imagePrompt && data.offscreenCanvas) {
-          globalThis.tvmjsGlobalEnv = globalThis.tvmjsGlobalEnv || {};
-          globalThis.tvmjsGlobalEnv.logger = (_type: string, message: string) =>
-            globalThis.postMessage({
-              progress: {
-                text: message,
-              },
-            });
+        while (retry++ < 3 && !response) {
+          if (cancel) break;
 
           try {
-            globalThis.importScripts(...StableDiffusionLibs);
-          } catch {
-            // Ignore failure to load libs
-          }
+            if (data.hasWindowAI) {
+              const aiAssistant = session as AILanguageModel;
+              const aiOptions:
+                | AILanguageModelPromptOptions
+                | AISummarizerSummarizeOptions = {
+                signal: abortController.signal,
+              };
 
-          await runStableDiffusion(
-            {
-              prompts: [[data.imagePrompt, ""]],
-            } as StableDiffusionConfig,
-            data.offscreenCanvas,
-            true,
-            false
-          );
-
-          globalThis.tvmjsGlobalEnv.logger("", "");
-
-          if (data.hasWindowAI) {
-            rebuildSession(
-              "I'll try to create that using Stable Diffusion 1.5."
-            );
-          }
-        } else {
-          while (retry++ < 3 && !response) {
-            if (cancel) break;
-
-            try {
-              if (data.hasWindowAI) {
-                const aiAssistant = session as AILanguageModel;
-                const aiOptions:
-                  | AILanguageModelPromptOptions
-                  | AISummarizerSummarizeOptions = {
-                  signal: abortController.signal,
-                };
-
-                if (summarizer && data.summarizeText) {
-                  // eslint-disable-next-line no-await-in-loop
-                  response = await summarizer.summarize(
-                    data.summarizeText,
-                    aiOptions
-                  );
-                  rebuildSession();
-                } else if (aiAssistant) {
-                  response = data.streamId
-                    ? aiAssistant.promptStreaming(data.text, aiOptions)
-                    : // eslint-disable-next-line no-await-in-loop
-                      (await aiAssistant.prompt(data.text, aiOptions)) || "";
-                }
-              } else {
-                prompts.push({
-                  content: data.summarizeText
-                    ? `Summarize:\n\n${data.summarizeText}`
-                    : data.text,
-                  role: "user",
-                  streamId: data.streamId,
-                });
-
-                const stream = Boolean(data.streamId);
+              if (summarizer && data.summarizeText) {
                 // eslint-disable-next-line no-await-in-loop
-                const completions = await engine.chat.completions.create({
-                  logprobs: true,
-                  messages: prompts as ChatCompletionMessageParam[],
-                  stream,
-                  stream_options: { include_usage: false },
-                  temperature: CONVO_STYLE_TEMPS[data.style].temperature,
-                  top_logprobs: CONVO_STYLE_TEMPS[data.style].topK,
-                  ...WEB_LLM_MODEL_CONFIG,
-                });
-
-                response = stream
-                  ? (completions as AsyncIterable<ChatCompletionChunk>)
-                  : (completions as ChatCompletion).choices[0].message
-                      .content || "";
+                response = await summarizer.summarize(
+                  data.summarizeText,
+                  aiOptions
+                );
+                rebuildSession();
+              } else if (aiAssistant) {
+                response = data.streamId
+                  ? aiAssistant.promptStreaming(data.text, aiOptions)
+                  : // eslint-disable-next-line no-await-in-loop
+                    (await aiAssistant.prompt(data.text, aiOptions)) || "";
               }
-            } catch (error) {
-              console.error("Failed to get prompt response.", error);
+            } else {
+              prompts.push({
+                content: data.summarizeText
+                  ? `Summarize:\n\n${data.summarizeText}`
+                  : data.text,
+                role: "user",
+                streamId: data.streamId,
+              });
+
+              const stream = Boolean(data.streamId);
+              // eslint-disable-next-line no-await-in-loop
+              const completions = await engine.chat.completions.create({
+                logprobs: true,
+                messages: prompts as ChatCompletionMessageParam[],
+                stream,
+                stream_options: { include_usage: false },
+                temperature: CONVO_STYLE_TEMPS[data.style].temperature,
+                top_logprobs: CONVO_STYLE_TEMPS[data.style].topK,
+                ...WEB_LLM_MODEL_CONFIG,
+              });
+
+              response = stream
+                ? (completions as AsyncIterable<ChatCompletionChunk>)
+                : (completions as ChatCompletion).choices[0].message
+                    .content || "";
             }
+          } catch (error) {
+            console.error("Failed to get prompt response.", error);
           }
+        }
 
           if (!response) console.error("Failed retires to create response.");
         }

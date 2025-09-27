@@ -24,7 +24,6 @@ export type Message = {
   formattedText: string;
   text: string;
   type: MessageTypes;
-  withCanvas?: boolean;
 };
 
 export type ConvoStyles = "balanced" | "creative" | "precise";
@@ -32,8 +31,6 @@ export type ConvoStyles = "balanced" | "creative" | "precise";
 export type WorkerMessage = {
   hasWindowAI: boolean;
   id: number;
-  imagePrompt?: string;
-  offscreenCanvas?: OffscreenCanvas;
   streamId?: number;
   style: ConvoStyles;
   summarizeText?: string;

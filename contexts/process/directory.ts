@@ -223,17 +223,6 @@ const directory: Processes = {
     singleton: true,
     title: "Screen Saver",
   },
-  StableDiffusion: {
-    Component: dynamic(() => import("components/apps/StableDiffusion")),
-    backgroundColor: "rgb(235, 251, 247)",
-    defaultSize: {
-      height: 644,
-      width: 538,
-    },
-    icon: "/System/Icons/stablediffusion.webp",
-    singleton: true,
-    title: "Stable Diffusion",
-  },
   Terminal: {
     Component: dynamic(() => import("components/apps/Terminal")),
     backgroundBlur: "8px",

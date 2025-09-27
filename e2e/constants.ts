@@ -250,7 +250,6 @@ export const START_MENU_APPS = [
   /^Paint$/,
   /^PDF$/,
   /^Photo Viewer$/,
-  /^Stable Diffusion$/,
   /^Terminal$/,
   /^TinyMCE$/,
   /^Video Player$/,

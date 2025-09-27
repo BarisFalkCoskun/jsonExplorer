@@ -20,8 +20,6 @@ export const WALLPAPER_PATHS: Record<
     import("components/system/Desktop/Wallpapers/ShaderToy/CoastalLandscape"),
   HEXELLS: () => import("components/system/Desktop/Wallpapers/hexells"),
   MATRIX: () => import("components/system/Desktop/Wallpapers/Matrix"),
-  STABLE_DIFFUSION: () =>
-    import("components/system/Desktop/Wallpapers/StableDiffusion"),
   VANTA: () => import("components/system/Desktop/Wallpapers/vantaWaves"),
 };
 
@@ -41,11 +39,6 @@ export const WALLPAPER_WORKERS: Record<string, () => Worker> = {
         import.meta.url
       ),
       { name: "Wallpaper (Hexells)" }
-    ),
-  STABLE_DIFFUSION: (): Worker =>
-    new Worker(
-      new URL("components/apps/StableDiffusion/sd.worker", import.meta.url),
-      { name: "Wallpaper (Stable Diffusion)" }
     ),
   VANTA: (): Worker =>
     new Worker(
@@ -88,11 +81,6 @@ export const WALLPAPER_MENU: WallpaperMenuItem[] = [
     name: "Picture Slideshow",
   },
   {
-    id: "STABLE_DIFFUSION",
-    name: "Stable Diffusion (beta)",
-    requiresWebGPU: true,
-  },
-  {
     id: "VANTA",
     name: "Vanta Waves",
     startsWith: true,
@@ -102,7 +90,5 @@ export const WALLPAPER_MENU: WallpaperMenuItem[] = [
 export const BASE_CANVAS_SELECTOR = ":scope > canvas";
 
 export const BASE_VIDEO_SELECTOR = ":scope > video";
-
-export const STABLE_DIFFUSION_DELAY_IN_MIN = 10;
 
 export const PRELOAD_ID = "preloadWallpaper";

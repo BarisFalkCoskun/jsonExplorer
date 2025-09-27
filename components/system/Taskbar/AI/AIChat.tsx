@@ -8,12 +8,10 @@ import {
 } from "components/system/Taskbar/AI/functions";
 import {
   AIIcon,
-  BackgroundIcon,
   ChatIcon,
   CopyIcon,
   EditIcon,
   PersonIcon,
-  SaveIcon,
   SendFilledIcon,
   SendIcon,
   SpeakIcon,
@@ -28,20 +26,8 @@ import {
 import StyledAIChat from "components/system/Taskbar/AI/StyledAIChat";
 import { CloseIcon } from "components/system/Window/Titlebar/WindowActionIcons";
 import Button from "styles/common/Button";
-import {
-  canvasToBuffer,
-  clsx,
-  getExtension,
-  label,
-  viewWidth,
-} from "utils/functions";
-import {
-  AI_TITLE,
-  AI_WINDOW_ID,
-  DESKTOP_PATH,
-  PREVENT_SCROLL,
-  SAVE_PATH,
-} from "utils/constants";
+import { clsx, getExtension, label, viewWidth } from "utils/functions";
+import { AI_TITLE, AI_WINDOW_ID, PREVENT_SCROLL } from "utils/constants";
 import {
   type MessageTypes,
   type ConvoStyles,
@@ -56,7 +42,6 @@ import { useSession } from "contexts/session";
 import { useWindowAI } from "hooks/useWindowAI";
 import { useFileSystem } from "contexts/fileSystem";
 import { readPdfText } from "components/apps/PDF/functions";
-import { useSnapshots } from "hooks/useSnapshots";
 
 type AIChatProps = {
   toggleAI: () => void;
@@ -88,8 +73,7 @@ const AIChat: FC<AIChatProps> = ({ toggleAI }) => {
       text: string | undefined,
       type: MessageTypes,
       formattedText?: string,
-      streamId?: number,
-      withCanvas = false
+      streamId?: number
     ): void => {
       if (text) {
         setConversation((prevMessages) => {
@@ -97,7 +81,6 @@ const AIChat: FC<AIChatProps> = ({ toggleAI }) => {
             formattedText: responseTweaks(formattedText || text),
             text,
             type,
-            withCanvas,
           };
 
           if (streamId) {
@@ -169,7 +152,7 @@ const AIChat: FC<AIChatProps> = ({ toggleAI }) => {
   );
   const [containerElement, setContainerElement] =
     useState<HTMLElement | null>();
-  const { removeFromStack, setWallpaper } = useSession();
+  const { removeFromStack } = useSession();
   const { zIndex, ...focusableProps } = useFocusable(
     AI_WINDOW_ID,
     undefined,
@@ -185,7 +168,6 @@ const AIChat: FC<AIChatProps> = ({ toggleAI }) => {
     textArea.style.height = `${textArea.scrollHeight}px`;
   }, []);
   const { exists, readFile, stat } = useFileSystem();
-  const canvasRefs = useRef<Record<number, HTMLCanvasElement>>({});
   const sendMessage = useCallback(async () => {
     const { text } = conversation[conversation.length - 1];
 
@@ -196,7 +178,6 @@ const AIChat: FC<AIChatProps> = ({ toggleAI }) => {
     let summarizeText = "";
     const lcText = text.toLowerCase();
     const isSummarize = lcText.startsWith("summarize: /");
-    const isGenerate = lcText.startsWith("generate: ");
 
     if (isSummarize) {
       const docPath = text.slice(11).trim();
@@ -216,16 +197,6 @@ const AIChat: FC<AIChatProps> = ({ toggleAI }) => {
           summarizeText = await readPdfText(docText);
         }
       }
-    } else if (isGenerate) {
-      addMessage(
-        text.slice(10).trim(),
-        "ai",
-        "I'll try to create that.",
-        conversation.length,
-        true
-      );
-
-      return;
     }
 
     aiWorker.current?.postMessage({
@@ -237,7 +208,6 @@ const AIChat: FC<AIChatProps> = ({ toggleAI }) => {
       text,
     });
   }, [
-    addMessage,
     aiWorker,
     conversation,
     convoStyle,
@@ -246,30 +216,6 @@ const AIChat: FC<AIChatProps> = ({ toggleAI }) => {
     readFile,
     stat,
   ]);
-  const { createSnapshot } = useSnapshots();
-  const saveCanvasImage = useCallback(
-    async (
-      index: number,
-      saveName: string,
-      savePath: string
-    ): Promise<string> => {
-      const canvas = canvasRefs.current[index];
-
-      if (canvas) {
-        return createSnapshot(
-          `${saveName}.png`,
-          canvasToBuffer(canvas),
-          undefined,
-          false,
-          savePath
-        );
-      }
-
-      return "";
-    },
-    [createSnapshot]
-  );
-
   useEffect(() => {
     textAreaRef.current?.focus(PREVENT_SCROLL);
   }, []);
@@ -429,7 +375,7 @@ const AIChat: FC<AIChatProps> = ({ toggleAI }) => {
         </div>
         <div className="conversation">
           {conversation.map(
-            ({ formattedText, type, text, withCanvas }, index) => (
+            ({ formattedText, type, text }, index) => (
               // eslint-disable-next-line react/no-array-index-key
               <div key={index} className={type}>
                 {(index === 0 || conversation[index - 1].type !== type) && (
@@ -470,10 +416,7 @@ const AIChat: FC<AIChatProps> = ({ toggleAI }) => {
                   className={clsx({
                     controls: true,
                     hidden:
-                      responding &&
-                      !withCanvas &&
-                      index === conversation.length - 1,
-                    invisible: responding && !!withCanvas,
+                      responding && index === conversation.length - 1,
                     last: index === lastAiMessageIndex,
                   })}
                 >
@@ -515,84 +458,7 @@ const AIChat: FC<AIChatProps> = ({ toggleAI }) => {
                       <SpeakIcon />
                     </button>
                   )}
-                  {type === "ai" && withCanvas && (
-                    <>
-                      <button
-                        className="control"
-                        onClick={() =>
-                          saveCanvasImage(index, text, DESKTOP_PATH)
-                        }
-                        type="button"
-                        {...label("Save")}
-                      >
-                        <SaveIcon />
-                      </button>
-                      <button
-                        className="control"
-                        onClick={() =>
-                          saveCanvasImage(index, text, SAVE_PATH).then(
-                            (newFileName) =>
-                              setWallpaper(`${SAVE_PATH}/${newFileName}`)
-                          )
-                        }
-                        type="button"
-                        {...label("Set as background")}
-                      >
-                        <BackgroundIcon />
-                      </button>
-                    </>
-                  )}
                 </div>
-                {withCanvas && (
-                  <div
-                    className={clsx({
-                      generating:
-                        responding && index === conversation.length - 1,
-                      "image-container": true,
-                    })}
-                  >
-                    <canvas
-                      ref={(canvas) => {
-                        if (
-                          !(canvas instanceof HTMLCanvasElement) ||
-                          canvasRefs.current[index] === canvas
-                        ) {
-                          return;
-                        }
-
-                        canvasRefs.current[index] = canvas;
-
-                        try {
-                          const offscreenCanvas =
-                            canvas.transferControlToOffscreen();
-
-                          aiWorker.current?.postMessage(
-                            {
-                              hasWindowAI,
-                              id: sessionIdRef.current,
-                              imagePrompt: text,
-                              offscreenCanvas,
-                              streamId: STREAMING_SUPPORT
-                                ? conversation.length
-                                : undefined,
-                              style: convoStyle,
-                              text,
-                            },
-                            [offscreenCanvas]
-                          );
-                        } catch {
-                          // Ignore failure to transfer control to offscreen
-                        }
-                      }}
-                      height={512}
-                      width={512}
-                    />
-                    <div className="prompt">&quot;{text}&quot;</div>
-                    <div className="powered-by">
-                      <div>Powered by Stable Diffusion 1.5</div>
-                    </div>
-                  </div>
-                )}
               </div>
             )
           )}
