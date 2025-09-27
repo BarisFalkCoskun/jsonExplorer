@@ -71,13 +71,7 @@ export const EXCLUDED_CONSOLE_LOGS = (
       "an ancestor violates the following Content Security Policy directive"
     );
 
-    if (browserName === "webkit") {
-      excludedConsoleLogs.push(
-        // TIC-80
-        "Unable to initialize SDL Audio: -1, No audio context available",
-        "Unable to initialize SDL Game Controller: -1, Gamepads not supported"
-      );
-    } else if (browserName === "chromium") {
+    if (browserName === "chromium") {
       excludedConsoleLogs.push(
         // Browser
         "Blocked autofocusing on a <textarea> element in a cross-origin subframe"

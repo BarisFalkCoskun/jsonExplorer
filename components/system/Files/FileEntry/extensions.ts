@@ -92,10 +92,6 @@ const types = {
     process: ["Photos", ...TEXT_EDITORS],
     type: "Scalable Vector Graphics File",
   },
-  Tic80: {
-    process: ["Tic80"],
-    type: "TIC-80 Cartridge",
-  },
   WasmFile: {
     command: "wapm",
     icon: "wapm",
@@ -141,7 +137,6 @@ const extensions: Record<string, Extension> = {
   ".spl": types.FutureSplash,
   ".svg": types.SvgFile,
   ".swf": types.ShockwaveFlash,
-  ".tic": types.Tic80,
   ".ttf": types.Font,
   ".wasm": types.WasmFile,
   ".whtml": types.WysiwygHtmlDocument,
