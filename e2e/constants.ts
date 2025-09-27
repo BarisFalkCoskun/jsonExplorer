@@ -236,7 +236,6 @@ export const START_BUTTON_MENU_ITEMS = [
 export const START_MENU_APPS = [
   /^Browser$/,
   /^DevTools$/,
-  /^IRC$/,
   /^Marked$/,
   /^Monaco Editor$/,
   /^Paint$/,

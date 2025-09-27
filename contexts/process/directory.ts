@@ -54,17 +54,6 @@ const directory: Processes = {
     icon: FOLDER_ICON,
     title: "File Explorer",
   },
-  IRC: {
-    Component: dynamic(() => import("components/apps/IRC")),
-    backgroundColor: "#FFF",
-    defaultSize: {
-      height: 512,
-      width: 704,
-    },
-    icon: "/System/Icons/kiwiirc.webp",
-    libs: ["/Program Files/kiwiirc/index.html"],
-    title: "IRC",
-  },
   JSDOS: {
     Component: dynamic(() => import("components/apps/JSDOS")),
     autoSizing: true,
