@@ -1,4 +1,3 @@
-import { emulatorCores } from "components/apps/Emulator/config";
 import { EDITABLE_IMAGE_FILE_EXTENSIONS, TEXT_EDITORS } from "utils/constants";
 
 type Extension = {
@@ -23,11 +22,6 @@ const types = {
     icon: "image",
     process: ["FileExplorer"],
     type: "Disc Image File",
-  },
-  Emulator: {
-    icon: "emulator",
-    process: ["Emulator"],
-    type: "Game ROM File",
   },
   Font: {
     icon: "font",
@@ -153,9 +147,5 @@ const addType =
   };
 
 EDITABLE_IMAGE_FILE_EXTENSIONS.forEach(addType(types.GraphicsEditor));
-
-Object.values(emulatorCores).forEach(({ ext }) =>
-  ext.forEach(addType(types.Emulator))
-);
 
 export default extensions;

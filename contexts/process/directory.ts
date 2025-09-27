@@ -28,22 +28,6 @@ const directory: Processes = {
     singleton: true,
     title: "DevTools",
   },
-  Emulator: {
-    Component: dynamic(() => import("components/apps/Emulator")),
-    backgroundColor: "#000",
-    defaultSize: {
-      height: 400,
-      width: 600,
-    },
-    dependantLibs: [
-      "/Program Files/EmulatorJs/emu-css.min.css",
-      "/Program Files/EmulatorJs/emulator.min.js",
-    ],
-    icon: "/System/Icons/emulator.webp",
-    libs: ["/Program Files/EmulatorJs/loader.js"],
-    lockAspectRatio: true,
-    title: "Emulator",
-  },
   FileExplorer: {
     Component: dynamic(() => import("components/apps/FileExplorer")),
     backgroundColor: "#202020",
