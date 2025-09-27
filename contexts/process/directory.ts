@@ -3,25 +3,6 @@ import { type Processes } from "contexts/process/types";
 import { FOLDER_ICON, TASKBAR_HEIGHT } from "utils/constants";
 
 const directory: Processes = {
-  BoxedWine: {
-    Component: dynamic(() => import("components/apps/BoxedWine")),
-    allowResizing: false,
-    backgroundColor: "#000",
-    defaultSize: {
-      height: 480,
-      width: 640,
-    },
-    dependantLibs: ["/Program Files/BoxedWine/boxedwine.wasm"],
-    icon: "/System/Icons/boxedwine.webp",
-    libs: [
-      "/Program Files/BoxedWine/browserfs.boxedwine.js",
-      "/Program Files/BoxedWine/boxedwine-shell.js",
-      "/Program Files/BoxedWine/boxedwine.js",
-    ],
-    lockAspectRatio: true,
-    singleton: true,
-    title: "BoxedWine",
-  },
   Browser: {
     Component: dynamic(() => import("components/apps/Browser")),
     backgroundColor: "#FFF",

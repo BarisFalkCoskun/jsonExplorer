@@ -259,13 +259,7 @@ export const START_MENU_APPS = [
 ];
 
 export const START_MENU_FOLDERS = {
-  Emulators: [
-    /^BoxedWine$/,
-    /^EmulatorJS$/,
-    /^js-dos$/,
-    /^Ruffle$/,
-    /^Virtual x86$/,
-  ],
+  Emulators: [/^EmulatorJS$/, /^js-dos$/, /^Ruffle$/, /^Virtual x86$/],
   Games: [],
 };
 

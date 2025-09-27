@@ -11,7 +11,7 @@ type Extension = {
 const types = {
   Application: {
     icon: "executable",
-    process: ["BoxedWine", "JSDOS"],
+    process: ["JSDOS"],
     type: "Application",
   },
   AudioPlaylist: {
@@ -114,7 +114,7 @@ const types = {
   },
   ZipFile: {
     icon: "compressed",
-    process: ["FileExplorer", "BoxedWine", "JSDOS"],
+    process: ["FileExplorer", "JSDOS"],
     type: "Compressed (zipped) Folder",
   },
 };
