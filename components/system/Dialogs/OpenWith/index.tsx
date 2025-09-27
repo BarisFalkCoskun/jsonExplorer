@@ -22,7 +22,6 @@ const INCLUDED_PROCESSES = new Set([
   "Photos",
   "Ruffle",
   "TinyMCE",
-  "V86",
   "VideoPlayer",
   "Vim",
   "Webamp",

@@ -7,7 +7,6 @@ import { runJs } from "components/apps/Terminal/js";
 import { colorAttributes, rgbAnsi } from "components/apps/Terminal/color";
 import {
   BACKUP_NAME_SERVER,
-  LINUX_IMAGE_PATH,
   PI_ASCII,
   PRIMARY_NAME_SERVER,
   config,
@@ -1121,8 +1120,7 @@ const useCommandInterpreter = (
             break;
           case "wsl":
           case "linux":
-            open("V86", { url: LINUX_IMAGE_PATH });
-            updateRecentFiles(LINUX_IMAGE_PATH, "V86");
+            printLn("Linux support is no longer available.");
             break;
           case "xlsx": {
             const [file, format = "xlsx"] = commandArgs;

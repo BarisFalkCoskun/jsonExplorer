@@ -257,21 +257,6 @@ const directory: Processes = {
     icon: "/System/Icons/copying.webp",
     title: "",
   },
-  V86: {
-    Component: dynamic(() => import("components/apps/V86")),
-    allowResizing: false,
-    autoSizing: true,
-    backgroundColor: "#000",
-    defaultSize: {
-      height: 200,
-      width: 320,
-    },
-    dependantLibs: ["/Program Files/Virtual x86/v86.wasm"],
-    icon: "/System/Icons/v86.webp",
-    libs: ["/Program Files/Virtual x86/libv86.js"],
-    preferProcessIcon: true,
-    title: "Virtual x86",
-  },
   VideoPlayer: {
     Component: dynamic(() => import("components/apps/VideoPlayer")),
     autoSizing: true,

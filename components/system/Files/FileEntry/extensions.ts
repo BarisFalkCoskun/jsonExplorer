@@ -21,7 +21,7 @@ const types = {
   },
   DiscImage: {
     icon: "image",
-    process: ["V86"],
+    process: ["FileExplorer"],
     type: "Disc Image File",
   },
   Emulator: {
@@ -62,7 +62,7 @@ const types = {
   },
   MountableDiscImage: {
     icon: "image",
-    process: ["FileExplorer", "V86"],
+    process: ["FileExplorer"],
     type: "Disc Image File",
   },
   Music: {

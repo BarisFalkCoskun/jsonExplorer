@@ -48,5 +48,3 @@ export const PRIMARY_NAME_SERVER = [
   "1.1.1.1",
 ];
 export const BACKUP_NAME_SERVER = ["https://dns.google/resolve", "8.8.8.8"];
-
-export const LINUX_IMAGE_PATH = "/System/linux.bin";

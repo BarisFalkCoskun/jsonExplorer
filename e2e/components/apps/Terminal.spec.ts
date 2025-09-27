@@ -379,7 +379,12 @@ test.describe("has commands", () => {
 
   test("wsl", async ({ page }) => {
     await sendToTerminal({ page }, "wsl");
-    await windowTitlebarTextIsVisible(/linux.bin/, { page });
+    await terminalHasText(
+      { page },
+      "Linux support is no longer available.",
+      -1,
+      true
+    );
   });
 
   test("xlsx", async ({ page }) => {
