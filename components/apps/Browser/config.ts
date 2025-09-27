@@ -12,13 +12,6 @@ type WaybackUrlInfo = {
   archived_snapshots: { closest: { url: string } };
 };
 
-export const DINO_GAME = {
-  icon: "/System/Icons/Favicons/dino.webp",
-  name: "T-Rex Chrome Dino Game",
-  path: "/Program Files/Browser/dino/index.html",
-  url: "chrome://dino",
-};
-
 export const bookmarks: Bookmark[] = [
   {
     icon: FAVICON_BASE_PATH,
@@ -30,7 +23,6 @@ export const bookmarks: Bookmark[] = [
     name: "Index of /",
     url: "http://localhost/",
   },
-  DINO_GAME,
   {
     icon: "/System/Icons/Favicons/google.webp",
     name: "Google",
