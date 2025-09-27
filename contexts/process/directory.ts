@@ -242,19 +242,6 @@ const directory: Processes = {
     singleton: true,
     title: "Screen Saver",
   },
-  SpaceCadet: {
-    Component: dynamic(() => import("components/apps/SpaceCadet")),
-    backgroundColor: "#000",
-    defaultSize: {
-      height: 428,
-      width: 600,
-    },
-    dependantLibs: ["/Program Files/SpaceCadet/SpaceCadetPinball.wasm"],
-    icon: "/System/Icons/pinball.webp",
-    libs: ["/Program Files/SpaceCadet/SpaceCadetPinball.js"],
-    lockAspectRatio: true,
-    title: "Space Cadet",
-  },
   StableDiffusion: {
     Component: dynamic(() => import("components/apps/StableDiffusion")),
     backgroundColor: "rgb(235, 251, 247)",

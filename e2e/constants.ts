@@ -266,7 +266,7 @@ export const START_MENU_FOLDERS = {
     /^Ruffle$/,
     /^Virtual x86$/,
   ],
-  Games: [/^Space Cadet$/],
+  Games: [],
 };
 
 export const TEST_APP_CONTAINER_APP = "Marked";
