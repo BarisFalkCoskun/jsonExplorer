@@ -54,23 +54,6 @@ const directory: Processes = {
     icon: FOLDER_ICON,
     title: "File Explorer",
   },
-  JSDOS: {
-    Component: dynamic(() => import("components/apps/JSDOS")),
-    autoSizing: true,
-    backgroundColor: "#000",
-    defaultSize: {
-      height: 200,
-      width: 320,
-    },
-    dependantLibs: ["/Program Files/js-dos/wdosbox.wasm"],
-    icon: "/System/Icons/jsdos.webp",
-    libs: [
-      "/Program Files/js-dos/emulators.js",
-      "/Program Files/js-dos/emulators-ui.js",
-    ],
-    lockAspectRatio: true,
-    title: "js-dos v7",
-  },
   Marked: {
     Component: dynamic(() => import("components/apps/Marked")),
     backgroundColor: "#FFF",

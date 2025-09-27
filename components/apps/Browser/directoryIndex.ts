@@ -42,7 +42,6 @@ const extensionIconToIndexIcon: Record<string, string> = {
   executable: "binary",
   font: "a",
   image: "diskimg",
-  jsdos: "compressed",
   marked: "layout",
   pdf: "layout",
   python: "p",

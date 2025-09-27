@@ -1001,7 +1001,6 @@ export const getMimeType = (url: string, ext?: string): string => {
       return "image/webp";
     case ".xml":
       return "application/xml";
-    case ".jsdos":
     case ".pk3":
     case ".wsz":
     case ".zip":

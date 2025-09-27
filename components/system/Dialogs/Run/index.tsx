@@ -31,7 +31,6 @@ const OPEN_ID = "open";
 export const resourceAliasMap: Record<string, string> = {
   cmd: "Terminal",
   code: "MonacoEditor",
-  dos: "JSDOS",
   explorer: "FileExplorer",
   monaco: "MonacoEditor",
   mspaint: "Paint",

@@ -20,7 +20,6 @@ const KNOWN_IDB_DBS = [
   "ejs-romsdata",
   "ejs-states",
   "ejs-system",
-  "js-dos-cache (emulators-ui-saves)",
   "keyval-store",
 ];
 

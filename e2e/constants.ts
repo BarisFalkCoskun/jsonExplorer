@@ -243,7 +243,7 @@ export const START_MENU_APPS = [
 ];
 
 export const START_MENU_FOLDERS = {
-  Emulators: [/^EmulatorJS$/, /^js-dos$/, /^Ruffle$/],
+  Emulators: [/^EmulatorJS$/, /^Ruffle$/],
   Games: [],
 };
 
