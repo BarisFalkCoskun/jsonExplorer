@@ -76,7 +76,7 @@ export const NO_RESULTS = "NO_RESULTS";
 
 const SUGGESTED = ["FileExplorer", "Terminal", "Messenger", "Browser", "Paint"];
 
-const GAMES = ["SpaceCadet", "Quake3", "DXBall"];
+const GAMES = ["SpaceCadet", "Quake3"];
 
 const METADATA = {
   Documents: {

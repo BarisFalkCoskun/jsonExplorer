@@ -32,15 +32,6 @@ const directory: Processes = {
     icon: "/System/Icons/chromium.webp",
     title: "Browser",
   },
-  DXBall: {
-    Component: dynamic(() => import("components/apps/DX-Ball")),
-    backgroundColor: "#000",
-    icon: "/System/Icons/dxball.webp",
-    libs: ["/Program Files/DX-Ball/game.js"],
-    lockAspectRatio: true,
-    singleton: true,
-    title: "DX-Ball",
-  },
   DevTools: {
     Component: dynamic(() => import("components/apps/DevTools")),
     backgroundColor: "#242424",
