@@ -197,8 +197,7 @@ globalThis.addEventListener(
           }
         }
 
-          if (!response) console.error("Failed retires to create response.");
-        }
+        if (!response) console.error("Failed retires to create response.");
       } catch (error) {
         console.error("Failed to create text session.", error);
       }
