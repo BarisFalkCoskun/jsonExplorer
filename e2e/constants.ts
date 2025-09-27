@@ -82,9 +82,7 @@ export const EXCLUDED_CONSOLE_LOGS = (
       excludedConsoleLogs.push(
         // TIC-80
         "Unable to initialize SDL Audio: -1, No audio context available",
-        "Unable to initialize SDL Game Controller: -1, Gamepads not supported",
-        // Quake 3
-        "WebGL: INVALID_ENUM: texParameter: invalid parameter name"
+        "Unable to initialize SDL Game Controller: -1, Gamepads not supported"
       );
     } else if (browserName === "chromium") {
       excludedConsoleLogs.push(
@@ -268,7 +266,7 @@ export const START_MENU_FOLDERS = {
     /^Ruffle$/,
     /^Virtual x86$/,
   ],
-  Games: [/^Quake III Arena$/, /^Space Cadet$/],
+  Games: [/^Space Cadet$/],
 };
 
 export const TEST_APP_CONTAINER_APP = "Marked";
