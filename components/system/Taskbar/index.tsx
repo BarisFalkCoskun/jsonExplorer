@@ -1,12 +1,14 @@
-import { memo, useCallback, useState, useMemo } from "react";
+import { memo, useCallback, useState } from "react";
 import dynamic from "next/dynamic";
 import { AnimatePresence } from "motion/react";
 import {
   importAIButton,
   importAIChat,
+  importCalendar,
   importSearch,
   importStartMenu,
 } from "components/system/Taskbar/functions";
+import Clock from "components/system/Taskbar/Clock";
 import SearchButton from "components/system/Taskbar/Search/SearchButton";
 import StartButton from "components/system/Taskbar/StartButton";
 import StyledTaskbar from "components/system/Taskbar/StyledTaskbar";
@@ -18,14 +20,16 @@ import { useSession } from "contexts/session";
 
 const AIButton = dynamic(importAIButton);
 const AIChat = dynamic(importAIChat);
+const Calendar = dynamic(importCalendar);
 const Search = dynamic(importSearch);
 const StartMenu = dynamic(importStartMenu);
 
 const Taskbar: FC = () => {
   const [startMenuVisible, setStartMenuVisible] = useState(false);
   const [searchVisible, setSearchVisible] = useState(false);
+  const [calendarVisible, setCalendarVisible] = useState(false);
   const [aiVisible, setAIVisible] = useState(false);
-  const clockWidth = useMemo(() => CLOCK_CANVAS_BASE_WIDTH, []);
+  const [clockWidth, setClockWidth] = useState(CLOCK_CANVAS_BASE_WIDTH);
   const { aiEnabled } = useSession();
   const hasWindowAI = useWindowAI();
   const toggleStartMenu = useCallback(
@@ -37,6 +41,13 @@ const Taskbar: FC = () => {
     (showSearch?: boolean): void =>
       setSearchVisible(
         (currentSearchState) => showSearch ?? !currentSearchState
+      ),
+    []
+  );
+  const toggleCalendar = useCallback(
+    (showCalendar?: boolean): void =>
+      setCalendarVisible(
+        (currentCalendarState) => showCalendar ?? !currentCalendarState
       ),
     []
   );
@@ -65,9 +76,18 @@ const Taskbar: FC = () => {
           toggleSearch={toggleSearch}
         />
         <TaskbarEntries clockWidth={clockWidth} hasAI={hasAI} />
+        <Clock
+          hasAI={hasAI}
+          setClockWidth={setClockWidth}
+          toggleCalendar={toggleCalendar}
+          width={clockWidth}
+        />
         {hasAI && <AIButton aiVisible={aiVisible} toggleAI={toggleAI} />}
       </StyledTaskbar>
       <AnimatePresence initial={false} presenceAffectsLayout={false}>
+        {calendarVisible && (
+          <Calendar key="calendar" toggleCalendar={toggleCalendar} />
+        )}
         {aiVisible && <AIChat key="aiChat" toggleAI={toggleAI} />}
       </AnimatePresence>
     </>

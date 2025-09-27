@@ -38,6 +38,13 @@ import {
 } from "utils/functions";
 import { getMountUrl, isMountedFolder } from "contexts/fileSystem/core";
 
+const stopGlobalMusicVisualization = (): void => {
+  window.WebampGlobal?.store.dispatch({
+    enabled: false,
+    type: "SET_MILKDROP_DESKTOP",
+  });
+};
+
 const NEW_FOLDER = "New folder";
 const NEW_TEXT_DOCUMENT = "New Text Document.txt";
 const NEW_RTF_DOCUMENT = "New Rich Text Document.whtml";
@@ -389,6 +396,9 @@ const useFolderContextMenu = (
           ADD_FILE,
           ...(isFileSystemMappingSupported() ? [MAP_DIRECTORY] : []),
         ];
+        const isMusicVisualizationRunning =
+          document.querySelector("main .webamp-desktop canvas") instanceof
+          HTMLCanvasElement;
         const mountUrl = getMountUrl(url, rootFs?.mntMap || {});
         const isReadOnly =
           MOUNTABLE_EXTENSIONS.has(getExtension(url)) ||
@@ -453,6 +463,9 @@ const useFolderContextMenu = (
                       ...menu,
                       {
                         action: () => {
+                          if (isMusicVisualizationRunning) {
+                            stopGlobalMusicVisualization();
+                          }
                           setWallpaper(item.id);
                         },
                         label: item.name || item.id,
@@ -461,7 +474,16 @@ const useFolderContextMenu = (
                           : wallpaperImage === item.id,
                       },
                     ],
-                    []
+                    isMusicVisualizationRunning
+                      ? [
+                          {
+                            action: stopGlobalMusicVisualization,
+                            checked: true,
+                            label: "Music Visualization",
+                          },
+                          MENU_SEPERATOR,
+                        ]
+                      : []
                   ),
                 },
                 ...(canCapture
@@ -481,6 +503,10 @@ const useFolderContextMenu = (
             : [
                 MENU_SEPERATOR,
                 ...FS_COMMANDS,
+                {
+                  action: () => open("Terminal", { url }),
+                  label: "Open Terminal here",
+                },
                 MENU_SEPERATOR,
                 {
                   action: () => pasteToFolder(event),

@@ -2,6 +2,7 @@ import { basename, dirname, join } from "path";
 import ini from "ini";
 import { type FSModule } from "browserfs/dist/node/core/FS";
 import type Stats from "browserfs/dist/node/core/node_fs_stats";
+import { monacoExtensions } from "components/apps/MonacoEditor/extensions";
 import extensions from "components/system/Files/FileEntry/extensions";
 import { type FileInfo } from "components/system/Files/FileEntry/useFileInfo";
 import { type FileStat } from "components/system/Files/FileManager/functions";
@@ -124,6 +125,7 @@ const getDefaultFileViewer = (extension: string): string => {
   if (VIDEO_FILE_EXTENSIONS.has(extension)) return "VideoPlayer";
   if (DECODED_VIDEO_FILE_EXTENSIONS.has(extension)) return "VideoPlayer";
   if (IMAGE_FILE_EXTENSIONS.has(extension)) return "Photos";
+  if (monacoExtensions.has(extension)) return "MonacoEditor";
 
   return "";
 };

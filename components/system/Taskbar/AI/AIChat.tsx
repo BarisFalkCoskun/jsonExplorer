@@ -55,6 +55,7 @@ import useFocusable from "components/system/Window/useFocusable";
 import { useSession } from "contexts/session";
 import { useWindowAI } from "hooks/useWindowAI";
 import { useFileSystem } from "contexts/fileSystem";
+import { readPdfText } from "components/apps/PDF/functions";
 import { useSnapshots } from "hooks/useSnapshots";
 
 type AIChatProps = {
@@ -211,6 +212,8 @@ const AIChat: FC<AIChatProps> = ({ toggleAI }) => {
           );
 
           summarizeText = domContent.body.textContent || "";
+        } else if (extension === ".pdf") {
+          summarizeText = await readPdfText(docText);
         }
       }
     } else if (isGenerate) {

@@ -4,6 +4,11 @@ import {
   type ChatCompletionMessageParam,
   type MLCEngine,
 } from "@mlc-ai/web-llm";
+import { type StableDiffusionConfig } from "components/apps/StableDiffusion/types";
+import {
+  runStableDiffusion,
+  libs as StableDiffusionLibs,
+} from "components/system/Desktop/Wallpapers/StableDiffusion";
 import {
   type WorkerMessage,
   type ConvoStyles,

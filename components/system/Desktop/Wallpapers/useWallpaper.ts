@@ -27,6 +27,7 @@ import {
   MILLISECONDS_IN_MINUTE,
   NATIVE_IMAGE_FORMATS,
   PICTURES_FOLDER,
+  PROMPT_FILE,
   SLIDESHOW_FILE,
   SLIDESHOW_TIMEOUT_IN_MILLISECONDS,
   UNSUPPORTED_SLIDESHOW_EXTENSIONS,
@@ -84,7 +85,7 @@ const useWallpaper = (
     [desktopRef, wallpaperName]
   );
   const loadWallpaper = useCallback(
-    (keepCanvas?: boolean) => {
+    async (keepCanvas?: boolean) => {
       if (!desktopRef.current || window.DEBUG_DISABLE_WALLPAPER) return;
 
       let config: WallpaperConfig | undefined;
@@ -122,6 +123,16 @@ const useWallpaper = (
                 forwardSpeed: -0.25,
               }),
         };
+      } else if (wallpaperName === "STABLE_DIFFUSION") {
+        const promptsFilePath = `${PICTURES_FOLDER}/${PROMPT_FILE}`;
+
+        if (await exists(promptsFilePath)) {
+          config = {
+            prompts: JSON.parse(
+              (await readFile(promptsFilePath))?.toString() || "[]"
+            ) as [string, string][],
+          };
+        }
       }
 
       document.documentElement.style.setProperty(
@@ -214,6 +225,8 @@ const useWallpaper = (
     },
     [
       desktopRef,
+      exists,
+      readFile,
       resetWallpaper,
       setWallpaper,
       vantaWireframe,

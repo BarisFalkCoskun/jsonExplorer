@@ -17,7 +17,13 @@ const DetailsTab = dynamic(
   () => import("components/system/Dialogs/Properties/DetailsTab")
 );
 
-const MEDIA_APPS = new Set(["Photos", "VideoPlayer"]);
+const MEDIA_APPS = new Set([
+  "PDF",
+  "Photos",
+  "Ruffle",
+  "VideoPlayer",
+  "Webamp",
+]);
 
 const EXIF_TYPES = new Set([".jpg", "jpeg", ".tif", ".tiff"]);
 

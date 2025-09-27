@@ -9,6 +9,7 @@ import {
   Pictures,
   Power,
   SideMenu,
+  Videos,
 } from "components/system/StartMenu/Sidebar/SidebarIcons";
 import StyledSidebar from "components/system/StartMenu/Sidebar/StyledSidebar";
 import { useFileSystem } from "contexts/fileSystem";
@@ -96,6 +97,19 @@ const Sidebar: FC<SidebarProps> = ({ height }) => {
               icon: <Pictures />,
               name: "Pictures",
               ...(collapsed && { tooltip: "Pictures" }),
+            }
+          : undefined,
+        buttonAreaCount > 5
+          ? {
+              action: () =>
+                open(
+                  "FileExplorer",
+                  { url: `${HOME}/Videos` },
+                  "/System/Icons/videos.webp"
+                ),
+              icon: <Videos />,
+              name: "Videos",
+              ...(collapsed && { tooltip: "Videos" }),
             }
           : undefined,
         {

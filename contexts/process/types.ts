@@ -1,3 +1,4 @@
+import type * as Monaco from "monaco-editor/esm/vs/editor/editor.api";
 import { type ComponentProcessProps } from "components/system/Apps/RenderComponent";
 import {
   type Operation,
@@ -24,6 +25,18 @@ type MediaPlayerProcessArguments = {
   paused?: boolean;
   play?: () => void;
   unmute?: () => void;
+};
+
+type MonacoProcessArguments = {
+  editor?: Monaco.editor.IStandaloneCodeEditor;
+};
+
+type PdfProcessArguments = {
+  count?: number;
+  page?: number;
+  rendering?: boolean;
+  scale?: number;
+  subTitle?: string;
 };
 
 export type RelativePosition = {
@@ -55,7 +68,9 @@ type BaseProcessArguments = {
 export type ProcessArguments = BaseProcessArguments &
   BrowserProcessArguments &
   DialogProcessArguments &
-  MediaPlayerProcessArguments;
+  MediaPlayerProcessArguments &
+  MonacoProcessArguments &
+  PdfProcessArguments;
 
 export type ProcessElements = {
   componentWindow?: HTMLElement;

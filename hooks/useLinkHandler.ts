@@ -1,5 +1,6 @@
 import { relative } from "path";
 import { useCallback } from "react";
+import { isCorsUrl } from "components/apps/TinyMCE/functions";
 import { getProcessByFileExtension } from "components/system/Files/FileEntry/functions";
 import { useProcesses } from "contexts/process";
 import { haltEvent, isYouTubeUrl, getExtension } from "utils/functions";
@@ -17,10 +18,11 @@ export const useLinkHandler = (): LinkHandler => {
   const { updateRecentFiles } = useSession();
 
   return useCallback(
-    (event: Event, url: string, pathName: string, _?: string) => {
+    (event: Event, url: string, pathName: string, title?: string) => {
       haltEvent(event);
 
       if (isYouTubeUrl(url)) open("VideoPlayer", { url });
+      else if (isCorsUrl(url)) open("Browser", { initialTitle: title, url });
       else if (
         !pathName ||
         relative(

@@ -20,6 +20,8 @@ export const WALLPAPER_PATHS: Record<
     import("components/system/Desktop/Wallpapers/ShaderToy/CoastalLandscape"),
   HEXELLS: () => import("components/system/Desktop/Wallpapers/hexells"),
   MATRIX: () => import("components/system/Desktop/Wallpapers/Matrix"),
+  STABLE_DIFFUSION: () =>
+    import("components/system/Desktop/Wallpapers/StableDiffusion"),
   VANTA: () => import("components/system/Desktop/Wallpapers/vantaWaves"),
 };
 
@@ -39,6 +41,11 @@ export const WALLPAPER_WORKERS: Record<string, () => Worker> = {
         import.meta.url
       ),
       { name: "Wallpaper (Hexells)" }
+    ),
+  STABLE_DIFFUSION: (): Worker =>
+    new Worker(
+      new URL("components/apps/StableDiffusion/sd.worker", import.meta.url),
+      { name: "Wallpaper (Stable Diffusion)" }
     ),
   VANTA: (): Worker =>
     new Worker(

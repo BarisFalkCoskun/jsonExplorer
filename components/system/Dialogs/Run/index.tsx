@@ -1,5 +1,6 @@
 import { basename, join } from "path";
 import { memo, useCallback, useLayoutEffect, useRef, useState } from "react";
+import { parseCommand } from "components/apps/Terminal/functions";
 import { type ComponentProcessProps } from "components/system/Apps/RenderComponent";
 import StyledRun from "components/system/Dialogs/Run/StyledRun";
 import StyledButton from "components/system/Dialogs/StyledButton";
@@ -15,6 +16,7 @@ import { useSession } from "contexts/session";
 import {
   DESKTOP_PATH,
   ICON_PATH,
+  PACKAGE_DATA,
   PREVENT_SCROLL,
   SHORTCUT_EXTENSION,
 } from "utils/constants";
@@ -27,11 +29,16 @@ import { ADDRESS_INPUT_PROPS } from "components/apps/FileExplorer/AddressBar";
 const OPEN_ID = "open";
 
 export const resourceAliasMap: Record<string, string> = {
+  cmd: "Terminal",
+  code: "MonacoEditor",
+  dos: "JSDOS",
   explorer: "FileExplorer",
+  monaco: "MonacoEditor",
+  mspaint: "Paint",
   vlc: "VideoPlayer",
 };
 
-const MESSAGE = `Type the name of a program, folder, document, or Internet resource`;
+const MESSAGE = `Type the name of a program, folder, document, or Internet resource, and ${PACKAGE_DATA.alias} will open it for you.`;
 
 const utilCommandMap: Record<string, () => void> = {
   esheep: spawnSheep,
@@ -69,9 +76,15 @@ const Run: FC<ComponentProcessProps> = ({ id }) => {
             ? currentRunHistory
             : [resource, ...currentRunHistory]
         );
+      const [resourcePid, ...resourceUrl] = parseCommand(resource);
       let resourcePath = resource;
       let closeOnExecute = true;
       const resourceExists = await exists(resourcePath);
+
+      if (!resourceExists) {
+        resourcePath =
+          resourceUrl.length > 0 ? resourceUrl.join(" ") : resourcePid;
+      }
 
       const isNostr = resourcePath.startsWith("nostr:");
 
@@ -101,6 +114,32 @@ const Run: FC<ComponentProcessProps> = ({ id }) => {
         if ((await lstat(resourcePath)).isDirectory()) {
           open("FileExplorer", { url: resourcePath }, "");
           addRunHistoryEntry();
+        } else if (
+          resourcePid &&
+          resourceUrl.length > 0 &&
+          resourcePath !== resource
+        ) {
+          const [pid] =
+            Object.entries(processDirectory)
+              .filter(([, { dialogProcess }]) => !dialogProcess)
+              .find(
+                ([processName]) =>
+                  processName.toLowerCase() === resourcePid.toLowerCase()
+              ) || [];
+
+          if (pid) {
+            const openUrl =
+              pid === "Browser" && isIpfs
+                ? resourceUrl.join(" ")
+                : resourcePath;
+
+            open(pid, { url: openUrl });
+            addRunHistoryEntry();
+            if (openUrl) updateRecentFiles(openUrl, pid);
+          } else {
+            notFound(resourcePid);
+            closeOnExecute = false;
+          }
         } else {
           const extension = getExtension(resourcePath);
 

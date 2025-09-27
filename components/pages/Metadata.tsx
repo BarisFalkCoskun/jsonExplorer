@@ -8,6 +8,7 @@ import {
   FAVICON_BASE_PATH,
   HIGH_PRIORITY_ELEMENT,
   ONE_TIME_PASSIVE_EVENT,
+  PACKAGE_DATA,
 } from "utils/constants";
 import {
   getDpi,
@@ -18,7 +19,10 @@ import {
   isDynamicIcon,
 } from "utils/functions";
 
+const { alias, author, description } = PACKAGE_DATA;
+
 const Metadata: FC = () => {
+  const [title, setTitle] = useState(alias);
   const [favIcon, setFavIcon] = useState("");
   const { readFile } = useFileSystem();
   const [customCursor, setCustomCursor] = useState("");
@@ -30,6 +34,7 @@ const Metadata: FC = () => {
     title: processTitle,
   } = process || {};
   const resetFaviconAndTitle = useCallback((): void => {
+    setTitle(alias);
     setFavIcon((currentFavicon) =>
       currentFavicon ? FAVICON_BASE_PATH : currentFavicon
     );
@@ -60,6 +65,9 @@ const Metadata: FC = () => {
 
   useEffect(() => {
     if (!hideTaskbarEntry && (processIcon || processTitle)) {
+      const documentTitle = processTitle ? `${processTitle} - ${alias}` : alias;
+
+      if (title !== documentTitle) setTitle(documentTitle);
       if (favIcon !== processIcon || !favIcon) {
         setFavIcon(encodeURI(processIcon) || FAVICON_BASE_PATH);
       }
@@ -72,6 +80,7 @@ const Metadata: FC = () => {
     processIcon,
     processTitle,
     resetFaviconAndTitle,
+    title,
   ]);
 
   useEffect(() => {
@@ -111,13 +120,25 @@ const Metadata: FC = () => {
 
   return (
     <Head>
-      <title>test</title>
+      <title>{title}</title>
       {currentFavIcon && (
         <link href={currentFavIcon} rel="icon" type={favIconMimeType} />
       )}
       <meta
         content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, interactive-widget=resizes-content"
         name="viewport"
+      />
+      <meta content={description} name="description" />
+      <meta content={alias} property="og:title" />
+      <meta content="website" property="og:type" />
+      <meta content={author.url} property="og:url" />
+      <meta content={`${author.url}/screenshot.png`} property="og:image" />
+      <meta content={description} property="og:description" />
+      <link
+        href={`${author.url}/rss.xml`}
+        rel="alternate"
+        title={`RSS Feed for ${alias}`}
+        type="application/rss+xml"
       />
       {desktopIcons.map((icon) => {
         const isSubIcon = icon.includes("/16x16/");

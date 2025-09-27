@@ -51,6 +51,7 @@ export const spawnSheep = (pickRandom?: boolean): Promise<void> =>
         collisionsWith: [
           "#__next main > nav", // Taskbar
           ".react-draggable section", // Windows
+          "#webamp .window", // Webamp Windows
         ],
         footerMargin: TASKBAR_HEIGHT,
         spawnContainer: document.querySelector("main") as HTMLElement,

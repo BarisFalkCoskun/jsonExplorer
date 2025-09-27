@@ -242,9 +242,34 @@ export const START_BUTTON_MENU_ITEMS = [
   /^Desktop$/,
 ];
 
-export const START_MENU_APPS = [/^Photo Viewer$/, /^Video Player$/];
+export const START_MENU_APPS = [
+  /^Browser$/,
+  /^DevTools$/,
+  /^IRC$/,
+  /^Marked$/,
+  /^Messenger$/,
+  /^Monaco Editor$/,
+  /^Paint$/,
+  /^PDF$/,
+  /^Photo Viewer$/,
+  /^Stable Diffusion$/,
+  /^Terminal$/,
+  /^TinyMCE$/,
+  /^Video Player$/,
+  /^Vim$/,
+  /^Webamp$/,
+];
 
-export const START_MENU_FOLDERS = {};
+export const START_MENU_FOLDERS = {
+  Emulators: [
+    /^BoxedWine$/,
+    /^EmulatorJS$/,
+    /^js-dos$/,
+    /^Ruffle$/,
+    /^Virtual x86$/,
+  ],
+  Games: [/^ClassiCube$/, /^DX-Ball$/, /^Quake III Arena$/, /^Space Cadet$/],
+};
 
 export const TEST_APP_CONTAINER_APP = "Marked";
 export const TEST_APP_CONTAINER_APP_TITLE = (file: string | null): string =>
@@ -256,17 +281,24 @@ export const TEST_APP_TITLE_TEXT = "My PC";
 export const TEST_APP_ICON = /\/pc\.(webp|png)$/;
 export const TEST_APP_URL: Record<string, string> = {
   Browser: "http://localhost",
+  Marked: "/CREDITS.md",
 };
 
 export const TEST_IMAGE_NAME = "image.png";
 export const TEST_DESKTOP_FILE = /^Public$/;
 export const TEST_ROOT_ARCHIVE = /^archive.zip$/;
+export const TEST_ROOT_FILE = /^CREDITS.md$/;
+export const TEST_ROOT_FILE_COPY = /^CREDITS \(1\).md$/;
 export const TEST_ROOT_FILE_2 = /^favicon.ico$/;
+export const TEST_ROOT_FILE_TEXT = "CREDITS.md";
 export const TEST_ROOT_FILE_DEFAULT_APP = "Marked";
+export const TEST_ROOT_FILE_ALT_APP = "Monaco Editor";
 export const TEST_ROOT_FILE_TOOLTIP =
   /^Type: Markdown File\nSize: \d\.\d\d KB\nDate modified: \d{4}-\d{2}-\d{2} \d{1,2}:\d{2} (?:AM|PM)$/;
 
 export const TEST_SEARCH = "CREDITS";
+export const TEST_SEARCH_RESULT = /^CREDITS.md$/;
+export const TEST_SEARCH_RESULT_TITLE = /^\/CREDITS.md/;
 
 export const NEW_FOLDER_LABEL = /^New folder$/;
 export const NEW_FILE_LABEL = /^New Text Document.txt$/;

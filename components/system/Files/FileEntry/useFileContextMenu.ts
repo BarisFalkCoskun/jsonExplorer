@@ -1,4 +1,5 @@
 import { basename, dirname, extname, join } from "path";
+import { type URLTrack } from "webamp";
 import { useMemo } from "react";
 import { type FileStat } from "components/system/Files/FileManager/functions";
 import { EXTRACTABLE_EXTENSIONS } from "components/system/Files/FileEntry/constants";
@@ -22,17 +23,20 @@ import { useSession } from "contexts/session";
 import { useProcessesRef } from "hooks/useProcessesRef";
 import {
   AI_TITLE,
+  AUDIO_PLAYLIST_EXTENSIONS,
   CURSOR_FILE_EXTENSIONS,
   DESKTOP_PATH,
   EDITABLE_IMAGE_FILE_EXTENSIONS,
   IMAGE_FILE_EXTENSIONS,
   MENU_SEPERATOR,
   MOUNTABLE_EXTENSIONS,
+  PACKAGE_DATA,
   PROCESS_DELIMITER,
   ROOT_SHORTCUT,
   SHORTCUT_EXTENSION,
   SPREADSHEET_FORMATS,
   SUMMARIZABLE_FILE_EXTENSIONS,
+  TEXT_EDITORS,
   VIDEO_FILE_EXTENSIONS,
 } from "utils/constants";
 import {
@@ -58,6 +62,8 @@ import useTransferDialog, {
   type ObjectReader,
 } from "components/system/Dialogs/Transfer/useTransferDialog";
 import { isMountedFolder } from "contexts/fileSystem/core";
+
+const { alias } = PACKAGE_DATA;
 
 const useFileContextMenu = (
   url: string,
@@ -393,6 +399,42 @@ const useFileContextMenu = (
                 });
               }
 
+              const canEncodePlaylist =
+                pathExtension !== ".m3u" &&
+                AUDIO_PLAYLIST_EXTENSIONS.has(pathExtension);
+
+              if (canEncodePlaylist) {
+                menuItems.unshift(MENU_SEPERATOR, {
+                  action: () => {
+                    absoluteEntries().forEach(async (absoluteEntry) => {
+                      const newFilePath = `${dirname(absoluteEntry)}/${basename(
+                        absoluteEntry,
+                        extname(absoluteEntry)
+                      )}.m3u`;
+                      const { createM3uPlaylist, tracksFromPlaylist } =
+                        await import("components/apps/Webamp/functions");
+                      const playlist = createM3uPlaylist(
+                        (await tracksFromPlaylist(
+                          (await readFile(absoluteEntry)).toString(),
+                          getExtension(absoluteEntry)
+                        )) as URLTrack[]
+                      );
+                      const playlistDirName = dirname(path);
+
+                      updateFolder(
+                        playlistDirName,
+                        await createPath(
+                          basename(newFilePath),
+                          playlistDirName,
+                          Buffer.from(playlist)
+                        )
+                      );
+                    });
+                  },
+                  label: "Convert to M3U",
+                });
+              }
+
               const opensInFileExplorer = pid === "FileExplorer";
 
               if (
@@ -402,7 +444,7 @@ const useFileContextMenu = (
               ) {
                 const baseFileName = basename(url);
                 const shareData: ShareData = {
-                  text: baseFileName,
+                  text: `${baseFileName} - ${alias}`,
                   title: baseFileName,
                   url: `${window.location.origin}?url=${url}`,
                 };
@@ -449,6 +491,17 @@ const useFileContextMenu = (
                   label: "Download",
                 }
               );
+
+              if (!isShortcut && !opensInFileExplorer) {
+                TEXT_EDITORS.forEach((textEditor) => {
+                  if (
+                    textEditor !== defaultProcess &&
+                    !openWithFiltered.includes(textEditor)
+                  ) {
+                    openWithFiltered.push(textEditor);
+                  }
+                });
+              }
             }
           }
 
