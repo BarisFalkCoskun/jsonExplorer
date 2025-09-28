@@ -169,9 +169,7 @@ const useWallpaper = (
           );
 
         try {
-          const { default: wallpaper } = await WALLPAPER_PATHS[
-            wallpaperName
-          ]();
+          const { default: wallpaper } = await WALLPAPER_PATHS[wallpaperName]();
 
           wallpaper?.(desktopRef.current, config, fallbackWallpaper);
         } catch {

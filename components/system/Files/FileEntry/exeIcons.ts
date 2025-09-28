@@ -84,15 +84,7 @@ export const extractExeIcon = async (
     iconGroupEntry = {
       icons:
         rawIconGroupEntry?.icons.map(
-          ({
-            bitCount,
-            colors,
-            dataSize,
-            height,
-            iconID,
-            planes,
-            width,
-          }) => ({
+          ({ bitCount, colors, dataSize, height, iconID, planes, width }) => ({
             bitCount,
             colors,
             dataSize,
@@ -104,7 +96,8 @@ export const extractExeIcon = async (
         ) ?? [],
     };
   } catch (error: unknown) {
-    if (error instanceof Error &&
+    if (
+      error instanceof Error &&
       error.message.includes("Binary with symbols is not supported now")
     ) {
       const { unarchive } = await import("utils/zipFunctions");
@@ -157,9 +150,8 @@ export const extractExeIcon = async (
     (accHeader, iconBitmapInfo, index) => {
       const previousEntry = iconData[index - 1];
 
-      currentIconOffset += index && previousEntry
-        ? getByteLength(previousEntry.bin)
-        : 0;
+      currentIconOffset +=
+        index && previousEntry ? getByteLength(previousEntry.bin) : 0;
 
       return Buffer.concat([
         accHeader,
@@ -172,9 +164,7 @@ export const extractExeIcon = async (
   const combinedIconBuffer = Buffer.from(
     iconData.reduce(
       (accIcon, iconItem) =>
-        iconItem
-          ? Buffer.concat([accIcon, toBuffer(iconItem.bin)])
-          : accIcon,
+        iconItem ? Buffer.concat([accIcon, toBuffer(iconItem.bin)]) : accIcon,
       iconHeader
     )
   );

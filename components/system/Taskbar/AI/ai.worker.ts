@@ -189,8 +189,8 @@ globalThis.addEventListener(
 
               response = stream
                 ? (completions as AsyncIterable<ChatCompletionChunk>)
-                : (completions as ChatCompletion).choices[0].message
-                    .content || "";
+                : (completions as ChatCompletion).choices[0].message.content ||
+                  "";
             }
           } catch (error) {
             console.error("Failed to get prompt response.", error);

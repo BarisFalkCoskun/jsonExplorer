@@ -207,15 +207,7 @@ const AIChat: FC<AIChatProps> = ({ toggleAI }) => {
       summarizeText,
       text,
     });
-  }, [
-    aiWorker,
-    conversation,
-    convoStyle,
-    exists,
-    hasWindowAI,
-    readFile,
-    stat,
-  ]);
+  }, [aiWorker, conversation, convoStyle, exists, hasWindowAI, readFile, stat]);
   useEffect(() => {
     textAreaRef.current?.focus(PREVENT_SCROLL);
   }, []);
@@ -374,94 +366,91 @@ const AIChat: FC<AIChatProps> = ({ toggleAI }) => {
           </div>
         </div>
         <div className="conversation">
-          {conversation.map(
-            ({ formattedText, type, text }, index) => (
-              // eslint-disable-next-line react/no-array-index-key
-              <div key={index} className={type}>
-                {(index === 0 || conversation[index - 1].type !== type) && (
-                  <div className="avatar">
-                    {type === "user" ? <PersonIcon /> : <AIIcon />}
-                    {type === "user" ? "You" : "AI"}
-                  </div>
-                )}
-                {text.startsWith("<think>") && (
-                  <button
-                    className={clsx({
-                      thinking: true,
-                      "thinking-responding":
-                        responding && index === conversation.length - 1,
-                    })}
-                    type="button"
-                    {...((!responding || index < conversation.length - 1) &&
-                      text.includes("</think>") && {
-                        onClick: () => toggleThought(index),
-                      })}
-                  >
-                    {text.includes("</think>") ||
-                    !responding ||
-                    index < conversation.length - 1
-                      ? "Thoughts"
-                      : "Thinking..."}
-                  </button>
-                )}
-                <div
-                  // eslint-disable-next-line react/no-danger
-                  dangerouslySetInnerHTML={{ __html: formattedText }}
+          {conversation.map(({ formattedText, type, text }, index) => (
+            // eslint-disable-next-line react/no-array-index-key
+            <div key={index} className={type}>
+              {(index === 0 || conversation[index - 1].type !== type) && (
+                <div className="avatar">
+                  {type === "user" ? <PersonIcon /> : <AIIcon />}
+                  {type === "user" ? "You" : "AI"}
+                </div>
+              )}
+              {text.startsWith("<think>") && (
+                <button
                   className={clsx({
-                    "hide-think": hiddenThoughts.includes(index),
-                    message: true,
-                  })}
-                />
-                <div
-                  className={clsx({
-                    controls: true,
-                    hidden:
+                    thinking: true,
+                    "thinking-responding":
                       responding && index === conversation.length - 1,
-                    last: index === lastAiMessageIndex,
                   })}
+                  type="button"
+                  {...((!responding || index < conversation.length - 1) &&
+                    text.includes("</think>") && {
+                      onClick: () => toggleThought(index),
+                    })}
                 >
+                  {text.includes("</think>") ||
+                  !responding ||
+                  index < conversation.length - 1
+                    ? "Thoughts"
+                    : "Thinking..."}
+                </button>
+              )}
+              <div
+                // eslint-disable-next-line react/no-danger
+                dangerouslySetInnerHTML={{ __html: formattedText }}
+                className={clsx({
+                  "hide-think": hiddenThoughts.includes(index),
+                  message: true,
+                })}
+              />
+              <div
+                className={clsx({
+                  controls: true,
+                  hidden: responding && index === conversation.length - 1,
+                  last: index === lastAiMessageIndex,
+                })}
+              >
+                <button
+                  className="control"
+                  onClick={() => {
+                    navigator.clipboard?.writeText(text);
+                    setCopiedIndex(index);
+                    setTimeout(() => setCopiedIndex(-1), 5000);
+                  }}
+                  type="button"
+                  {...label(copiedIndex === index ? "Copied" : "Copy")}
+                >
+                  <CopyIcon />
+                </button>
+                {type === "user" && (
                   <button
                     className="control"
                     onClick={() => {
-                      navigator.clipboard?.writeText(text);
-                      setCopiedIndex(index);
-                      setTimeout(() => setCopiedIndex(-1), 5000);
+                      if (textAreaRef.current) {
+                        textAreaRef.current.value = text;
+                        textAreaRef.current.focus(PREVENT_SCROLL);
+                        setPromptText(text);
+                      }
                     }}
                     type="button"
-                    {...label(copiedIndex === index ? "Copied" : "Copy")}
+                    {...label("Edit")}
                   >
-                    <CopyIcon />
+                    <EditIcon />
                   </button>
-                  {type === "user" && (
-                    <button
-                      className="control"
-                      onClick={() => {
-                        if (textAreaRef.current) {
-                          textAreaRef.current.value = text;
-                          textAreaRef.current.focus(PREVENT_SCROLL);
-                          setPromptText(text);
-                        }
-                      }}
-                      type="button"
-                      {...label("Edit")}
-                    >
-                      <EditIcon />
-                    </button>
-                  )}
-                  {"speechSynthesis" in window && type === "ai" && (
-                    <button
-                      className="control"
-                      onClick={() => speakMessage(text)}
-                      type="button"
-                      {...label("Read aloud")}
-                    >
-                      <SpeakIcon />
-                    </button>
-                  )}
-                </div>
+                )}
+                {"speechSynthesis" in window && type === "ai" && (
+                  <button
+                    className="control"
+                    onClick={() => speakMessage(text)}
+                    type="button"
+                    {...label("Read aloud")}
+                  >
+                    <SpeakIcon />
+                  </button>
+                )}
               </div>
-            )
-          )}
+            </div>
+          ))}
           {responding && (
             <div className="responding">
               <button
