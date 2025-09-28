@@ -1,0 +1,7 @@
+<svg viewBox="0 0 48 48" fill="#4CAF50" xmlns="http://www.w3.org/2000/svg">
+  <rect width="48" height="48" rx="8" fill="#2E7D32"/>
+  <path d="M24 8c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2s2-.9 2-2v-8c0-1.1-.9-2-2-2z" fill="#4CAF50"/>
+  <path d="M24 28c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2s2-.9 2-2v-8c0-1.1-.9-2-2-2z" fill="#4CAF50"/>
+  <circle cx="24" cy="24" r="4" fill="#4CAF50"/>
+  <text x="24" y="28" font-family="Arial, sans-serif" font-size="12" font-weight="bold" text-anchor="middle" fill="white">DB</text>
+</svg>

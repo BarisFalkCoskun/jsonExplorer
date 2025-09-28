@@ -11,12 +11,15 @@ import {
 import Clock from "components/system/Taskbar/Clock";
 import SearchButton from "components/system/Taskbar/Search/SearchButton";
 import StartButton from "components/system/Taskbar/StartButton";
+import MongoButton from "components/system/Taskbar/MongoDB/MongoButton";
+import MongoConnectionManager from "components/system/Dialogs/MongoConnectionManager";
 import StyledTaskbar from "components/system/Taskbar/StyledTaskbar";
 import TaskbarEntries from "components/system/Taskbar/TaskbarEntries";
 import useTaskbarContextMenu from "components/system/Taskbar/useTaskbarContextMenu";
 import { CLOCK_CANVAS_BASE_WIDTH, FOCUSABLE_ELEMENT } from "utils/constants";
 import { useWindowAI } from "hooks/useWindowAI";
 import { useSession } from "contexts/session";
+import mongoService from "services/mongoService";
 
 const AIButton = dynamic(importAIButton);
 const AIChat = dynamic(importAIChat);
@@ -29,6 +32,7 @@ const Taskbar: FC = () => {
   const [searchVisible, setSearchVisible] = useState(false);
   const [calendarVisible, setCalendarVisible] = useState(false);
   const [aiVisible, setAIVisible] = useState(false);
+  const [mongoManagerVisible, setMongoManagerVisible] = useState(false);
   const [clockWidth, setClockWidth] = useState(CLOCK_CANVAS_BASE_WIDTH);
   const { aiEnabled } = useSession();
   const hasWindowAI = useWindowAI();
@@ -56,7 +60,23 @@ const Taskbar: FC = () => {
       setAIVisible((currentAIState) => showAI ?? !currentAIState),
     []
   );
+  const toggleMongoManager = useCallback(
+    (showManager?: boolean): void => {
+      console.log('toggleMongoManager called with:', showManager);
+      setMongoManagerVisible((currentState) => {
+        const newState = showManager ?? !currentState;
+        console.log('MongoDB manager visibility changing from', currentState, 'to', newState);
+        return newState;
+      });
+    },
+    []
+  );
   const hasAI = hasWindowAI || aiEnabled;
+
+  const handleConnectionsChange = useCallback((connections) => {
+    // This is called when connections are updated from the manager
+    console.log('Connections updated:', connections);
+  }, []);
 
   return (
     <>
@@ -90,6 +110,13 @@ const Taskbar: FC = () => {
         )}
         {aiVisible && <AIChat key="aiChat" toggleAI={toggleAI} />}
       </AnimatePresence>
+      {mongoManagerVisible && (
+        <MongoConnectionManager
+          isOpen={mongoManagerVisible}
+          onClose={() => toggleMongoManager(false)}
+          onConnectionsChange={handleConnectionsChange}
+        />
+      )}
     </>
   );
 };

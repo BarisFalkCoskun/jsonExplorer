@@ -249,6 +249,17 @@ const directory: Processes = {
     singleton: true,
     title: "Webamp",
   },
+  MongoDBManager: {
+    Component: dynamic(() => import("components/apps/MongoDBManager")),
+    backgroundColor: "#2b2b2b",
+    defaultSize: {
+      height: 600,
+      width: 480,
+    },
+    icon: "/System/Icons/mongodb.png",
+    singleton: true,
+    title: "MongoDB Connection Manager",
+  },
 };
 
 export default directory;

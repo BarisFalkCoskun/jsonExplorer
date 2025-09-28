@@ -63,6 +63,7 @@
     "libheif-js": "^1.19.8",
     "mediainfo.js": "0.3.6",
     "minimist": "^1.2.8",
+    "mongodb": "^6.20.0",
     "motion": "^12.23.22",
     "multiformats": "^13.4.1",
     "music-metadata-browser": "^2.5.11",
@@ -83,7 +84,6 @@
     "wasi-js": "^1.7.3"
   },
   "devDependencies": {
-    "7z-wasm": "^1.2.0",
     "@axe-core/playwright": "^4.10.2",
     "@next/bundle-analyzer": "^15.5.4",
     "@next/eslint-plugin-next": "^15.5.4",
@@ -106,6 +106,7 @@
     "@types/wicg-file-system-access": "^2023.10.6",
     "@typescript-eslint/eslint-plugin": "^8.42.0",
     "@typescript-eslint/parser": "^8.42.0",
+    "7z-wasm": "^1.2.0",
     "emulators": "^8.3.9",
     "emulators-ui": "^0.73.9",
     "eruda": "^3.4.3",

@@ -41,7 +41,7 @@ const nextConfig = {
       ],
     },
   ],
-  output: "export",
+  // output: "export", // Commented out to enable API routes
   productionBrowserSourceMaps: false,
   reactProductionProfiling: false,
   reactStrictMode: !isProduction,

@@ -70,6 +70,7 @@ import {
 import { spotlightEffect } from "utils/spotlightEffect";
 import { useIsVisible } from "hooks/useIsVisible";
 import { UNKNOWN_SIZE } from "contexts/fileSystem/core";
+import MongoDocumentHandler from "components/system/Files/FileEntry/MongoDocumentHandler";
 
 const ColumnRow = dynamic(
   () => import("components/system/Files/FileEntry/ColumnRow")
@@ -619,14 +620,16 @@ const FileEntry: FC<FileEntryProps> = ({
             role: "heading",
           })}
         >
-          <Icon
-            ref={iconRef}
-            $eager={loadIconImmediately}
-            $moving={pasteList[path] === "move"}
-            alt=""
-            src={icon}
-            {...FileEntryIconSize[view]}
-          />
+          <MongoDocumentHandler path={path}>
+            <Icon
+              ref={iconRef}
+              $eager={loadIconImmediately}
+              $moving={pasteList[path] === "move"}
+              alt=""
+              src={icon}
+              {...FileEntryIconSize[view]}
+            />
+          </MongoDocumentHandler>
           <SubIcons
             alt=""
             icon={icon}
