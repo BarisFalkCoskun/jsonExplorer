@@ -168,19 +168,21 @@ const useWallpaper = (
               : DEFAULT_WALLPAPER
           );
 
-        WALLPAPER_PATHS[wallpaperName]()
-          .then(({ default: wallpaper }) =>
-            wallpaper?.(desktopRef.current, config, fallbackWallpaper)
-          )
-          .catch(fallbackWallpaper);
+        try {
+          const { default: wallpaper } = await WALLPAPER_PATHS[
+            wallpaperName
+          ]();
+
+          wallpaper?.(desktopRef.current, config, fallbackWallpaper);
+        } catch {
+          fallbackWallpaper();
+        }
       } else {
         setWallpaper(DEFAULT_WALLPAPER);
       }
     },
     [
       desktopRef,
-      exists,
-      readFile,
       resetWallpaper,
       setWallpaper,
       vantaWireframe,
