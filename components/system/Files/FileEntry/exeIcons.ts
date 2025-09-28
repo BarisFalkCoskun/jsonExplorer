@@ -1,8 +1,22 @@
-import {
-  type IconGroupEntry,
-  type IconGroupItem,
-  type ResourceEntry,
-} from "resedit/dist/resource";
+type IconGroupItem = {
+  bitCount: number;
+  colors: number;
+  dataSize: number;
+  height: number;
+  iconID: number;
+  planes: number;
+  width: number;
+};
+
+type IconGroupEntry = {
+  icons: IconGroupItem[];
+};
+
+type ResourceEntry = {
+  bin: ArrayBuffer | Uint8Array | Buffer;
+  id: number;
+  type: number;
+};
 
 const RESERVED = 0;
 const ICON_TYPE = {
@@ -54,18 +68,44 @@ export const extractExeIcon = async (
   let entries: ResourceEntry[];
 
   try {
-    ({ entries } = ResEdit.NtExecutableResource.from(
-      ResEdit.NtExecutable.from(exeData, {
-        ignoreCert: true,
-      }),
-      true
-    ));
-    [iconGroupEntry] = ResEdit.Resource.IconGroupEntry.fromEntries(entries);
-  } catch (error) {
-    if (
-      (error as Error).message.includes(
-        "Binary with symbols is not supported now"
-      )
+    const executable = ResEdit.NtExecutable.from(exeData, {
+      ignoreCert: true,
+    });
+    const resource = ResEdit.NtExecutableResource.from(executable, true);
+
+    entries = resource.entries as ResourceEntry[];
+
+    const [rawIconGroupEntry] = ResEdit.Resource.IconGroupEntry.fromEntries(
+      entries as unknown as Parameters<
+        typeof ResEdit.Resource.IconGroupEntry.fromEntries
+      >[0]
+    );
+
+    iconGroupEntry = {
+      icons:
+        rawIconGroupEntry?.icons.map(
+          ({
+            bitCount,
+            colors,
+            dataSize,
+            height,
+            iconID,
+            planes,
+            width,
+          }) => ({
+            bitCount,
+            colors,
+            dataSize,
+            height,
+            iconID,
+            planes,
+            width,
+          })
+        ) ?? [],
+    };
+  } catch (error: unknown) {
+    if (error instanceof Error &&
+      error.message.includes("Binary with symbols is not supported now")
     ) {
       const { unarchive } = await import("utils/zipFunctions");
 
@@ -82,6 +122,8 @@ export const extractExeIcon = async (
       }
     }
 
+    lockIconExtraction = false;
+
     return undefined;
   }
 
@@ -91,6 +133,20 @@ export const extractExeIcon = async (
     return undefined;
   }
 
+  const toBuffer = (data: ResourceEntry["bin"]): Buffer => {
+    if (Buffer.isBuffer(data)) return data;
+    if (data instanceof Uint8Array) return Buffer.from(data);
+
+    return Buffer.from(new Uint8Array(data));
+  };
+
+  const getByteLength = (data: ResourceEntry["bin"]): number => {
+    if (Buffer.isBuffer(data)) return data.length;
+    if (data instanceof Uint8Array) return data.byteLength;
+
+    return data.byteLength;
+  };
+
   const iconDataOffset =
     ICONDIR_LENGTH + ICONDIRENTRY_LENGTH * iconGroupEntry.icons.length;
   let currentIconOffset = iconDataOffset;
@@ -99,8 +155,10 @@ export const extractExeIcon = async (
   );
   const iconHeader = iconGroupEntry.icons.reduce(
     (accHeader, iconBitmapInfo, index) => {
-      currentIconOffset += index
-        ? (iconData[index - 1]?.bin.byteLength ?? 0)
+      const previousEntry = iconData[index - 1];
+
+      currentIconOffset += index && previousEntry
+        ? getByteLength(previousEntry.bin)
         : 0;
 
       return Buffer.concat([
@@ -114,7 +172,9 @@ export const extractExeIcon = async (
   const combinedIconBuffer = Buffer.from(
     iconData.reduce(
       (accIcon, iconItem) =>
-        Buffer.concat([accIcon, Buffer.from((iconItem as ResourceEntry).bin)]),
+        iconItem
+          ? Buffer.concat([accIcon, toBuffer(iconItem.bin)])
+          : accIcon,
       iconHeader
     )
   );

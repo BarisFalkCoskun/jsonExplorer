@@ -10,7 +10,7 @@
     "jsx": "preserve",
     "lib": ["dom", "dom.iterable", "esnext", "webworker"],
     "module": "esnext",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "noEmit": true,
     "noImplicitOverride": true,
     "noImplicitReturns": true,
