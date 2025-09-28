@@ -1,5 +1,4 @@
 import { type ProxyState } from "components/apps/Browser/useProxyMenu";
-import { FAVICON_BASE_PATH } from "utils/constants";
 
 type Bookmark = {
   icon: string;
@@ -13,11 +12,6 @@ type WaybackUrlInfo = {
 };
 
 export const bookmarks: Bookmark[] = [
-  {
-    icon: FAVICON_BASE_PATH,
-    name: "daedalOS",
-    url: "https://dustinbrett.com/",
-  },
   {
     icon: "/System/Icons/Favicons/dir.webp",
     name: "Index of /",
@@ -42,11 +36,6 @@ export const bookmarks: Bookmark[] = [
     icon: "/System/Icons/webamp.webp",
     name: "Winamp Skin Museum",
     url: "https://skins.webamp.org/",
-  },
-  {
-    icon: "/System/Icons/Favicons/aos.webp",
-    name: "AaronOS",
-    url: "https://aaronos.dev/",
   },
 ];
 

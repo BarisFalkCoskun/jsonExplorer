@@ -17,7 +17,6 @@
 		[/^rat$/i, "red"],
 		[/^Fred$/i, "red"],
 		[/^Rhett$/i, "red"],
-		[/^Brett$/i, "red"],
 		[/^friend$/i, "red"],
 		["hello", "yellow"],
 		["grave", "green"],
