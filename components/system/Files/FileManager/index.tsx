@@ -200,8 +200,8 @@ const FileManager: FC<FileManagerProps> = ({
             if (!currentlyMounted) {
               mountFs(url)
                 .then(() => setTimeout(updateFiles, 100))
-                .catch(() => {
-                  // Ignore race-condtion failures
+                .catch((error: Error) => {
+                  console.warn(`Failed to mount filesystem at ${url}:`, error);
                 });
             }
             return true;

@@ -9,6 +9,7 @@ import {
 import { type ApiError } from "browserfs/dist/node/core/api_error";
 import { type SortBy } from "components/system/Files/FileManager/useSortBy";
 import { useFileSystem } from "contexts/fileSystem";
+import { isApiError } from "contexts/fileSystem/functions";
 import {
   type Views,
   type IconPositions,
@@ -61,16 +62,10 @@ const useSessionContextState = (): SessionContextState => {
   const [cursor, setCursor] = useState<string | undefined>();
   const [aiEnabled, setAiEnabled] = useState(false);
   const [lazySheep, setLazySheep] = useState(false);
-  const [windowStates, setWindowStates] = useState(
-    Object.create(null) as WindowStates
-  );
-  const [sortOrders, setSortOrders] = useState(
-    Object.create(null) as SortOrders
-  );
-  const [views, setViews] = useState(Object.create(null) as Views);
-  const [iconPositions, setIconPositions] = useState(
-    Object.create(null) as IconPositions
-  );
+  const [windowStates, setWindowStates] = useState<WindowStates>({});
+  const [sortOrders, setSortOrders] = useState<SortOrders>({});
+  const [views, setViews] = useState<Views>({});
+  const [iconPositions, setIconPositions] = useState<IconPositions>({});
   const [wallpaperFit, setWallpaperFit] = useState(DEFAULT_WALLPAPER_FIT);
   const [wallpaperImage, setWallpaperImage] = useState(DEFAULT_WALLPAPER);
   const [runHistory, setRunHistory] = useState<string[]>([]);
@@ -339,8 +334,7 @@ const useSessionContextState = (): SessionContextState => {
             setIconPositions(session.iconPositions);
           } else if (typeof session.iconPositions !== "object") {
             setIconPositions(
-              DEFAULT_SESSION.iconPositions ||
-                (Object.create(null) as IconPositions)
+              DEFAULT_SESSION.iconPositions || {}
             );
           }
           if (
@@ -369,7 +363,7 @@ const useSessionContextState = (): SessionContextState => {
             });
           }
         } catch (error) {
-          if ((error as ApiError)?.code === "ENOENT") {
+          if (isApiError(error) && error.code === "ENOENT") {
             deletePath(SESSION_FILE);
           }
         }

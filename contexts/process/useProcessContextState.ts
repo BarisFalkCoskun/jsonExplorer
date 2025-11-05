@@ -45,9 +45,7 @@ type ProcessContextState = {
 };
 
 const useProcessContextState = (): ProcessContextState => {
-  const [processes, setProcesses] = useState<Processes>(
-    Object.create(null) as Processes
-  );
+  const [processes, setProcesses] = useState<Processes>({});
   const argument = useCallback(
     (
       id: string,

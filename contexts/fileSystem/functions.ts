@@ -3,6 +3,7 @@ import type HTTPRequest from "browserfs/dist/node/backend/HTTPRequest";
 import type IndexedDBFileSystem from "browserfs/dist/node/backend/IndexedDB";
 import type OverlayFS from "browserfs/dist/node/backend/OverlayFS";
 import type InMemoryFileSystem from "browserfs/dist/node/backend/InMemory";
+import { type ApiError } from "browserfs/dist/node/core/api_error";
 import { type FileSystemObserver } from "contexts/fileSystem/useFileSystemContextState";
 import { FS_HANDLES } from "utils/constants";
 import { type RootFileSystem } from "contexts/fileSystem/useAsyncFs";
@@ -12,6 +13,14 @@ import {
   getKeyValStore,
   supportsIndexedDB,
 } from "contexts/fileSystem/core";
+
+/**
+ * Type guard to check if an error is a BrowserFS ApiError
+ */
+export const isApiError = (error: unknown): error is ApiError =>
+  error instanceof Error &&
+  'code' in error &&
+  typeof (error as { code?: unknown }).code === 'string';
 
 const KNOWN_IDB_DBS = [
   "/classicube",

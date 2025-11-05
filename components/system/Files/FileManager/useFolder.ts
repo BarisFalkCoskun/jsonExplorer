@@ -29,6 +29,7 @@ import useSortBy, {
   type SortByOrder,
 } from "components/system/Files/FileManager/useSortBy";
 import { useFileSystem } from "contexts/fileSystem";
+import { isApiError } from "contexts/fileSystem/functions";
 import { useProcesses } from "contexts/process";
 import { useSession } from "contexts/session";
 import {
@@ -269,10 +270,10 @@ const useFolder = (
               );
             }
           } else {
-            setFiles(Object.create(null) as Files);
+            setFiles({});
           }
         } catch (error) {
-          if ((error as ApiError).code === "ENOENT") {
+          if (isApiError(error) && error.code === "ENOENT") {
             closeProcessesByUrl(directory);
           }
         }
