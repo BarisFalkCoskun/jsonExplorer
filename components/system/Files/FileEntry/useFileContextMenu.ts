@@ -116,7 +116,6 @@ const useFileContextMenu = (
         const openWith = extensionProcesses.filter(
           (process) => process !== pid
         );
-        const openWithFiltered = openWith.filter((id) => id !== pid);
         const isSingleSelection =
           focusedEntries.length === 1 || !isFocusedEntry;
         const absoluteEntries = (): string[] =>
@@ -549,11 +548,11 @@ const useFileContextMenu = (
           });
         }
 
-        if (openWithFiltered.length > 0) {
+        if (openWith.length > 0) {
           menuItems.unshift({
             label: "Open with",
             menu: [
-              ...openWithFiltered.map((id): MenuItem => {
+              ...openWith.map((id): MenuItem => {
                 const { icon, title: label } = processDirectory[id] || {};
                 const action = (): void => {
                   openFile(id, icon);

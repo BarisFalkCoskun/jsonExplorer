@@ -26,6 +26,7 @@ import {
   KEYVAL_DB,
   type FS9PV4,
 } from "contexts/fileSystem/core";
+import { isApiError } from "contexts/fileSystem/functions";
 import useAsyncFs, {
   type AsyncFS,
   type EmscriptenFS,
@@ -140,12 +141,8 @@ const useFileSystemContextState = (): FileSystemContextState => {
     writeFile,
   } = asyncFs;
   const { closeWithTransition } = useProcesses();
-  const fsWatchersRef = useRef<FileSystemWatchers>(
-    Object.create(null) as FileSystemWatchers
-  );
-  const [pasteList, setPasteList] = useState<FilePasteOperations>(
-    Object.create(null) as FilePasteOperations
-  );
+  const fsWatchersRef = useRef<FileSystemWatchers>({});
+  const [pasteList, setPasteList] = useState<FilePasteOperations>({});
   const updatePasteEntries = useCallback(
     (entries: string[], operation: "copy" | "move"): void =>
       setPasteList(
@@ -172,8 +169,8 @@ const useFileSystemContextState = (): FileSystemContextState => {
             ),
           }),
         ]);
-      } catch {
-        // Ignore failure to copy image to clipboard
+      } catch (error) {
+        console.warn('Failed to copy image to clipboard:', error);
       }
     },
     [readFile]
@@ -290,8 +287,8 @@ const useFileSystemContextState = (): FileSystemContextState => {
 
             try {
               rootFs?.mount?.(join("/", dbName), newFs);
-            } catch {
-              // Ignore error during mounting
+            } catch (error) {
+              console.warn(`Failed to mount database ${dbName}:`, error);
             }
 
             resolve(dbName);
@@ -349,8 +346,11 @@ const useFileSystemContextState = (): FileSystemContextState => {
             mode: "readwrite",
             startIn: "desktop",
           }));
-      } catch {
-        // Ignore cancelling the dialog
+      } catch (error) {
+        // User cancelled the dialog - this is expected, log only in debug mode
+        if (error && (error as Error).name !== 'AbortError') {
+          console.warn('Failed to open file picker:', error);
+        }
       }
 
       return new Promise((resolve, reject) => {
@@ -411,7 +411,8 @@ const useFileSystemContextState = (): FileSystemContextState => {
 
                 try {
                   observer.observe(handle, { recursive: true });
-                } catch {
+                } catch (error) {
+                  console.warn('Failed to observe directory handle:', error);
                   observer = undefined;
                 }
               }
@@ -539,7 +540,8 @@ const useFileSystemContextState = (): FileSystemContextState => {
 
         try {
           created = (await exists(makePath)) || (await mkdir(makePath));
-        } catch {
+        } catch (error) {
+          console.warn(`Failed to create directory ${makePath}:`, error);
           created = false;
         }
 
@@ -563,7 +565,7 @@ const useFileSystemContextState = (): FileSystemContextState => {
       try {
         deleted = await unlink(path);
       } catch (error) {
-        if ((error as ApiError).code === "EISDIR") {
+        if (isApiError(error) && error.code === "EISDIR") {
           const dirContents = await readdir(path);
 
           await Promise.all(
@@ -623,7 +625,7 @@ const useFileSystemContextState = (): FileSystemContextState => {
               updateFolder(dirname(makePath), basename(makePath));
             }
           } catch (error) {
-            if ((error as ApiError).code === "ENOENT") {
+            if (isApiError(error) && error.code === "ENOENT") {
               await maybeMakePath(dirname(makePath));
               await maybeMakePath(makePath);
             }
@@ -641,7 +643,7 @@ const useFileSystemContextState = (): FileSystemContextState => {
             return uniqueName;
           }
         } catch (error) {
-          if ((error as ApiError)?.code === "EEXIST") {
+          if (isApiError(error) && error.code === "EEXIST") {
             return createPath(name, directory, buffer, iteration + 1);
           }
         }
@@ -673,8 +675,8 @@ const useFileSystemContextState = (): FileSystemContextState => {
                     await mapFs(mapDirectory, handle);
 
                     if (mapDirectory === DESKTOP_PATH) mappedOntoDesktop = true;
-                  } catch {
-                    // Ignore failure
+                  } catch (error) {
+                    console.warn(`Failed to map directory ${mapDirectory}:`, error);
                   }
                 }
               }

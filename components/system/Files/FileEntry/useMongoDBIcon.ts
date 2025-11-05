@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useFileSystem } from "contexts/fileSystem";
 import { MongoDBFileSystem } from "contexts/fileSystem/MongoDBFS";
+import { type RootFileSystem } from "contexts/fileSystem/useAsyncFs";
 
 interface MongoDBIconState {
   images: string[];
@@ -18,6 +19,38 @@ const INITIAL_STATE: MongoDBIconState = {
   hasNavigationArrows: false,
 };
 
+/**
+ * Find the MongoDB filesystem instance for a given path
+ * @returns Object with mongoFS, mountPoint, and relativePath, or null if not found
+ */
+const findMongoDBFileSystem = (
+  path: string,
+  rootFs: RootFileSystem | null
+): { mongoFS: MongoDBFileSystem; mountPoint: string; relativePath: string } | null => {
+  if (!rootFs) return null;
+
+  const pathParts = path.split("/");
+  let currentPath = "/";
+
+  for (let i = 1; i < pathParts.length; i++) {
+    currentPath = `${currentPath}${pathParts[i]}/`.replace(/\/+/g, "/");
+    const mountPoint = currentPath.slice(0, -1);
+
+    if (rootFs.mntMap && rootFs.mntMap[mountPoint]) {
+      const fs = rootFs.mntMap[mountPoint];
+      if (fs instanceof MongoDBFileSystem) {
+        return {
+          mongoFS: fs,
+          mountPoint,
+          relativePath: path.replace(mountPoint, ""),
+        };
+      }
+    }
+  }
+
+  return null;
+};
+
 export const useMongoDBIcon = (path: string) => {
   const [state, setState] = useState<MongoDBIconState>(INITIAL_STATE);
   const { rootFs } = useFileSystem();
@@ -26,27 +59,10 @@ export const useMongoDBIcon = (path: string) => {
 
   // Check if this is a MongoDB document
   const isMongoDocument = useCallback(() => {
-    if (!rootFs) return false;
+    const mongoData = findMongoDBFileSystem(path, rootFs);
+    if (!mongoData) return false;
 
-    // Check if the path is within a MongoDB mount
-    const pathParts = path.split("/");
-    if (pathParts.length < 2) return false;
-
-    // Find the mount point for this path
-    let currentPath = "/";
-    for (let i = 1; i < pathParts.length; i++) {
-      currentPath = `${currentPath}${pathParts[i]}/`.replace(/\/+/g, "/");
-      const mountPoint = currentPath.slice(0, -1);
-
-      if (rootFs.mntMap && rootFs.mntMap[mountPoint]) {
-        const fs = rootFs.mntMap[mountPoint];
-        if (fs instanceof MongoDBFileSystem) {
-          return fs.isMongoDBDocument(path.replace(mountPoint, ""));
-        }
-      }
-    }
-
-    return false;
+    return mongoData.mongoFS.isMongoDBDocument(mongoData.relativePath);
   }, [path, rootFs]);
 
   // Load images from MongoDB document
@@ -65,33 +81,15 @@ export const useMongoDBIcon = (path: string) => {
 
     try {
       // Find the MongoDB filesystem instance for this path
-      let mongoFS: MongoDBFileSystem | null = null;
-      let relativePath = path;
+      const mongoData = findMongoDBFileSystem(path, rootFs);
 
-      const pathParts = path.split("/");
-      let currentPath = "/";
-
-      for (let i = 1; i < pathParts.length; i++) {
-        currentPath = `${currentPath}${pathParts[i]}/`.replace(/\/+/g, "/");
-        const mountPoint = currentPath.slice(0, -1);
-
-        if (rootFs.mntMap && rootFs.mntMap[mountPoint]) {
-          const fs = rootFs.mntMap[mountPoint];
-          if (fs instanceof MongoDBFileSystem) {
-            mongoFS = fs;
-            relativePath = path.replace(mountPoint, "");
-            break;
-          }
-        }
-      }
-
-      if (!mongoFS) {
+      if (!mongoData) {
         setState(prev => ({ ...prev, isLoading: false, error: "MongoDB filesystem not found" }));
         return;
       }
 
       // Get images for the document
-      const images = await mongoFS.getDocumentImages(relativePath);
+      const images = await mongoData.mongoFS.getDocumentImages(mongoData.relativePath);
 
       if (abortController.signal.aborted) return;
 

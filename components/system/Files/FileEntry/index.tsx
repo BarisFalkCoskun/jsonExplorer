@@ -457,8 +457,8 @@ const FileEntry: FC<FileEntryProps> = ({
                       },
                       width,
                     });
-                  } catch {
-                    // Ignore failure to capture
+                  } catch (error) {
+                    console.warn(`Failed to capture canvas for icon: ${path}`, error);
                   }
 
                   if (
