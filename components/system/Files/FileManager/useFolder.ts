@@ -219,42 +219,51 @@ const useFolder = (
           const dirContents = (await readdir(directory)).filter(
             filterSystemFiles(directory)
           );
-          const sortedFiles = await dirContents.reduce(
-            async (processedFiles, file) => {
+
+          // Fetch all file stats in parallel for much better performance
+          const fileStatsResults = await Promise.all(
+            dirContents.map(async (file) => {
               try {
                 const filePath = join(directory, file);
                 const fileStats = isSimpleSort
                   ? await lstat(filePath)
                   : await stat(filePath);
                 const hideEntry = hideFolders && fileStats.isDirectory();
-                let newFiles = await processedFiles;
 
-                if (!hideEntry) {
-                  newFiles[file] = await statsWithShortcutInfo(file, fileStats);
-                  newFiles = sortContents(
-                    newFiles,
-                    (!skipSorting && sortOrder) || [],
-                    isSimpleSort
-                      ? undefined
-                      : sortBy === "date"
-                        ? sortByDate(directory)
-                        : sortBySize,
-                    sortAscending
-                  );
+                if (hideEntry) {
+                  return null;
                 }
 
-                if (hideLoading) setFiles(newFiles);
-
-                return newFiles;
+                const statsWithInfo = await statsWithShortcutInfo(file, fileStats);
+                return { file, stats: statsWithInfo };
               } catch {
-                return processedFiles;
+                return null;
               }
-            },
-            Promise.resolve({} as Files)
+            })
+          );
+
+          // Build files object from successful results
+          const filesObject: Files = {};
+          for (const result of fileStatsResults) {
+            if (result) {
+              filesObject[result.file] = result.stats;
+            }
+          }
+
+          // Sort once at the end (not after each file)
+          const sortedFiles = sortContents(
+            filesObject,
+            (!skipSorting && sortOrder) || [],
+            isSimpleSort
+              ? undefined
+              : sortBy === "date"
+                ? sortByDate(directory)
+                : sortBySize,
+            sortAscending
           );
 
           if (dirContents.length > 0) {
-            if (!hideLoading) setFiles(sortedFiles);
+            setFiles(sortedFiles);
 
             const newSortOrder = Object.keys(sortedFiles);
 

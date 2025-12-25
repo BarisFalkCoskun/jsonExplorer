@@ -133,8 +133,6 @@ const truncateName = (
 
 const focusing: string[] = [];
 
-const cacheQueue: (() => Promise<void>)[] = [];
-
 const FileEntry: FC<FileEntryProps> = ({
   columns,
   fileActions,
@@ -406,10 +404,6 @@ const FileEntry: FC<FileEntryProps> = ({
               retryCanvasDraw?: boolean
             ): Promise<void> => {
               if (iconRef.current instanceof HTMLImageElement) {
-                const nextQueueItem = (): Promise<void> => {
-                  cacheQueue.shift();
-                  return cacheQueue[0]?.();
-                };
                 let generatedIcon = "";
 
                 if (
@@ -474,29 +468,24 @@ const FileEntry: FC<FileEntryProps> = ({
                   }
                 }
 
+                // Cache icon concurrently (no queue - much faster)
                 if (generatedIcon) {
-                  cacheQueue.push(async () => {
-                    const baseCachedPath = dirname(cachedIconPath);
+                  const baseCachedPath = dirname(cachedIconPath);
 
-                    await mkdirRecursive(baseCachedPath);
+                  await mkdirRecursive(baseCachedPath);
 
-                    const cachedIcon = Buffer.from(
-                      generatedIcon.replace(/data:.*;base64,/, ""),
-                      "base64"
-                    );
+                  const cachedIcon = Buffer.from(
+                    generatedIcon.replace(/data:.*;base64,/, ""),
+                    "base64"
+                  );
 
-                    await writeFile(cachedIconPath, cachedIcon, true);
-                    setInfo((info) => ({
-                      ...info,
-                      icon: bufferToUrl(cachedIcon),
-                    }));
-                    updateFolder(baseCachedPath, basename(cachedIconPath));
-
-                    return nextQueueItem();
-                  });
+                  await writeFile(cachedIconPath, cachedIcon, true);
+                  setInfo((info) => ({
+                    ...info,
+                    icon: bufferToUrl(cachedIcon),
+                  }));
+                  updateFolder(baseCachedPath, basename(cachedIconPath));
                 }
-
-                if (cacheQueue.length === 1) await cacheQueue[0]();
               }
             };
 

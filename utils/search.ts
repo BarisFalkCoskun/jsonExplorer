@@ -142,8 +142,11 @@ export const fullSearch = async (
   readFile: (path: string) => Promise<Buffer>,
   rootFs?: RootFileSystem
 ): Promise<Index.Result[]> => {
-  const baseResult = await search(searchTerm);
-  const dynamicIndex = await buildDynamicIndex(readFile, rootFs);
+  // Run base search and dynamic index building in parallel
+  const [baseResult, dynamicIndex] = await Promise.all([
+    search(searchTerm),
+    buildDynamicIndex(readFile, rootFs),
+  ]);
   const dynamicResult = await search(searchTerm, dynamicIndex);
 
   return [...baseResult, ...dynamicResult].sort((a, b) => b.score - a.score);
@@ -154,26 +157,12 @@ export const useSearch = (searchTerm: string): Index.Result[] => {
   const { readFile, rootFs } = useFileSystem();
 
   useEffect(() => {
-    const updateResults = async (): Promise<void> => {
-      if (searchTerm.length > 0) {
-        if (!window.lunr) await loadFiles([SEARCH_LIB]);
-
-        search(searchTerm).then(setResults);
-        buildDynamicIndex(readFile, rootFs).then((dynamicIndex) =>
-          search(searchTerm, dynamicIndex).then((searchResults) =>
-            setResults((currentResults) =>
-              [...currentResults, ...searchResults].sort(
-                (a, b) => b.score - a.score
-              )
-            )
-          )
-        );
-      } else {
-        setResults([]);
-      }
-    };
-
-    updateResults();
+    if (searchTerm.length > 0) {
+      // Use fullSearch which runs base search and dynamic index building in parallel
+      fullSearch(searchTerm, readFile, rootFs).then(setResults);
+    } else {
+      setResults([]);
+    }
   }, [readFile, rootFs, searchTerm]);
 
   return results;
