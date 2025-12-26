@@ -1,31 +1,65 @@
-import { useRef, useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { DEFAULT_INTERSECTION_OPTIONS } from "utils/constants";
+
+// Shared observer per root element - prevents creating 100s of observers
+type ObserverData = {
+  observer: IntersectionObserver;
+  callbacks: Map<Element, (isVisible: boolean) => void>;
+};
+
+const observerMap = new Map<Element | null, ObserverData>();
+
+const getOrCreateObserver = (root: Element | null): ObserverData => {
+  const existing = observerMap.get(root);
+  if (existing) return existing;
+
+  const callbacks = new Map<Element, (isVisible: boolean) => void>();
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        const callback = callbacks.get(entry.target);
+        callback?.(entry.isIntersecting);
+      });
+    },
+    { root, ...DEFAULT_INTERSECTION_OPTIONS }
+  );
+
+  const data = { observer, callbacks };
+  observerMap.set(root, data);
+  return data;
+};
 
 export const useIsVisible = (
   elementRef: React.RefObject<HTMLElement | null>,
   parentSelector?: string | React.RefObject<HTMLElement | null>,
   alwaysVisible = false
 ): boolean => {
-  const watching = useRef(false);
   const [isVisible, setIsVisible] = useState(alwaysVisible);
 
   useEffect(() => {
-    if (alwaysVisible || !elementRef.current || watching.current) return;
+    if (alwaysVisible || !elementRef.current) return;
 
-    watching.current = true;
+    const element = elementRef.current;
+    const root =
+      (typeof parentSelector === "object" && parentSelector.current) ||
+      (typeof parentSelector === "string" &&
+        element.closest(parentSelector)) ||
+      element.parentElement;
 
-    new IntersectionObserver(
-      (entries) =>
-        entries.forEach(({ isIntersecting }) => setIsVisible(isIntersecting)),
-      {
-        root:
-          (typeof parentSelector === "object" && parentSelector.current) ||
-          (typeof parentSelector === "string" &&
-            elementRef.current.closest(parentSelector)) ||
-          elementRef.current.parentElement,
-        ...DEFAULT_INTERSECTION_OPTIONS,
+    const { observer, callbacks } = getOrCreateObserver(root);
+    callbacks.set(element, setIsVisible);
+    observer.observe(element);
+
+    return () => {
+      callbacks.delete(element);
+      observer.unobserve(element);
+
+      // Clean up observer if no more elements are being watched
+      if (callbacks.size === 0) {
+        observer.disconnect();
+        observerMap.delete(root);
       }
-    ).observe(elementRef.current);
+    };
   }, [alwaysVisible, elementRef, parentSelector]);
 
   return isVisible;
