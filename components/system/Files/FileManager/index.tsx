@@ -91,7 +91,7 @@ const FileManager: FC<FileManagerProps> = ({
   );
   const { focusedEntries, focusableEntry, ...focusFunctions } =
     useFocusableEntries(fileManagerRef, isFileExplorerIconView);
-  const { fileActions, files, folderActions, isLoading, updateFiles } =
+  const { fileActions, files, folderActions, hasMore, isLoading, loadMore, updateFiles } =
     useFolder(url, setRenaming, focusFunctions, {
       hideFolders,
       hideLoading,
@@ -231,6 +231,31 @@ const FileManager: FC<FileManagerProps> = ({
   useEffect(() => {
     setColumns(isDetailsView ? DEFAULT_COLUMNS : undefined);
   }, [isDetailsView]);
+
+  useEffect(() => {
+    const container = fileManagerRef.current;
+
+    if (!container || !hasMore) return;
+
+    const onScroll = (): void => {
+      const { scrollTop, clientHeight, scrollHeight } = container;
+
+      if (scrollTop + clientHeight >= scrollHeight - 300) {
+        loadMore();
+      }
+    };
+
+    // Fill viewport if content is too short to scroll
+    if (container.scrollHeight <= container.clientHeight) {
+      loadMore();
+    }
+
+    container.addEventListener("scroll", onScroll, { passive: true });
+
+    return () => {
+      container.removeEventListener("scroll", onScroll);
+    };
+  }, [hasMore, loadMore]);
 
   return (
     <>

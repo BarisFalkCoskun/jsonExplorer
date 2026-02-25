@@ -143,7 +143,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const documents = await collection.find(
           {},
           metaOnly ? { projection: { _id: 1, name: 1 } } : undefined
-        ).toArray();
+        ).sort({ name: 1 }).toArray();
         res.json(documents);
         break;
 

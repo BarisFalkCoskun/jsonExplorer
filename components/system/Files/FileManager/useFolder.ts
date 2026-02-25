@@ -91,7 +91,9 @@ type Folder = {
   fileActions: FileActions;
   files: Files;
   folderActions: FolderActions;
+  hasMore: boolean;
   isLoading: boolean;
+  loadMore: () => void;
   updateFiles: (newFile?: string, oldFile?: string) => void;
 };
 
@@ -213,74 +215,117 @@ const useFolder = (
           [baseName]: fileStats,
         }));
       } else {
+        progressiveLoadRef.current?.abort();
+        progressiveLoadRef.current = null;
+        allEntriesRef.current = [];
+        loadedCountRef.current = 0;
+        setHasMore(false);
         setIsLoading(true);
+
+        const BATCH_SIZE = 200;
+
+        const sortFn = isSimpleSort
+          ? undefined
+          : sortBy === "date"
+            ? sortByDate(directory)
+            : sortBySize;
+        const effectiveSortOrder = (!skipSorting && sortOrder) || [];
+
+        const statFile = async (
+          file: string
+        ): Promise<{ file: string; stats: FileStat } | null> => {
+          try {
+            const filePath = join(directory, file);
+            const fileStats = isSimpleSort
+              ? await lstat(filePath)
+              : await stat(filePath);
+            const hideEntry = hideFolders && fileStats.isDirectory();
+
+            if (hideEntry) {
+              return null;
+            }
+
+            const statsWithInfo = await statsWithShortcutInfo(file, fileStats);
+            return { file, stats: statsWithInfo };
+          } catch {
+            return null;
+          }
+        };
+
+        const buildFilesObject = (
+          results: ({ file: string; stats: FileStat } | null)[]
+        ): Files => {
+          const filesObject: Files = {};
+          for (const result of results) {
+            if (result) {
+              filesObject[result.file] = result.stats;
+            }
+          }
+          return filesObject;
+        };
+
+        const updateSortOrder = (sortedFiles: Files): void => {
+          const newSortOrder = Object.keys(sortedFiles);
+
+          if (
+            !skipSorting &&
+            (!sortOrder ||
+              sortOrder?.some(
+                (entry, index) => newSortOrder[index] !== entry
+              ))
+          ) {
+            window.requestAnimationFrame(() =>
+              setSortOrder(directory, newSortOrder)
+            );
+          }
+        };
 
         try {
           const dirContents = (await readdir(directory)).filter(
             filterSystemFiles(directory)
           );
 
-          // Fetch all file stats in parallel for much better performance
-          const fileStatsResults = await Promise.all(
-            dirContents.map(async (file) => {
-              try {
-                const filePath = join(directory, file);
-                const fileStats = isSimpleSort
-                  ? await lstat(filePath)
-                  : await stat(filePath);
-                const hideEntry = hideFolders && fileStats.isDirectory();
-
-                if (hideEntry) {
-                  return null;
-                }
-
-                const statsWithInfo = await statsWithShortcutInfo(file, fileStats);
-                return { file, stats: statsWithInfo };
-              } catch {
-                return null;
-              }
-            })
-          );
-
-          // Build files object from successful results
-          const filesObject: Files = {};
-          for (const result of fileStatsResults) {
-            if (result) {
-              filesObject[result.file] = result.stats;
-            }
+          if (dirContents.length === 0) {
+            setFiles({});
+            setIsLoading(false);
+            return;
           }
 
-          // Sort once at the end (not after each file)
-          const sortedFiles = sortContents(
-            filesObject,
-            (!skipSorting && sortOrder) || [],
-            isSimpleSort
-              ? undefined
-              : sortBy === "date"
-                ? sortByDate(directory)
-                : sortBySize,
+          if (dirContents.length <= BATCH_SIZE) {
+            // Small folder: single-pass (existing behavior)
+            const fileStatsResults = await Promise.all(
+              dirContents.map(statFile)
+            );
+            const sortedFiles = sortContents(
+              buildFilesObject(fileStatsResults),
+              effectiveSortOrder,
+              sortFn,
+              sortAscending
+            );
+
+            setFiles(sortedFiles);
+            updateSortOrder(sortedFiles);
+            setIsLoading(false);
+            return;
+          }
+
+          // Large folder: load first batch, wait for scroll to load more
+          allEntriesRef.current = dirContents;
+
+          const firstBatch = dirContents.slice(0, BATCH_SIZE);
+          const firstResults = await Promise.all(firstBatch.map(statFile));
+
+          const firstFiles = sortContents(
+            buildFilesObject(firstResults),
+            effectiveSortOrder,
+            sortFn,
             sortAscending
           );
-
-          if (dirContents.length > 0) {
-            setFiles(sortedFiles);
-
-            const newSortOrder = Object.keys(sortedFiles);
-
-            if (
-              !skipSorting &&
-              (!sortOrder ||
-                sortOrder?.some(
-                  (entry, index) => newSortOrder[index] !== entry
-                ))
-            ) {
-              window.requestAnimationFrame(() =>
-                setSortOrder(directory, newSortOrder)
-              );
-            }
-          } else {
-            setFiles({});
-          }
+          setFiles(firstFiles);
+          updateSortOrder(firstFiles);
+          loadedCountRef.current = BATCH_SIZE;
+          setHasMore(true);
+          setIsLoading(false);
         } catch (error) {
           if (isApiError(error) && error.code === "ENOENT") {
             closeProcessesByUrl(directory);
@@ -288,9 +333,9 @@ const useFolder = (
             console.error(`Failed to read directory: ${directory}`, error);
             setFiles({});
           }
-        }
 
-        setIsLoading(false);
+          setIsLoading(false);
+        }
       }
     },
     [
@@ -312,6 +357,80 @@ const useFolder = (
       statsWithShortcutInfo,
     ]
   );
+  const loadMore = useCallback(async () => {
+    const BATCH_SIZE = 200;
+    const allEntries = allEntriesRef.current;
+
+    if (
+      isLoadingMoreRef.current ||
+      loadedCountRef.current >= allEntries.length
+    ) {
+      return;
+    }
+
+    isLoadingMoreRef.current = true;
+
+    const sortFn = isSimpleSort
+      ? undefined
+      : sortBy === "date"
+        ? sortByDate(directory)
+        : sortBySize;
+    const effectiveSortOrder = (!skipSorting && sortOrder) || [];
+
+    const start = loadedCountRef.current;
+    const end = Math.min(start + BATCH_SIZE, allEntries.length);
+    const batch = allEntries.slice(start, end);
+
+    try {
+      const batchResults = await Promise.all(
+        batch.map(async (file) => {
+          try {
+            const filePath = join(directory, file);
+            const fileStats = isSimpleSort
+              ? await lstat(filePath)
+              : await stat(filePath);
+
+            if (hideFolders && fileStats.isDirectory()) return null;
+
+            const statsWithInfo = await statsWithShortcutInfo(file, fileStats);
+            return { file, stats: statsWithInfo };
+          } catch {
+            return null;
+          }
+        })
+      );
+
+      const batchFiles: Files = {};
+      for (const result of batchResults) {
+        if (result) batchFiles[result.file] = result.stats;
+      }
+
+      setFiles((prev = {}) =>
+        sortContents(
+          { ...prev, ...batchFiles },
+          effectiveSortOrder,
+          sortFn,
+          sortAscending
+        )
+      );
+
+      loadedCountRef.current = end;
+      setHasMore(end < allEntries.length);
+    } finally {
+      isLoadingMoreRef.current = false;
+    }
+  }, [
+    directory,
+    hideFolders,
+    isSimpleSort,
+    lstat,
+    skipSorting,
+    sortAscending,
+    sortBy,
+    sortOrder,
+    stat,
+    statsWithShortcutInfo,
+  ]);
   const deleteLocalPath = useCallback(
     async (path: string): Promise<void> => {
       if (await deletePath(path)) {
@@ -750,10 +869,20 @@ const useFolder = (
     }),
     [addFile, directory, newPath, pasteToFolder, sortByOrder]
   );
+  const [hasMore, setHasMore] = useState(false);
   const updatingFiles = useRef(false);
+  const progressiveLoadRef = useRef<AbortController | null>(null);
+  const allEntriesRef = useRef<string[]>([]);
+  const loadedCountRef = useRef(0);
+  const isLoadingMoreRef = useRef(false);
 
   useEffect(() => {
     if (directory !== currentDirectory) {
+      progressiveLoadRef.current?.abort();
+      progressiveLoadRef.current = null;
+      allEntriesRef.current = [];
+      loadedCountRef.current = 0;
+      setHasMore(false);
       setIsLoading(true);
       setCurrentDirectory(directory);
       setFiles(NO_FILES);
@@ -828,7 +957,9 @@ const useFolder = (
     },
     files: files || {},
     folderActions,
+    hasMore,
     isLoading,
+    loadMore,
     updateFiles,
   };
 };
