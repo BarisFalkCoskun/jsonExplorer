@@ -49,7 +49,7 @@ export const getResultInfo = async (
       } else {
         getInfoWithoutExtension(
           fs,
-          fs.getRootFS() as RootFileSystem,
+          (fs.getRootFS?.() || Object.create(null)) as RootFileSystem,
           url,
           isDirectory,
           false,

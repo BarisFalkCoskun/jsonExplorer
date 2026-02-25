@@ -37,3 +37,5 @@ public/Users/Public/**
 !public/Users/Public/Start Menu/Games/Space Cadet.url
 !public/Users/Public/Videos
 tsconfig.tsbuildinfo
+package-lock.json
+yarn.lock

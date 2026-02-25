@@ -25,7 +25,7 @@ const INITIAL_STATE: MongoDBIconState = {
  */
 const findMongoDBFileSystem = (
   path: string,
-  rootFs: RootFileSystem | null
+  rootFs: RootFileSystem | null | undefined
 ): { mongoFS: MongoDBFileSystem; mountPoint: string; relativePath: string } | null => {
   if (!rootFs) return null;
 

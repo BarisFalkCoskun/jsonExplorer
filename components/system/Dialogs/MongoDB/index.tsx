@@ -2,6 +2,8 @@ import { useState, useCallback } from "react";
 import styled from "styled-components";
 import Button from "styles/common/Button";
 import { useMongoDBIntegration } from "hooks/useMongoDBIntegration";
+import { type ComponentProcessProps } from "components/system/Apps/RenderComponent";
+import { useProcesses } from "contexts/process";
 import { type FC } from "react";
 
 const StyledMongoDBDialog = styled.div`
@@ -116,11 +118,8 @@ const StyledMongoDBDialog = styled.div`
   }
 `;
 
-interface MongoDBDialogProps {
-  onClose: () => void;
-}
-
-const MongoDBDialog: FC<MongoDBDialogProps> = ({ onClose }) => {
+const MongoDBDialog: FC<ComponentProcessProps> = ({ id }) => {
+  const { closeWithTransition } = useProcesses();
   const {
     connections,
     isLoading,
@@ -250,7 +249,7 @@ const MongoDBDialog: FC<MongoDBDialogProps> = ({ onClose }) => {
       </div>
 
       <div className="buttons">
-        <Button onClick={onClose}>Close</Button>
+        <Button onClick={() => closeWithTransition(id)}>Close</Button>
       </div>
     </StyledMongoDBDialog>
   );

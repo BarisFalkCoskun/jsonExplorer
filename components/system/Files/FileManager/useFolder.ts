@@ -284,6 +284,9 @@ const useFolder = (
         } catch (error) {
           if (isApiError(error) && error.code === "ENOENT") {
             closeProcessesByUrl(directory);
+          } else {
+            console.error(`Failed to read directory: ${directory}`, error);
+            setFiles({});
           }
         }
 

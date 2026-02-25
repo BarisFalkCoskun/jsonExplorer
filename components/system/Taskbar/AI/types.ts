@@ -1,7 +1,12 @@
 /// <reference types="dom-chromium-ai" />
 
 import { type ChatCompletionMessageParam } from "@mlc-ai/web-llm";
-import { type MarkedOptions } from "components/apps/Marked/useMarked";
+
+type MarkedOptions = {
+  headerIds?: boolean;
+  mangle?: boolean;
+  [key: string]: unknown;
+};
 
 declare global {
   /* eslint-disable vars-on-top, no-var  */

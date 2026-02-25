@@ -1,22 +1,80 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { MongoClient } from 'mongodb';
+import { MongoClient, ObjectId } from 'mongodb';
 
-let cachedClient: MongoClient | null = null;
+type MongoClientCacheEntry = {
+  client?: MongoClient;
+  connecting?: Promise<MongoClient>;
+};
+
+const clientCache = new Map<string, MongoClientCacheEntry>();
 
 async function connectToMongoDB(connectionString: string): Promise<MongoClient> {
-  if (cachedClient && cachedClient.readyState === 'connected') {
-    return cachedClient;
+  const cachedEntry = clientCache.get(connectionString);
+
+  if (cachedEntry?.client) {
+    return cachedEntry.client;
+  }
+
+  if (cachedEntry?.connecting) {
+    return cachedEntry.connecting;
   }
 
   const client = new MongoClient(connectionString, {
+    maxPoolSize: 10,
     serverSelectionTimeoutMS: 5000,
     connectTimeoutMS: 5000,
   });
 
-  await client.connect();
-  cachedClient = client;
-  return client;
+  const connecting = client
+    .connect()
+    .then(() => {
+      clientCache.set(connectionString, { client });
+      return client;
+    })
+    .catch((error) => {
+      clientCache.delete(connectionString);
+      throw error;
+    });
+
+  clientCache.set(connectionString, { connecting });
+
+  return connecting;
 }
+
+const getDocumentFilters = (documentId: string): object[] => {
+  const filters: object[] = [{ name: documentId }, { _id: documentId }];
+
+  if (ObjectId.isValid(documentId)) {
+    filters.push({ _id: new ObjectId(documentId) });
+  }
+
+  return filters;
+}
+
+const extractDatabaseNameFromConnectionString = (
+  connectionString: string
+): string | undefined => {
+  const protocolMatch = connectionString.match(/^mongodb(?:\+srv)?:\/\//i);
+
+  if (!protocolMatch) {
+    return undefined;
+  }
+
+  const connectionWithoutProtocol = connectionString.slice(
+    protocolMatch[0].length
+  );
+  const firstPathSlash = connectionWithoutProtocol.indexOf("/");
+
+  if (firstPathSlash < 0) {
+    return undefined;
+  }
+
+  const pathAndQuery = connectionWithoutProtocol.slice(firstPathSlash + 1);
+  const [rawDatabaseName = ""] = pathAndQuery.split("?");
+  const databaseName = decodeURIComponent(rawDatabaseName).trim();
+
+  return databaseName || undefined;
+};
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { params } = req.query;
@@ -31,9 +89,38 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     switch (operation) {
       case 'databases':
         const adminDb = client.db().admin();
-        const { databases } = await adminDb.listDatabases();
-        res.json(databases.map((db: any) => db.name));
-        break;
+        try {
+          const { databases } = await adminDb.listDatabases({
+            authorizedDatabases: true,
+            nameOnly: true,
+          });
+
+          const names = databases
+            .map((db: any) => db?.name)
+            .filter(Boolean) as string[];
+
+          if (names.length > 0) {
+            return res.json(names);
+          }
+        } catch (listDatabasesError) {
+          const fallbackDatabaseName =
+            extractDatabaseNameFromConnectionString(connectionString);
+
+          if (fallbackDatabaseName) {
+            return res.json([fallbackDatabaseName]);
+          }
+
+          throw listDatabasesError;
+        }
+
+        // Some clusters/users return no database list. Fall back to URI db.
+        {
+          const fallbackDatabaseName =
+            extractDatabaseNameFromConnectionString(connectionString);
+          return res.json(
+            fallbackDatabaseName ? [fallbackDatabaseName] : []
+          );
+        }
 
       case 'collections':
         const [dbName] = operationParams;
@@ -52,7 +139,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
         const db2 = client.db(dbName2);
         const collection = db2.collection(collectionName);
-        const documents = await collection.find({}).toArray();
+        const metaOnly = req.query.meta === '1' || req.query.meta === 'true';
+        const documents = await collection.find(
+          {},
+          metaOnly ? { projection: { _id: 1, name: 1 } } : undefined
+        ).toArray();
         res.json(documents);
         break;
 
@@ -68,10 +159,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (req.method === 'GET') {
           // Find document by name or _id
           const doc = await collection2.findOne({
-            $or: [
-              { name: documentId },
-              { _id: documentId }
-            ]
+            $or: getDocumentFilters(documentId),
           });
           if (!doc) {
             return res.status(404).json({ error: 'Document not found' });
@@ -86,10 +174,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         } else if (req.method === 'DELETE') {
           // Delete document
           const result = await collection2.deleteOne({
-            $or: [
-              { name: documentId },
-              { _id: documentId }
-            ]
+            $or: getDocumentFilters(documentId),
           });
           res.json({ deletedCount: result.deletedCount });
         } else {
@@ -108,10 +193,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         // Find document by name or _id
         const docWithImages = await collection3.findOne({
-          $or: [
-            { name: documentId2 },
-            { _id: documentId2 }
-          ]
+          $or: getDocumentFilters(documentId2),
         });
 
         if (!docWithImages) {

@@ -171,7 +171,7 @@ export const ZIP_EXTENSIONS = new Set([".jsdos", ".pk3", ".wsz", ".zip"]);
 
 export const MOUNTABLE_EXTENSIONS = new Set([".iso", ...ZIP_EXTENSIONS]);
 
-export const MOUNTABLE_FS_TYPES = new Set(["FileSystemAccess", "HTTPRequest"]);
+export const MOUNTABLE_FS_TYPES = new Set(["FileSystemAccess", "HTTPRequest", "MongoDBFS"]);
 
 export const SPREADSHEET_FORMATS = [
   ".csv",
@@ -302,6 +302,8 @@ export const ICON_CACHE = `${USER_ICON_PATH}/Cache`;
 export const YT_ICON_CACHE = `${ICON_CACHE}/YouTube`;
 
 export const ICON_CACHE_EXTENSION = ".cache";
+
+export const TEXT_EDITORS = ["FileExplorer"];
 
 export const SESSION_FILE = "/session.json";
 

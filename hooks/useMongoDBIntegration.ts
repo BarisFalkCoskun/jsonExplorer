@@ -72,6 +72,10 @@ export const useMongoDBIntegration = () => {
           }
 
           try {
+            if (!rootFs?.mount) {
+              throw new Error("File system is not ready yet");
+            }
+
             // Create the Local folder on desktop and mount MongoDB FS inside it
             const localFolderPath = `${DESKTOP_PATH}/${alias}`;
 
@@ -85,7 +89,7 @@ export const useMongoDBIntegration = () => {
             // The filesystem mounting will handle directory creation
 
             // Now mount the MongoDB filesystem at the Local folder path
-            rootFs?.mount?.(localFolderPath, mongoFS);
+            rootFs.mount(localFolderPath, mongoFS);
 
             const newConnection: MongoDBConnection = {
               connectionString,
@@ -94,8 +98,13 @@ export const useMongoDBIntegration = () => {
             };
 
             setState(prev => {
-              const updatedConnections = [...prev.connections, newConnection];
+              const updatedConnections = [
+                ...prev.connections.filter(conn => conn.alias !== alias),
+                newConnection,
+              ];
+
               saveConnections(updatedConnections);
+
               return {
                 ...prev,
                 connections: updatedConnections,
@@ -155,9 +164,16 @@ export const useMongoDBIntegration = () => {
   // Load saved connections from localStorage
   useEffect(() => {
     const savedConnections = localStorage.getItem("mongodbConnections");
+
     if (savedConnections) {
       try {
-        const connections = JSON.parse(savedConnections);
+        const connections = (JSON.parse(savedConnections) as MongoDBConnection[]).map(
+          (connection) => ({
+            ...connection,
+            isConnected: false,
+          })
+        );
+
         setState(prev => ({ ...prev, connections }));
       } catch (error) {
         console.error("Failed to load MongoDB connections:", error);
@@ -178,7 +194,10 @@ export const useMongoDBIntegration = () => {
   useEffect(() => {
     const restoreConnections = async () => {
       for (const connection of state.connections) {
-        if (!connection.isConnected) {
+        const mountPath = `${DESKTOP_PATH}/${connection.alias}`;
+        const isMounted = Boolean(rootFs?.mntMap?.[mountPath]);
+
+        if (!isMounted) {
           try {
             await addConnection(connection.connectionString, connection.alias);
           } catch (error) {

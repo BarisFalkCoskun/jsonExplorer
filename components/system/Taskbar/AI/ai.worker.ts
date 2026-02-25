@@ -11,6 +11,18 @@ import {
 } from "components/system/Taskbar/AI/types";
 import { isAvailable } from "hooks/useWindowAI";
 
+type StableDiffusionConfig = {
+  prompts: [string, string][];
+};
+
+declare const StableDiffusionLibs: string[];
+declare const runStableDiffusion: (
+  config: StableDiffusionConfig,
+  offscreenCanvas: OffscreenCanvas,
+  renderOnScreen: boolean,
+  disableSafetyChecker: boolean
+) => Promise<void>;
+
 const MARKED_LIBS = [
   "/Program Files/Marked/marked.min.js",
   "/Program Files/Marked/purify.min.js",
@@ -142,8 +154,14 @@ globalThis.addEventListener(
         }
 
         if (data.imagePrompt && data.offscreenCanvas) {
-          globalThis.tvmjsGlobalEnv = globalThis.tvmjsGlobalEnv || {};
-          globalThis.tvmjsGlobalEnv.logger = (_type: string, message: string) =>
+          const workerGlobal = globalThis as typeof globalThis & {
+            tvmjsGlobalEnv?: {
+              logger?: (type: string, message: string) => void;
+            };
+          };
+
+          workerGlobal.tvmjsGlobalEnv = workerGlobal.tvmjsGlobalEnv || {};
+          workerGlobal.tvmjsGlobalEnv.logger = (_type: string, message: string) =>
             globalThis.postMessage({
               progress: {
                 text: message,
@@ -165,7 +183,7 @@ globalThis.addEventListener(
             false
           );
 
-          globalThis.tvmjsGlobalEnv.logger("", "");
+          workerGlobal.tvmjsGlobalEnv.logger?.("", "");
 
           if (data.hasWindowAI) {
             rebuildSession(
