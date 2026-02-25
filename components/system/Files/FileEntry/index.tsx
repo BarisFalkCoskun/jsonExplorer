@@ -183,7 +183,7 @@ const FileEntry: FC<FileEntryProps> = ({
   const { formats, sizes } = useTheme();
 
   // MongoDB icon integration
-  const mongoDBIcon = useMongoDBIcon(path);
+  const mongoDBIcon = useMongoDBIcon(path, isVisible);
   const {
     isMongoDocument,
     images,

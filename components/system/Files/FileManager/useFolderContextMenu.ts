@@ -39,6 +39,7 @@ import {
 import { getMountUrl, isMountedFolder } from "contexts/fileSystem/core";
 
 const NEW_FOLDER = "New folder";
+const NEW_MONGO_FOLDER = "NewFolder";
 const NEW_TEXT_DOCUMENT = "New Text Document.txt";
 const NEW_RTF_DOCUMENT = "New Rich Text Document.whtml";
 
@@ -390,6 +391,9 @@ const useFolderContextMenu = (
           ...(isFileSystemMappingSupported() ? [MAP_DIRECTORY] : []),
         ];
         const mountUrl = getMountUrl(url, rootFs?.mntMap || {});
+        const isMongoFS = mountUrl
+          ? rootFs?.mntMap[mountUrl]?.getName?.() === "MongoDBFS"
+          : false;
         const isReadOnly =
           MOUNTABLE_EXTENSIONS.has(getExtension(url)) ||
           (mountUrl && !isMountedFolder(rootFs?.mntMap[mountUrl]));
@@ -492,7 +496,7 @@ const useFolderContextMenu = (
                   label: "New",
                   menu: [
                     {
-                      action: () => newEntry(NEW_FOLDER, undefined, event),
+                      action: () => newEntry(isMongoFS ? NEW_MONGO_FOLDER : NEW_FOLDER, undefined, event),
                       icon: FOLDER_ICON,
                       label: "Folder",
                     },

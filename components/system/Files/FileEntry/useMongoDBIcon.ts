@@ -51,11 +51,12 @@ const findMongoDBFileSystem = (
   return null;
 };
 
-export const useMongoDBIcon = (path: string) => {
+export const useMongoDBIcon = (path: string, visible = false) => {
   const [state, setState] = useState<MongoDBIconState>(INITIAL_STATE);
   const { rootFs } = useFileSystem();
   const loadingRef = useRef<AbortController | null>(null);
-  const imageCache = useRef<Map<string, string>>(new Map());
+  const hasLoadedRef = useRef(false);
+  const isLoadingRef = useRef(false);
 
   // Check if this is a MongoDB document
   const isMongoDocument = useCallback(() => {
@@ -67,15 +68,11 @@ export const useMongoDBIcon = (path: string) => {
 
   // Load images from MongoDB document
   const loadImages = useCallback(async () => {
-    if (!isMongoDocument() || !rootFs) return;
-
-    // Abort any existing loading
-    if (loadingRef.current) {
-      loadingRef.current.abort();
-    }
+    if (!isMongoDocument() || !rootFs || isLoadingRef.current) return;
 
     const abortController = new AbortController();
     loadingRef.current = abortController;
+    isLoadingRef.current = true;
 
     setState(prev => ({ ...prev, isLoading: true, error: null }));
 
@@ -85,6 +82,7 @@ export const useMongoDBIcon = (path: string) => {
 
       if (!mongoData) {
         setState(prev => ({ ...prev, isLoading: false, error: "MongoDB filesystem not found" }));
+        isLoadingRef.current = false;
         return;
       }
 
@@ -93,6 +91,9 @@ export const useMongoDBIcon = (path: string) => {
 
       if (abortController.signal.aborted) return;
 
+      hasLoadedRef.current = true;
+      isLoadingRef.current = false;
+
       setState(prev => ({
         ...prev,
         images,
@@ -100,14 +101,10 @@ export const useMongoDBIcon = (path: string) => {
         hasNavigationArrows: images.length > 1,
         currentImageIndex: 0,
       }));
-
-      // Preload the first few images
-      if (images.length > 0) {
-        preloadImages(images.slice(0, Math.min(3, images.length)));
-      }
     } catch (error) {
       if (abortController.signal.aborted) return;
 
+      isLoadingRef.current = false;
       setState(prev => ({
         ...prev,
         isLoading: false,
@@ -116,59 +113,29 @@ export const useMongoDBIcon = (path: string) => {
     }
   }, [isMongoDocument, path, rootFs]);
 
-  // Preload images for better performance
-  const preloadImages = useCallback((imageUrls: string[]) => {
-    imageUrls.forEach(url => {
-      if (!imageCache.current.has(url)) {
-        const img = new Image();
-        img.onload = () => {
-          imageCache.current.set(url, url);
-        };
-        img.onerror = () => {
-          console.warn(`Failed to preload image: ${url}`);
-        };
-        img.src = url;
-      }
-    });
-  }, []);
-
   // Navigate to previous image
   const goToPreviousImage = useCallback(() => {
     setState(prev => {
       if (prev.images.length <= 1 || prev.currentImageIndex <= 0) return prev;
 
-      const newIndex = prev.currentImageIndex - 1;
-
-      // Preload previous image if available
-      if (newIndex > 0 && prev.images[newIndex - 1]) {
-        preloadImages([prev.images[newIndex - 1]]);
-      }
-
       return {
         ...prev,
-        currentImageIndex: newIndex,
+        currentImageIndex: prev.currentImageIndex - 1,
       };
     });
-  }, [preloadImages]);
+  }, []);
 
   // Navigate to next image
   const goToNextImage = useCallback(() => {
     setState(prev => {
       if (prev.images.length <= 1 || prev.currentImageIndex >= prev.images.length - 1) return prev;
 
-      const newIndex = prev.currentImageIndex + 1;
-
-      // Preload next image if available
-      if (newIndex < prev.images.length - 1 && prev.images[newIndex + 1]) {
-        preloadImages([prev.images[newIndex + 1]]);
-      }
-
       return {
         ...prev,
-        currentImageIndex: newIndex,
+        currentImageIndex: prev.currentImageIndex + 1,
       };
     });
-  }, [preloadImages]);
+  }, []);
 
   // Get current image URL
   const getCurrentImageUrl = useCallback(() => {
@@ -180,17 +147,31 @@ export const useMongoDBIcon = (path: string) => {
   const canGoToPrevious = state.currentImageIndex > 0;
   const canGoToNext = state.currentImageIndex < state.images.length - 1;
 
-  // Load images when path changes or component mounts
+  // Only load images when visible and not already loaded
   useEffect(() => {
-    loadImages();
+    if (visible && !hasLoadedRef.current && !isLoadingRef.current) {
+      loadImages();
+    }
+  }, [visible, loadImages]);
 
-    // Cleanup on unmount or path change
+  // Abort on unmount
+  useEffect(() => {
     return () => {
       if (loadingRef.current) {
         loadingRef.current.abort();
       }
     };
-  }, [loadImages]);
+  }, []);
+
+  // Reset when path changes
+  useEffect(() => {
+    if (loadingRef.current) {
+      loadingRef.current.abort();
+    }
+    hasLoadedRef.current = false;
+    isLoadingRef.current = false;
+    setState(INITIAL_STATE);
+  }, [path]);
 
   return {
     ...state,

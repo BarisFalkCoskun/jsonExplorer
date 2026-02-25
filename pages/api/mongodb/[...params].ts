@@ -209,10 +209,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           images.push(...docWithImages.oldImages);
         }
 
-        // Filter out invalid URLs and ensure they're strings
-        const validImages = images.filter(img =>
-          typeof img === 'string' && img.trim().length > 0
-        );
+        // Extract image URLs - images can be strings or objects with small/medium/large
+        const validImages = images
+          .map(img => {
+            if (typeof img === 'string' && img.trim().length > 0) {
+              return img.trim();
+            }
+            if (img && typeof img === 'object') {
+              // Prefer medium, then small, then large
+              return img.medium || img.small || img.large || null;
+            }
+            return null;
+          })
+          .filter((url): url is string => url !== null);
 
         res.json({
           images: validImages,
@@ -221,6 +230,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             name: docWithImages.name
           }
         });
+        break;
+
+      case 'mkdir':
+        const [mkdirDb, mkdirCollection] = operationParams;
+        if (!mkdirDb) {
+          return res.status(400).json({ error: 'Database name required' });
+        }
+        if (mkdirCollection) {
+          // Create collection
+          await client.db(mkdirDb).createCollection(mkdirCollection);
+        } else {
+          // Create database by creating a placeholder collection
+          // MongoDB databases only exist while they have collections
+          await client.db(mkdirDb).createCollection('_placeholder');
+        }
+        res.json({ success: true });
         break;
 
       case 'test':

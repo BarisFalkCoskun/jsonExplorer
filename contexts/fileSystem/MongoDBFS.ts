@@ -85,7 +85,7 @@ export class MongoDBFileSystem implements FileSystem {
         }),
         listCollections: async () => {
           if (!dbName) return [];
-          const response = await fetch(`/api/mongodb/collections/${dbName}`, {
+          const response = await fetch(`/api/mongodb/collections/${encodeURIComponent(dbName)}`, {
             headers: {
               'x-mongodb-connection': this.connectionString,
             },
@@ -100,7 +100,7 @@ export class MongoDBFileSystem implements FileSystem {
           find: () => ({
             toArray: async () => {
               if (!dbName) return [];
-              const response = await fetch(`/api/mongodb/documents/${dbName}/${collectionName}`, {
+              const response = await fetch(`/api/mongodb/documents/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}`, {
                 headers: {
                   'x-mongodb-connection': this.connectionString,
                 },
@@ -114,7 +114,7 @@ export class MongoDBFileSystem implements FileSystem {
           findOne: async (filter: any) => {
             if (!dbName) return null;
             const documentId = filter.name || filter._id;
-            const response = await fetch(`/api/mongodb/document/${dbName}/${collectionName}/${documentId}`, {
+            const response = await fetch(`/api/mongodb/document/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}/${encodeURIComponent(documentId)}`, {
               headers: {
                 'x-mongodb-connection': this.connectionString,
               },
@@ -126,7 +126,7 @@ export class MongoDBFileSystem implements FileSystem {
           },
           getImages: async (documentId: string) => {
             if (!dbName) return [];
-            const response = await fetch(`/api/mongodb/images/${dbName}/${collectionName}/${documentId}`, {
+            const response = await fetch(`/api/mongodb/images/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}/${encodeURIComponent(documentId)}`, {
               headers: {
                 'x-mongodb-connection': this.connectionString,
               },
@@ -146,7 +146,7 @@ export class MongoDBFileSystem implements FileSystem {
           },
           deleteOne: async (filter: any) => {
             const documentId = filter.name || filter._id;
-            const response = await fetch(`/api/mongodb/document/${dbName}/${collectionName}/${documentId}`, {
+            const response = await fetch(`/api/mongodb/document/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}/${encodeURIComponent(documentId)}`, {
               method: 'DELETE',
               headers: {
                 'x-mongodb-connection': this.connectionString,
@@ -171,7 +171,7 @@ export class MongoDBFileSystem implements FileSystem {
 
   private async replaceDocument(dbName: string, collectionName: string, doc: any) {
     const documentId = doc.name || doc._id || new Date().getTime().toString();
-    const response = await fetch(`/api/mongodb/document/${dbName}/${collectionName}/${documentId}`, {
+    const response = await fetch(`/api/mongodb/document/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}/${encodeURIComponent(documentId)}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -280,7 +280,7 @@ export class MongoDBFileSystem implements FileSystem {
 
     if (metaOnly) {
       const response = await fetch(
-        `/api/mongodb/documents/${dbName}/${collectionName}?meta=1`,
+        `/api/mongodb/documents/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}?meta=1`,
         {
           headers: {
             "x-mongodb-connection": this.connectionString,
@@ -646,6 +646,18 @@ export class MongoDBFileSystem implements FileSystem {
     }
   }
 
+  private static readonly INVALID_MONGO_NAME_CHARS = /[\s/\\."$*<>:|?]/;
+
+  private validateMongoName(name: string): string | null {
+    if (MongoDBFileSystem.INVALID_MONGO_NAME_CHARS.test(name)) {
+      return "Name cannot contain spaces or special characters: /\\. \"$*<>:|?";
+    }
+    if (name.length === 0 || name.length > 64) {
+      return "Name must be between 1 and 64 characters";
+    }
+    return null;
+  }
+
   async mkdir(path: string, mode: number, callback: (error: ApiError | null) => void): Promise<void> {
     try {
       const { database, collection } = this.parsePath(path);
@@ -657,25 +669,40 @@ export class MongoDBFileSystem implements FileSystem {
         return;
       }
 
-      await this.connect();
-      if (!this.client) throw new Error("No MongoDB connection");
-
-      if (collection) {
-        // Create collection by inserting a dummy document
-        const db = this.client.db(database);
-        const col = db.collection(collection);
-        await col.insertOne({ _placeholder: true });
-        await col.deleteOne({ _placeholder: true });
-        this.invalidateCollectionCache(database, collection);
-      } else {
-        // Create database by creating a collection
-        const db = this.client.db(database);
-        const col = db.collection("_temp");
-        await col.insertOne({ _placeholder: true });
-        await col.deleteOne({ _placeholder: true });
-        this.invalidateCollectionCache(database);
+      const dbError = this.validateMongoName(database);
+      if (dbError) {
+        const error = new Error(dbError) as ApiError;
+        error.code = "EINVAL";
+        callback(error);
+        return;
       }
 
+      if (collection) {
+        const collError = this.validateMongoName(collection);
+        if (collError) {
+          const error = new Error(collError) as ApiError;
+          error.code = "EINVAL";
+          callback(error);
+          return;
+        }
+      }
+
+      const url = collection
+        ? `/api/mongodb/mkdir/${encodeURIComponent(database)}/${encodeURIComponent(collection)}`
+        : `/api/mongodb/mkdir/${encodeURIComponent(database)}`;
+
+      const response = await fetch(url, {
+        headers: {
+          'x-mongodb-connection': this.connectionString,
+        },
+      });
+
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(result.error || `HTTP ${response.status}`);
+      }
+
+      this.invalidateCollectionCache(database, collection);
       callback(null);
     } catch (error) {
       const apiError = new Error(String(error)) as ApiError;
