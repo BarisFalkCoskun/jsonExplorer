@@ -145,7 +145,8 @@ export class MongoDBFileSystem implements FileSystem {
             return this.replaceDocument(dbName!, collectionName, doc);
           },
           deleteOne: async (filter: any) => {
-            const documentId = filter.name || filter._id;
+            if (!dbName) throw new Error("No database name");
+            const documentId = String(filter.name || filter._id || "");
             const response = await fetch(`/api/mongodb/document/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}/${encodeURIComponent(documentId)}`, {
               method: 'DELETE',
               headers: {

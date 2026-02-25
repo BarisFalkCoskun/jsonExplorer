@@ -33,9 +33,11 @@ import { type FileStat } from "components/system/Files/FileManager/functions";
 import useFileDrop from "components/system/Files/FileManager/useFileDrop";
 import { type FocusEntryFunctions } from "components/system/Files/FileManager/useFocusableEntries";
 import { type FileActions } from "components/system/Files/FileManager/useFolder";
+import { ICON_ZOOM_LEVELS } from "components/system/Files/FileManager/constants";
 import {
   type FileManagerViewNames,
   FileEntryIconSize,
+  getFileEntryIconSize,
 } from "components/system/Files/Views";
 import { useFileSystem } from "contexts/fileSystem";
 import { useProcesses } from "contexts/process";
@@ -94,6 +96,7 @@ type FileEntryProps = {
   focusedEntries: string[];
   hasNewFolderIcon?: boolean;
   hideShortcutIcon?: boolean;
+  iconZoomLevel?: number;
   isDesktop?: boolean;
   isHeading?: boolean;
   isLoadingFileManager: boolean;
@@ -141,6 +144,7 @@ const FileEntry: FC<FileEntryProps> = ({
   focusedEntries,
   focusFunctions,
   hideShortcutIcon,
+  iconZoomLevel,
   isDesktop,
   isHeading,
   isLoadingFileManager,
@@ -237,18 +241,20 @@ const FileEntry: FC<FileEntryProps> = ({
     directory,
   });
   const openInFileExplorer = useMemo(() => pid === "FileExplorer", [pid]);
-  const truncatedName = useMemo(
-    () =>
-      truncateName(
-        name,
-        sizes.fileEntry.fontSize,
-        formats.systemFont,
-        sizes.fileEntry[
-          listView ? "maxListTextDisplayWidth" : "maxIconTextDisplayWidth"
-        ]
-      ),
-    [formats.systemFont, listView, name, sizes.fileEntry]
-  );
+  const truncatedName = useMemo(() => {
+    const maxWidth = listView
+      ? sizes.fileEntry.maxListTextDisplayWidth
+      : iconZoomLevel !== undefined
+        ? ICON_ZOOM_LEVELS[iconZoomLevel].labelWidth
+        : sizes.fileEntry.maxIconTextDisplayWidth;
+
+    return truncateName(
+      name,
+      sizes.fileEntry.fontSize,
+      formats.systemFont,
+      maxWidth
+    );
+  }, [formats.systemFont, iconZoomLevel, listView, name, sizes.fileEntry]);
   const iconRef = useRef<HTMLImageElement | null>(null);
   const isIconCached = useRef(false);
   const isDynamicIconLoaded = useRef(false);
@@ -649,7 +655,7 @@ const FileEntry: FC<FileEntryProps> = ({
               $moving={pasteList[path] === "move"}
               alt=""
               src={iconSource}
-              {...FileEntryIconSize[view]}
+              {...getFileEntryIconSize(view, iconZoomLevel)}
             />
             {isMongoDocument && hasNavigationArrows && (
               <ImageNavigation
@@ -666,6 +672,7 @@ const FileEntry: FC<FileEntryProps> = ({
           <SubIcons
             alt=""
             icon={icon}
+            iconZoomLevel={iconZoomLevel}
             isDesktop={isDesktop}
             showShortcutIcon={Boolean(hideShortcutIcon || stats.systemShortcut)}
             subIcons={subIcons}

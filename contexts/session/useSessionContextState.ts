@@ -20,6 +20,7 @@ import {
   type WallpaperFit,
   type WindowStates,
 } from "contexts/session/types";
+import { DEFAULT_ICON_ZOOM_LEVEL } from "components/system/Files/FileManager/constants";
 import defaultSession from "public/session.json";
 import {
   DEFAULT_ASCENDING,
@@ -65,6 +66,7 @@ const useSessionContextState = (): SessionContextState => {
   const [windowStates, setWindowStates] = useState<WindowStates>({});
   const [sortOrders, setSortOrders] = useState<SortOrders>({});
   const [views, setViews] = useState<Views>({});
+  const [iconZoomLevel, setIconZoomLevel] = useState(DEFAULT_ICON_ZOOM_LEVEL);
   const [iconPositions, setIconPositions] = useState<IconPositions>({});
   const [wallpaperFit, setWallpaperFit] = useState(DEFAULT_WALLPAPER_FIT);
   const [wallpaperImage, setWallpaperImage] = useState(DEFAULT_WALLPAPER);
@@ -213,6 +215,7 @@ const useSessionContextState = (): SessionContextState => {
             clockSource,
             cursor,
             iconPositions,
+            iconZoomLevel,
             lazySheep,
             recentFiles,
             runHistory,
@@ -233,6 +236,7 @@ const useSessionContextState = (): SessionContextState => {
     cursor,
     haltSession,
     iconPositions,
+    iconZoomLevel,
     lazySheep,
     recentFiles,
     runHistory,
@@ -289,6 +293,9 @@ const useSessionContextState = (): SessionContextState => {
           }
           if (session.views && Object.keys(session.views).length > 0) {
             setViews(session.views);
+          }
+          if (typeof session.iconZoomLevel === "number") {
+            setIconZoomLevel(session.iconZoomLevel);
           }
           if (
             session.iconPositions &&
@@ -386,6 +393,7 @@ const useSessionContextState = (): SessionContextState => {
     cursor,
     foregroundId,
     iconPositions,
+    iconZoomLevel,
     prependToStack,
     recentFiles,
     removeFromStack,
@@ -397,6 +405,7 @@ const useSessionContextState = (): SessionContextState => {
     setForegroundId,
     setHaltSession,
     setIconPositions: setAndUpdateIconPositions,
+    setIconZoomLevel,
     setRunHistory,
     setSortOrder,
     setThemeName,

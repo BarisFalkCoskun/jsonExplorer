@@ -21,6 +21,7 @@ import {
   FileManagerViews,
 } from "components/system/Files/Views";
 import { useFileSystem } from "contexts/fileSystem";
+import { ICON_ZOOM_LEVELS } from "components/system/Files/FileManager/constants";
 import {
   FOCUSABLE_ELEMENT,
   MOUNTABLE_EXTENSIONS,
@@ -70,7 +71,7 @@ const FileManager: FC<FileManagerProps> = ({
   skipSorting,
   url,
 }) => {
-  const { views, setViews } = useSession();
+  const { iconZoomLevel, setIconZoomLevel, views, setViews } = useSession();
   const view = useMemo(() => {
     if (isDesktop) return "icon";
     if (isStartMenu) return "list";
@@ -134,6 +135,7 @@ const FileManager: FC<FileManagerProps> = ({
     },
     [setViews, url]
   );
+  const isIconView = useMemo(() => view === "icon", [view]);
   const keyShortcuts = useFileKeyboardShortcuts(
     files,
     url,
@@ -235,6 +237,29 @@ const FileManager: FC<FileManagerProps> = ({
   useEffect(() => {
     const container = fileManagerRef.current;
 
+    if (!container || !isIconView || isDesktop) return;
+
+    const onWheel = (event: globalThis.WheelEvent): void => {
+      if (event.ctrlKey) {
+        event.preventDefault();
+        const delta = event.deltaY < 0 ? 1 : -1;
+
+        setIconZoomLevel((current) =>
+          Math.max(0, Math.min(ICON_ZOOM_LEVELS.length - 1, current + delta))
+        );
+      }
+    };
+
+    container.addEventListener("wheel", onWheel, { passive: false });
+
+    return () => {
+      container.removeEventListener("wheel", onWheel);
+    };
+  }, [isDesktop, isIconView, setIconZoomLevel]);
+
+  useEffect(() => {
+    const container = fileManagerRef.current;
+
     if (!container || !hasMore) return;
 
     const onScroll = (): void => {
@@ -263,6 +288,7 @@ const FileManager: FC<FileManagerProps> = ({
       {!loading && isEmptyFolder && <StyledEmpty $hasColumns={isDetailsView} />}
       <StyledFileManager
         ref={fileManagerRef}
+        $iconZoomLevel={isIconView && !isDesktop ? iconZoomLevel : undefined}
         $isEmptyFolder={isEmptyFolder}
         $scrollable={!hideScrolling}
         onKeyDownCapture={loading ? undefined : onKeyDown}
@@ -291,6 +317,7 @@ const FileManager: FC<FileManagerProps> = ({
               <StyledFileEntry
                 key={file}
                 $desktop={isDesktop}
+                $iconZoomLevel={isIconView && !isDesktop ? iconZoomLevel : undefined}
                 $selecting={isSelecting}
                 $visible={!isLoading}
                 {...(!readOnly && draggableEntry(url, file, renaming === file))}
@@ -306,6 +333,7 @@ const FileManager: FC<FileManagerProps> = ({
                   focusedEntries={focusedEntries}
                   hasNewFolderIcon={isStartMenu}
                   hideShortcutIcon={hideShortcutIcons}
+                  iconZoomLevel={isIconView && !isDesktop ? iconZoomLevel : undefined}
                   isDesktop={isDesktop}
                   isHeading={isDesktop && files[file].systemShortcut}
                   isLoadingFileManager={isLoading}
@@ -329,7 +357,9 @@ const FileManager: FC<FileManagerProps> = ({
           count={loading ? 0 : fileKeys.length}
           directory={url}
           fileDrop={fileDrop}
+          iconZoomLevel={iconZoomLevel}
           selected={focusedEntries}
+          setIconZoomLevel={setIconZoomLevel}
           setView={setView}
           view={view}
         />

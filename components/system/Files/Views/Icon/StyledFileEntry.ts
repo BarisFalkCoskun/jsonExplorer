@@ -1,5 +1,6 @@
 import styled from "styled-components";
 import { type StyledFileEntryProps } from "components/system/Files/Views";
+import { ICON_ZOOM_LEVELS } from "components/system/Files/FileManager/constants";
 
 const StyledFileEntry = styled.li<StyledFileEntryProps>`
   display: ${({ $visible }) => ($visible ? "flex" : "none")};
@@ -20,9 +21,18 @@ const StyledFileEntry = styled.li<StyledFileEntryProps>`
 
       figcaption {
         color: ${({ theme }) => theme.colors.fileEntry.text};
-        font-size: ${({ theme }) => theme.sizes.fileEntry.fontSize};
+        font-size: ${({ $iconZoomLevel, theme }) => {
+          if ($iconZoomLevel !== undefined) {
+            return `${ICON_ZOOM_LEVELS[$iconZoomLevel].fontSize}px`;
+          }
+          return theme.sizes.fileEntry.fontSize;
+        }};
         line-height: 1.2;
         margin: 1px 0;
+        max-width: ${({ $iconZoomLevel }) =>
+          $iconZoomLevel !== undefined
+            ? `${ICON_ZOOM_LEVELS[$iconZoomLevel].labelWidth}px`
+            : undefined};
         overflow-wrap: anywhere;
         padding: 2px 0;
         text-shadow: ${({ $desktop, theme }) =>
@@ -36,12 +46,21 @@ const StyledFileEntry = styled.li<StyledFileEntryProps>`
 
       textarea {
         position: absolute;
-        top: ${({ theme }) => theme.sizes.fileEntry.iconSize};
+        top: ${({ $iconZoomLevel, theme }) =>
+          $iconZoomLevel !== undefined
+            ? `${ICON_ZOOM_LEVELS[$iconZoomLevel].iconSize}px`
+            : theme.sizes.fileEntry.iconSize};
       }
 
       picture {
-        height: ${({ theme }) => theme.sizes.fileEntry.iconSize};
-        width: ${({ theme }) => theme.sizes.fileEntry.iconSize};
+        height: ${({ $iconZoomLevel, theme }) =>
+          $iconZoomLevel !== undefined
+            ? `${ICON_ZOOM_LEVELS[$iconZoomLevel].iconSize}px`
+            : theme.sizes.fileEntry.iconSize};
+        width: ${({ $iconZoomLevel, theme }) =>
+          $iconZoomLevel !== undefined
+            ? `${ICON_ZOOM_LEVELS[$iconZoomLevel].iconSize}px`
+            : theme.sizes.fileEntry.iconSize};
 
         &:not(:first-of-type) {
           position: absolute;

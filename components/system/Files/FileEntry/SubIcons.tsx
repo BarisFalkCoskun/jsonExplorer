@@ -2,6 +2,7 @@ import { memo, useMemo } from "react";
 import {
   type FileManagerViewNames,
   FileEntryIconSize,
+  getFileEntryIconSize,
 } from "components/system/Files/Views";
 import Icon from "styles/common/Icon";
 import {
@@ -19,6 +20,7 @@ type IconProps = {
 };
 
 type SharedSubIconProps = {
+  iconZoomLevel?: number;
   imgSize?: 64 | 32 | 16 | 8;
   isDesktop?: boolean;
 };
@@ -44,6 +46,7 @@ const SHORT_IMAGE_TRANSFORM_16 = "matrix(0.4, 0.14, 0, 0.8, -0.5, 2)";
 const SubIcon: FC<SubIconProps> = ({
   baseIcon,
   icon,
+  iconZoomLevel,
   imgSize,
   isDesktop,
   isFirstImage,
@@ -65,10 +68,10 @@ const SubIcon: FC<SubIconProps> = ({
       };
     }
 
-    return FileEntryIconSize[
-      isSub ? (view === "details" ? "detailsSub" : "sub") : view
-    ];
-  }, [icon, view]);
+    const key = isSub ? (view === "details" ? "detailsSub" : "sub") : view;
+
+    return getFileEntryIconSize(key, iconZoomLevel);
+  }, [icon, iconZoomLevel, view]);
 
   const style = useMemo((): React.CSSProperties | undefined => {
     if (icon === FOLDER_FRONT_ICON) return { zIndex: 3 };
@@ -114,6 +117,7 @@ const MemoizedSubIcon = memo(SubIcon);
 const SubIcons: FC<SubIconsProps> = ({
   alt,
   icon,
+  iconZoomLevel,
   imgSize,
   isDesktop,
   showShortcutIcon,
@@ -149,6 +153,7 @@ const SubIcons: FC<SubIconsProps> = ({
           alt={alt}
           baseIcon={icon}
           icon={entryIcon}
+          iconZoomLevel={iconZoomLevel}
           imgSize={imgSize}
           isDesktop={isDesktop}
           isFirstImage={subIconIndex === 0}

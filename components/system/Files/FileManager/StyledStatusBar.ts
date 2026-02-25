@@ -38,6 +38,7 @@ const StyledStatusBar = styled.footer`
   }
 
   nav {
+    align-items: center;
     display: flex;
     position: absolute;
     right: 4px;
@@ -67,6 +68,35 @@ const StyledStatusBar = styled.footer`
         picture {
           padding-left: 1px;
           top: 0;
+        }
+      }
+    }
+
+    .zoom-slider {
+      appearance: none;
+      background: transparent;
+      cursor: pointer;
+      height: 16px;
+      margin-left: 6px;
+      width: 80px;
+
+      &::-webkit-slider-runnable-track {
+        background: rgb(77 77 77);
+        border-radius: 2px;
+        height: 3px;
+      }
+
+      &::-webkit-slider-thumb {
+        appearance: none;
+        background: rgb(200 200 200);
+        border: none;
+        border-radius: 50%;
+        height: 11px;
+        margin-top: -4px;
+        width: 11px;
+
+        &:hover {
+          background: rgb(240 240 240);
         }
       }
     }

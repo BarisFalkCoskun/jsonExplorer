@@ -43,6 +43,7 @@ export type SessionData = {
   clockSource: ClockSource;
   cursor: string | undefined;
   iconPositions: IconPositions;
+  iconZoomLevel: number;
   lazySheep?: boolean;
   recentFiles: RecentFiles;
   runHistory: string[];
@@ -65,6 +66,7 @@ export type SessionContextState = SessionData & {
   setForegroundId: React.Dispatch<React.SetStateAction<string>>;
   setHaltSession: React.Dispatch<React.SetStateAction<boolean>>;
   setIconPositions: React.Dispatch<React.SetStateAction<IconPositions>>;
+  setIconZoomLevel: React.Dispatch<React.SetStateAction<number>>;
   setRunHistory: React.Dispatch<React.SetStateAction<string[]>>;
   setSortOrder: (
     directory: string,

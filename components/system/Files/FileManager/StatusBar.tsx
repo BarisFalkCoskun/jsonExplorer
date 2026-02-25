@@ -10,6 +10,7 @@ import {
 import { useTheme } from "styled-components";
 import { type FileManagerViewNames } from "components/system/Files/Views";
 import StyledStatusBar from "components/system/Files/FileManager/StyledStatusBar";
+import { ICON_ZOOM_LEVELS } from "components/system/Files/FileManager/constants";
 import { type FileDrop } from "components/system/Files/FileManager/useFileDrop";
 import { useFileSystem } from "contexts/fileSystem";
 import useResizeObserver from "hooks/useResizeObserver";
@@ -22,7 +23,9 @@ type StatusBarProps = {
   count: number;
   directory: string;
   fileDrop: FileDrop;
+  iconZoomLevel: number;
   selected: string[];
+  setIconZoomLevel: React.Dispatch<React.SetStateAction<number>>;
   setView: (view: FileManagerViewNames) => void;
   view: FileManagerViewNames;
 };
@@ -33,7 +36,9 @@ const StatusBar: FC<StatusBarProps> = ({
   count,
   directory,
   fileDrop,
+  iconZoomLevel,
   selected,
+  setIconZoomLevel,
   setView,
   view,
 }) => {
@@ -134,6 +139,17 @@ const StatusBar: FC<StatusBarProps> = ({
             src="/System/Icons/icon_view.webp"
           />
         </Button>
+        {view === "icon" && (
+          <input
+            className="zoom-slider"
+            max={ICON_ZOOM_LEVELS.length - 1}
+            min={0}
+            onChange={(e) => setIconZoomLevel(Number(e.target.value))}
+            type="range"
+            value={iconZoomLevel}
+            {...label("Icon size")}
+          />
+        )}
       </nav>
     </StyledStatusBar>
   );

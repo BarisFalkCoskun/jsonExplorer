@@ -4,16 +4,22 @@ import StyledIconFileEntry from "components/system/Files/Views/Icon/StyledFileEn
 import StyledIconFileManager from "components/system/Files/Views/Icon/StyledFileManager";
 import StyledListFileEntry from "components/system/Files/Views/List/StyledFileEntry";
 import StyledListFileManager from "components/system/Files/Views/List/StyledFileManager";
+import {
+  DEFAULT_ICON_ZOOM_LEVEL,
+  ICON_ZOOM_LEVELS,
+} from "components/system/Files/FileManager/constants";
 import { type IconProps } from "styles/common/Icon";
 
 export type StyledFileEntryProps = {
   $desktop?: boolean;
+  $iconZoomLevel?: number;
   $labelHeightOffset?: number;
   $selecting?: boolean;
   $visible?: boolean;
 };
 
 export type StyledFileManagerProps = {
+  $iconZoomLevel?: number;
   $isEmptyFolder: boolean;
   $scrollable: boolean;
   $selecting?: boolean;
@@ -68,4 +74,27 @@ export const FileEntryIconSize: Record<
     displaySize: 48,
     imgSize: 16,
   },
+};
+
+export const getFileEntryIconSize = (
+  view: FileManagerViewNames | "detailsSub" | "sub",
+  zoomLevel?: number
+): IconProps => {
+  if (view === "icon") {
+    const level = zoomLevel ?? DEFAULT_ICON_ZOOM_LEVEL;
+    const { iconSize } = ICON_ZOOM_LEVELS[level];
+
+    return { imgSize: iconSize as IconProps["imgSize"] };
+  }
+
+  if (view === "sub" && zoomLevel !== undefined) {
+    const { iconSize } = ICON_ZOOM_LEVELS[zoomLevel];
+
+    return {
+      displaySize: iconSize as IconProps["displaySize"],
+      imgSize: 16,
+    };
+  }
+
+  return FileEntryIconSize[view];
 };
