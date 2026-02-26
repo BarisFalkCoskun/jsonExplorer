@@ -34,6 +34,11 @@ import { useSession } from "contexts/session";
 import { getMountUrl } from "contexts/fileSystem/core";
 import { MongoDBFileSystem } from "contexts/fileSystem/MongoDBFS";
 
+const QuickLook = dynamic(
+  () => import("components/system/Files/FileManager/QuickLook/QuickLook"),
+  { ssr: false }
+);
+
 const StyledEmpty = dynamic(
   () => import("components/system/Files/FileManager/StyledEmpty")
 );
@@ -243,6 +248,17 @@ const FileManager: FC<FileManagerProps> = ({
     },
     [mongoFs, mountUrl, url]
   );
+  const [quickLookPath, setQuickLookPath] = useState("");
+  const handleQuickLook = useCallback(
+    (entry: string) => {
+      setQuickLookPath(join(url, entry));
+    },
+    [url]
+  );
+  const handleQuickLookClose = useCallback(() => {
+    setQuickLookPath("");
+    fileManagerRef.current?.focus(PREVENT_SCROLL);
+  }, []);
   const { StyledFileEntry, StyledFileManager } = FileManagerViews[view];
   const { isSelecting, selectionRect, selectionStyling, selectionEvents } =
     useSelection(fileManagerRef, focusedEntries, focusFunctions, isDesktop);
@@ -292,7 +308,8 @@ const FileManager: FC<FileManagerProps> = ({
     isDesktop,
     setView,
     isMongoFS ? handleToggleHideCategorized : undefined,
-    isMongoFS ? handleSetCategory : undefined
+    isMongoFS ? handleSetCategory : undefined,
+    isMongoFS ? handleQuickLook : undefined
   );
   const [permission, setPermission] = useState<PermissionState>("prompt");
   const requestingPermissions = useRef(false);
@@ -381,7 +398,7 @@ const FileManager: FC<FileManagerProps> = ({
   useEffect(() => {
     const container = fileManagerRef.current;
 
-    if (!container || !isIconView || isDesktop) return;
+    if (!container || !isIconView || isDesktop || quickLookPath) return;
 
     const onWheel = (event: globalThis.WheelEvent): void => {
       if (event.ctrlKey) {
@@ -399,7 +416,7 @@ const FileManager: FC<FileManagerProps> = ({
     return () => {
       container.removeEventListener("wheel", onWheel);
     };
-  }, [isDesktop, isIconView, setIconZoomLevel]);
+  }, [isDesktop, isIconView, quickLookPath, setIconZoomLevel]);
 
   useEffect(() => {
     const container = fileManagerRef.current;
@@ -502,6 +519,14 @@ const FileManager: FC<FileManagerProps> = ({
           </>
         )}
       </StyledFileManager>
+      {quickLookPath && (
+        <QuickLook
+          files={fileKeys}
+          onClose={handleQuickLookClose}
+          path={quickLookPath}
+          url={url}
+        />
+      )}
       {showStatusBar && (
         <StatusBar
           count={loading ? 0 : fileKeys.length}

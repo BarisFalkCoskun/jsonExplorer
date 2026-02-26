@@ -38,7 +38,8 @@ const useFileKeyboardShortcuts = (
   isDesktop?: boolean,
   setView?: (newView: FileManagerViewNames) => void,
   onToggleHideCategorized?: () => void,
-  onSetCategory?: (entries: string[]) => void
+  onSetCategory?: (entries: string[]) => void,
+  onQuickLook?: (entry: string) => void
 ): KeyboardShortcutEntry => {
   const { copyEntries, deletePath, moveEntries } = useFileSystem();
   const { open, url: changeUrl } = useProcesses();
@@ -204,6 +205,12 @@ const useFileKeyboardShortcuts = (
                 sendMouseClick(target, 2);
               }
               break;
+            case " ":
+              if (onQuickLook && focusedEntries.length === 1) {
+                haltEvent(event);
+                onQuickLook(focusedEntries[0]);
+              }
+              break;
             default:
               if (key.startsWith("Arrow")) {
                 haltEvent(event);
@@ -320,6 +327,7 @@ const useFileKeyboardShortcuts = (
       isDesktop,
       isStartMenu,
       moveEntries,
+      onQuickLook,
       onSetCategory,
       onToggleHideCategorized,
       open,
