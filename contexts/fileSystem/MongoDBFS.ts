@@ -21,10 +21,16 @@ interface MongoFSEntry {
 
 const UNKNOWN_DOCUMENT_SIZE = -1;
 const COLLECTION_CACHE_TTL_MS = 5000;
+const DOCUMENTS_CACHE_TTL_MS = 30_000;
 
 type CachedCollectionEntries = {
   cachedAt: number;
   entries: Set<string>;
+};
+
+type CachedDocumentsList = {
+  cachedAt: number;
+  documents: MongoDocument[];
 };
 
 export class MongoDBFileSystem implements FileSystem {
@@ -32,6 +38,7 @@ export class MongoDBFileSystem implements FileSystem {
   private connected = false;
   private readonly connectionString: string;
   private readonly collectionEntriesCache = new Map<string, CachedCollectionEntries>();
+  private readonly documentsListCache = new Map<string, CachedDocumentsList>();
   public hideCategorized = false;
 
   constructor(connectionString = "mongodb://localhost:27017") {
@@ -272,6 +279,34 @@ export class MongoDBFileSystem implements FileSystem {
     return collections.map((col: any) => col.name);
   }
 
+  private getCachedDocumentsList(
+    database: string,
+    collection: string
+  ): MongoDocument[] | null {
+    const key = this.getCollectionCacheKey(database, collection);
+    const cached = this.documentsListCache.get(key);
+
+    if (!cached) return null;
+
+    if (Date.now() - cached.cachedAt > DOCUMENTS_CACHE_TTL_MS) {
+      this.documentsListCache.delete(key);
+      return null;
+    }
+
+    return cached.documents;
+  }
+
+  private setCachedDocumentsList(
+    database: string,
+    collection: string,
+    documents: MongoDocument[]
+  ): void {
+    this.documentsListCache.set(
+      this.getCollectionCacheKey(database, collection),
+      { cachedAt: Date.now(), documents }
+    );
+  }
+
   private async getDocuments(
     dbName: string,
     collectionName: string,
@@ -281,12 +316,12 @@ export class MongoDBFileSystem implements FileSystem {
     if (!this.client) throw new Error("No MongoDB connection");
 
     if (metaOnly) {
-      let metaUrl = `/api/mongodb/documents/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}?meta=1`;
-      if (this.hideCategorized) {
-        metaUrl += `&filter=${encodeURIComponent(JSON.stringify({ category: { $exists: false } }))}`;
-      }
+      const cached = this.getCachedDocumentsList(dbName, collectionName);
+
+      if (cached) return cached;
+
       const response = await fetch(
-        metaUrl,
+        `/api/mongodb/documents/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}?meta=1`,
         {
           headers: {
             "x-mongodb-connection": this.connectionString,
@@ -298,7 +333,11 @@ export class MongoDBFileSystem implements FileSystem {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      return (await response.json()) as MongoDocument[];
+      const documents = (await response.json()) as MongoDocument[];
+
+      this.setCachedDocumentsList(dbName, collectionName, documents);
+
+      return documents;
     }
 
     const db = this.client.db(dbName);
@@ -328,6 +367,38 @@ export class MongoDBFileSystem implements FileSystem {
     }
   }
 
+  /**
+   * Returns a Set of document names that have a `category` field,
+   * using the in-memory documents cache. Returns null if no cache is available.
+   * Does NOT check TTL — the toggle should use whatever was loaded this session.
+   */
+  public getCachedDocumentNames(): Set<string> | null {
+    for (const cached of this.documentsListCache.values()) {
+      const categorized = new Set<string>();
+
+      for (const doc of cached.documents) {
+        if ("category" in doc) {
+          categorized.add(this.getDocumentIdentifier(doc));
+        }
+      }
+
+      return categorized;
+    }
+
+    return null;
+  }
+
+  public getCachedDocumentCategory(docName: string): string | null {
+    for (const cached of this.documentsListCache.values()) {
+      for (const doc of cached.documents) {
+        if (this.getDocumentIdentifier(doc) === docName && "category" in doc) {
+          return doc.category;
+        }
+      }
+    }
+    return null;
+  }
+
   public async patchDocument(
     path: string,
     updates: Record<string, any>
@@ -354,7 +425,28 @@ export class MongoDBFileSystem implements FileSystem {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
-    this.invalidateCollectionCache(database, collection);
+    // Update the in-memory documents cache in-place so that
+    // getCachedDocumentCategory returns the new value immediately.
+    const cacheKey = this.getCollectionCacheKey(database, collection);
+    const cached = this.documentsListCache.get(cacheKey);
+
+    if (cached) {
+      for (const doc of cached.documents) {
+        if (this.getDocumentIdentifier(doc) === document) {
+          for (const [k, v] of Object.entries(updates)) {
+            if (v === null) {
+              delete doc[k];
+            } else {
+              doc[k] = v;
+            }
+          }
+          break;
+        }
+      }
+    }
+
+    // Invalidate the entries cache so readdir refreshes
+    this.collectionEntriesCache.delete(cacheKey);
   }
 
   public isMongoDBDocument(path: string): boolean {
@@ -404,7 +496,9 @@ export class MongoDBFileSystem implements FileSystem {
 
   private invalidateCollectionCache(database?: string, collection?: string): void {
     if (database && collection) {
-      this.collectionEntriesCache.delete(this.getCollectionCacheKey(database, collection));
+      const key = this.getCollectionCacheKey(database, collection);
+      this.collectionEntriesCache.delete(key);
+      this.documentsListCache.delete(key);
       return;
     }
 
@@ -417,10 +511,17 @@ export class MongoDBFileSystem implements FileSystem {
         }
       }
 
+      for (const key of this.documentsListCache.keys()) {
+        if (key.startsWith(databasePrefix)) {
+          this.documentsListCache.delete(key);
+        }
+      }
+
       return;
     }
 
     this.collectionEntriesCache.clear();
+    this.documentsListCache.clear();
   }
 
   private getDocumentIdentifier(document: MongoDocument): string {
@@ -575,7 +676,10 @@ export class MongoDBFileSystem implements FileSystem {
       }
 
       // Collection path - list documents as JSON files
-      const documents = await this.getDocuments(database, collection, true);
+      const allDocuments = await this.getDocuments(database, collection, true);
+      const documents = this.hideCategorized
+        ? allDocuments.filter((doc) => !("category" in doc))
+        : allDocuments;
       const entries = documents.map((doc) => this.getDocumentIdentifier(doc));
       this.setCachedCollectionEntries(database, collection, entries);
 

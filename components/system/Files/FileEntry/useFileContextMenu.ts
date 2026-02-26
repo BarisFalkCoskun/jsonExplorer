@@ -189,16 +189,35 @@ const useFileContextMenu = (
                   MENU_SEPERATOR,
                   {
                     action: () => {
-                      const value = window.prompt("Enter category name:");
-                      if (value) {
-                        const mongoFs = mountedFs as MongoDBFileSystem;
-                        const relativePath = path.replace(
-                          `${mountUrl}/`,
-                          ""
+                      const mongoFs = mountedFs as MongoDBFileSystem;
+                      const entries = absoluteEntries();
+                      const categories = entries.map((e) =>
+                        mongoFs.getCachedDocumentCategory(basename(e, ".json"))
+                      );
+                      const first = categories[0];
+                      const allSame =
+                        first !== null &&
+                        categories.every(
+                          (c) => c !== null && c.toLowerCase() === first.toLowerCase()
                         );
-                        mongoFs
-                          .patchDocument(relativePath, { category: value })
-                          .catch(console.error);
+                      const defaultValue = allSame ? first : "";
+                      const raw = window.prompt("Enter category (comma-separated for multiple):", defaultValue);
+                      if (raw) {
+                        const newLabels = raw.toLowerCase().split(",").map((l) => l.trim()).filter(Boolean);
+                        entries.forEach((entry) => {
+                          const existing = mongoFs.getCachedDocumentCategory(basename(entry, ".json"));
+                          const existingLabels = existing ? existing.split(",").map((l) => l.trim().toLowerCase()) : [];
+                          const labelsToAdd = newLabels.filter((l) => !existingLabels.includes(l));
+                          if (labelsToAdd.length === 0) return;
+                          const merged = [...existingLabels, ...labelsToAdd].join(", ");
+                          const relativePath = entry.replace(
+                            `${mountUrl}/`,
+                            ""
+                          );
+                          mongoFs
+                            .patchDocument(relativePath, { category: merged })
+                            .catch(console.error);
+                        });
                       }
                     },
                     label: "Set Category",
@@ -206,13 +225,15 @@ const useFileContextMenu = (
                   {
                     action: () => {
                       const mongoFs = mountedFs as MongoDBFileSystem;
-                      const relativePath = path.replace(
-                        `${mountUrl}/`,
-                        ""
-                      );
-                      mongoFs
-                        .patchDocument(relativePath, { category: null })
-                        .catch(console.error);
+                      absoluteEntries().forEach((entry) => {
+                        const relativePath = entry.replace(
+                          `${mountUrl}/`,
+                          ""
+                        );
+                        mongoFs
+                          .patchDocument(relativePath, { category: null })
+                          .catch(console.error);
+                      });
                     },
                     label: "Remove Category",
                   },

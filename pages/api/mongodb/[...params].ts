@@ -150,13 +150,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
         const documents = await collection.find(
           filter,
-          metaOnly ? { projection: { _id: 1, name: 1 } } : undefined
+          metaOnly ? { projection: { _id: 1, name: 1, category: 1 } } : undefined
         ).sort({ name: 1 }).toArray();
         res.json(documents);
         break;
 
       case 'document':
-        const [dbName3, collectionName2, documentId] = operationParams;
+        const [dbName3, collectionName2, ...documentIdParts] = operationParams;
+        const documentId = documentIdParts.join('/');
         if (!dbName3 || !collectionName2 || !documentId) {
           return res.status(400).json({ error: 'Database, collection, and document ID required' });
         }
@@ -214,7 +215,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         break;
 
       case 'images':
-        const [dbName4, collectionName3, documentId2] = operationParams;
+        const [dbName4, collectionName3, ...documentIdParts2] = operationParams;
+        const documentId2 = documentIdParts2.join('/');
         if (!dbName4 || !collectionName3 || !documentId2) {
           return res.status(400).json({ error: 'Database, collection, and document ID required' });
         }

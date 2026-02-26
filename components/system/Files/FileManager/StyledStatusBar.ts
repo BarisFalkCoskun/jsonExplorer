@@ -42,9 +42,10 @@ const StyledStatusBar = styled.footer`
     border: 1px solid transparent;
     color: rgb(247 247 247);
     cursor: pointer;
+    flex-shrink: 0;
     font-size: 11px;
     margin-left: auto;
-    margin-right: 8px;
+    margin-right: 136px;
     padding: 1px 8px;
 
     &:hover {

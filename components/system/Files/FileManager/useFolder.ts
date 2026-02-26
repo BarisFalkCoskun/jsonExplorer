@@ -94,6 +94,7 @@ type Folder = {
   hasMore: boolean;
   isLoading: boolean;
   loadMore: () => void;
+  setFiles: React.Dispatch<React.SetStateAction<Files | typeof NO_FILES>>;
   updateFiles: (newFile?: string, oldFile?: string) => void;
 };
 
@@ -960,6 +961,7 @@ const useFolder = (
     hasMore,
     isLoading,
     loadMore,
+    setFiles,
     updateFiles,
   };
 };

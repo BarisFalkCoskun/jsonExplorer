@@ -94,7 +94,7 @@ const FileManager: FC<FileManagerProps> = ({
   );
   const { focusedEntries, focusableEntry, ...focusFunctions } =
     useFocusableEntries(fileManagerRef, isFileExplorerIconView);
-  const { fileActions, files, folderActions, hasMore, isLoading, loadMore, updateFiles } =
+  const { fileActions, files, folderActions, hasMore, isLoading, loadMore, setFiles, updateFiles } =
     useFolder(url, setRenaming, focusFunctions, {
       hideFolders,
       hideLoading,
@@ -113,13 +113,136 @@ const FileManager: FC<FileManagerProps> = ({
       mountUrl: mUrl,
     };
   }, [rootFs?.mntMap, url]);
+  const allFilesRef = useRef<Record<string, any> | null>(null);
   const handleToggleHideCategorized = useCallback(() => {
-    if (mongoFs) {
-      mongoFs.hideCategorized = !mongoFs.hideCategorized;
-      setHideCategorized(mongoFs.hideCategorized);
-      updateFiles();
+    if (!mongoFs) return;
+
+    const newHidden = !mongoFs.hideCategorized;
+    mongoFs.hideCategorized = newHidden;
+    setHideCategorized(newHidden);
+
+    if (newHidden) {
+      // Save the full file list before filtering
+      allFilesRef.current = { ...files };
+
+      // Get cached docs with category info to know which to hide
+      const cachedDocs = mongoFs.getCachedDocumentNames();
+
+      if (cachedDocs) {
+        setFiles((currentFiles) => {
+          if (!currentFiles) return currentFiles;
+
+          const filtered: typeof currentFiles = {};
+
+          for (const [name, stat] of Object.entries(currentFiles)) {
+            const docName = name.replace(/\.json$/, "");
+
+            if (!cachedDocs.has(docName)) {
+              filtered[name] = stat;
+            }
+          }
+
+          return filtered;
+        });
+      } else {
+        // No cache available, fall back to full refresh
+        updateFiles();
+      }
+    } else {
+      // Restore the full file list
+      if (allFilesRef.current) {
+        setFiles(allFilesRef.current as any);
+        allFilesRef.current = null;
+      } else {
+        // Session restore case: reconstruct from cache instead of full reload
+        const cachedDocs = mongoFs.getCachedDocumentNames();
+
+        if (cachedDocs !== null) {
+          if (cachedDocs.size > 0) {
+            // Add back categorized items with minimal stats
+            setFiles((currentFiles) => {
+              if (!currentFiles) return currentFiles;
+
+              const restored = { ...currentFiles };
+              const now = new Date();
+
+              for (const docName of cachedDocs) {
+                const fileName = `${docName}.json`;
+
+                if (!(fileName in restored)) {
+                  restored[fileName] = {
+                    size: -1,
+                    mode: 33188,
+                    isFile: () => true,
+                    isDirectory: () => false,
+                    isBlockDevice: () => false,
+                    isCharacterDevice: () => false,
+                    isSymbolicLink: () => false,
+                    isFIFO: () => false,
+                    isSocket: () => false,
+                    mtime: now,
+                    atime: now,
+                    ctime: now,
+                    birthtime: now,
+                  } as any;
+                }
+              }
+
+              return restored;
+            });
+          }
+          // If cachedDocs.size === 0: no categorized items, current files are complete
+        } else {
+          updateFiles();
+        }
+      }
     }
-  }, [mongoFs, setHideCategorized, updateFiles]);
+  }, [files, mongoFs, setFiles, setHideCategorized, updateFiles]);
+  const handleSetCategory = useCallback(
+    (entries: string[]) => {
+      if (!mongoFs || !mountUrl) return;
+
+      // Pre-fill only when ALL selected entries share the same category
+      const categories = entries.map((e) =>
+        mongoFs.getCachedDocumentCategory(e.replace(/\.json$/, ""))
+      );
+      const first = categories[0];
+      const allSame =
+        first !== null &&
+        categories.every(
+          (c) => c !== null && c.toLowerCase() === first.toLowerCase()
+        );
+      const defaultValue = allSame ? first : "";
+
+      const raw = window.prompt(
+        "Enter category (comma-separated for multiple):",
+        defaultValue
+      );
+
+      if (raw) {
+        const newLabels = raw.toLowerCase().split(",").map((l) => l.trim()).filter(Boolean);
+
+        entries.forEach((entry) => {
+          const existing = mongoFs.getCachedDocumentCategory(
+            entry.replace(/\.json$/, "")
+          );
+          const existingLabels = existing ? existing.split(",").map((l) => l.trim().toLowerCase()) : [];
+          const labelsToAdd = newLabels.filter((l) => !existingLabels.includes(l));
+          if (labelsToAdd.length === 0) return;
+
+          const merged = [...existingLabels, ...labelsToAdd].join(", ");
+          const relativePath = `${url.replace(`${mountUrl}/`, "")}/${entry}`.replace(
+            /\.json$/,
+            ""
+          );
+          mongoFs
+            .patchDocument(relativePath, { category: merged })
+            .catch(console.error);
+        });
+      }
+    },
+    [mongoFs, mountUrl, url]
+  );
   const { StyledFileEntry, StyledFileManager } = FileManagerViews[view];
   const { isSelecting, selectionRect, selectionStyling, selectionEvents } =
     useSelection(fileManagerRef, focusedEntries, focusFunctions, isDesktop);
@@ -167,7 +290,9 @@ const FileManager: FC<FileManagerProps> = ({
     id,
     isStartMenu,
     isDesktop,
-    setView
+    setView,
+    isMongoFS ? handleToggleHideCategorized : undefined,
+    isMongoFS ? handleSetCategory : undefined
   );
   const [permission, setPermission] = useState<PermissionState>("prompt");
   const requestingPermissions = useRef(false);
@@ -302,11 +427,10 @@ const FileManager: FC<FileManagerProps> = ({
   }, [hasMore, loadMore]);
 
   useEffect(() => {
-    if (mongoFs && mongoFs.hideCategorized !== hideCategorized) {
+    if (mongoFs) {
       mongoFs.hideCategorized = hideCategorized;
-      updateFiles();
     }
-  }, [mongoFs, hideCategorized]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mongoFs, hideCategorized]);
 
   return (
     <>

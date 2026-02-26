@@ -11,8 +11,6 @@ import { type FileManagerViewNames } from "components/system/Files/Views";
 import { useFileSystem } from "contexts/fileSystem";
 import { useProcesses } from "contexts/process";
 import { useSession } from "contexts/session";
-import { getMountUrl } from "contexts/fileSystem/core";
-import { MongoDBFileSystem } from "contexts/fileSystem/MongoDBFS";
 import {
   DESKTOP_PATH,
   PREVENT_SCROLL,
@@ -38,12 +36,14 @@ const useFileKeyboardShortcuts = (
   id?: string,
   isStartMenu?: boolean,
   isDesktop?: boolean,
-  setView?: (newView: FileManagerViewNames) => void
+  setView?: (newView: FileManagerViewNames) => void,
+  onToggleHideCategorized?: () => void,
+  onSetCategory?: (entries: string[]) => void
 ): KeyboardShortcutEntry => {
-  const { copyEntries, deletePath, moveEntries, rootFs } = useFileSystem();
+  const { copyEntries, deletePath, moveEntries } = useFileSystem();
   const { open, url: changeUrl } = useProcesses();
   const { openTransferDialog } = useTransferDialog();
-  const { foregroundId, hideCategorized, setHideCategorized, setIconPositions } = useSession();
+  const { foregroundId, setIconPositions } = useSession();
 
   useEffect(() => {
     const pasteHandler = (event: ClipboardEvent): void => {
@@ -134,16 +134,16 @@ const useFileKeyboardShortcuts = (
               onDelete();
               break;
             case "h": {
-              haltEvent(event);
-              const mntUrl = rootFs?.mntMap
-                ? getMountUrl(url, rootFs.mntMap)
-                : undefined;
-              const mntFs = mntUrl ? rootFs?.mntMap[mntUrl] : undefined;
-              if (mntFs?.getName() === "MongoDBFS") {
-                const mongoFs = mntFs as MongoDBFileSystem;
-                mongoFs.hideCategorized = !mongoFs.hideCategorized;
-                setHideCategorized(mongoFs.hideCategorized);
-                updateFiles();
+              if (onToggleHideCategorized) {
+                haltEvent(event);
+                onToggleHideCategorized();
+              }
+              break;
+            }
+            case "l": {
+              if (onSetCategory && focusedEntries.length > 0) {
+                haltEvent(event);
+                onSetCategory(focusedEntries);
               }
               break;
             }
@@ -316,15 +316,14 @@ const useFileKeyboardShortcuts = (
       files,
       focusEntry,
       focusedEntries,
-      hideCategorized,
       id,
       isDesktop,
       isStartMenu,
       moveEntries,
+      onSetCategory,
+      onToggleHideCategorized,
       open,
       pasteToFolder,
-      rootFs?.mntMap,
-      setHideCategorized,
       setIconPositions,
       setRenaming,
       setView,
