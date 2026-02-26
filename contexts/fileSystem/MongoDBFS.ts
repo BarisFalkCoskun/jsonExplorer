@@ -32,6 +32,7 @@ export class MongoDBFileSystem implements FileSystem {
   private connected = false;
   private readonly connectionString: string;
   private readonly collectionEntriesCache = new Map<string, CachedCollectionEntries>();
+  public hideCategorized = false;
 
   constructor(connectionString = "mongodb://localhost:27017") {
     this.connectionString = connectionString;
@@ -280,8 +281,12 @@ export class MongoDBFileSystem implements FileSystem {
     if (!this.client) throw new Error("No MongoDB connection");
 
     if (metaOnly) {
+      let metaUrl = `/api/mongodb/documents/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}?meta=1`;
+      if (this.hideCategorized) {
+        metaUrl += `&filter=${encodeURIComponent(JSON.stringify({ category: { $exists: false } }))}`;
+      }
       const response = await fetch(
-        `/api/mongodb/documents/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}?meta=1`,
+        metaUrl,
         {
           headers: {
             "x-mongodb-connection": this.connectionString,
@@ -321,6 +326,35 @@ export class MongoDBFileSystem implements FileSystem {
       console.warn(`Failed to get images for ${path}:`, error);
       return [];
     }
+  }
+
+  public async patchDocument(
+    path: string,
+    updates: Record<string, any>
+  ): Promise<void> {
+    const { database, collection, document } = this.parsePath(path);
+
+    if (!database || !collection || !document) {
+      throw new Error("Invalid document path");
+    }
+
+    const response = await fetch(
+      `/api/mongodb/document/${encodeURIComponent(database)}/${encodeURIComponent(collection)}/${encodeURIComponent(document)}`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "x-mongodb-connection": this.connectionString,
+        },
+        body: JSON.stringify(updates),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    this.invalidateCollectionCache(database, collection);
   }
 
   public isMongoDBDocument(path: string): boolean {
@@ -661,10 +695,18 @@ export class MongoDBFileSystem implements FileSystem {
 
   async mkdir(path: string, mode: number, callback: (error: ApiError | null) => void): Promise<void> {
     try {
-      const { database, collection } = this.parsePath(path);
+      const { database, collection, document } = this.parsePath(path);
 
       if (!database) {
         const error = new Error("EINVAL: invalid argument") as ApiError;
+        error.code = "EINVAL";
+        callback(error);
+        return;
+      }
+
+      // Cannot create folders inside a collection (depth 3+)
+      if (document) {
+        const error = new Error("Cannot create a folder inside a collection") as ApiError;
         error.code = "EINVAL";
         callback(error);
         return;

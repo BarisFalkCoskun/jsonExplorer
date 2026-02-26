@@ -42,6 +42,7 @@ export type SessionData = {
   aiEnabled: boolean;
   clockSource: ClockSource;
   cursor: string | undefined;
+  hideCategorized: boolean;
   iconPositions: IconPositions;
   iconZoomLevel: number;
   lazySheep?: boolean;
@@ -65,6 +66,7 @@ export type SessionContextState = SessionData & {
   setCursor: React.Dispatch<React.SetStateAction<string | undefined>>;
   setForegroundId: React.Dispatch<React.SetStateAction<string>>;
   setHaltSession: React.Dispatch<React.SetStateAction<boolean>>;
+  setHideCategorized: React.Dispatch<React.SetStateAction<boolean>>;
   setIconPositions: React.Dispatch<React.SetStateAction<IconPositions>>;
   setIconZoomLevel: React.Dispatch<React.SetStateAction<number>>;
   setRunHistory: React.Dispatch<React.SetStateAction<string[]>>;

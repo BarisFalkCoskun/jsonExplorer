@@ -140,8 +140,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const db2 = client.db(dbName2);
         const collection = db2.collection(collectionName);
         const metaOnly = req.query.meta === '1' || req.query.meta === 'true';
+        let filter = {};
+        if (typeof req.query.filter === 'string') {
+          try {
+            filter = JSON.parse(req.query.filter);
+          } catch {
+            return res.status(400).json({ error: 'Invalid filter JSON' });
+          }
+        }
         const documents = await collection.find(
-          {},
+          filter,
           metaOnly ? { projection: { _id: 1, name: 1 } } : undefined
         ).sort({ name: 1 }).toArray();
         res.json(documents);
@@ -165,6 +173,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             return res.status(404).json({ error: 'Document not found' });
           }
           res.json(doc);
+        } else if (req.method === 'PATCH') {
+          // Partial update: $set or $unset fields
+          const updates = req.body;
+          const setFields: Record<string, any> = {};
+          const unsetFields: Record<string, string> = {};
+
+          for (const [field, value] of Object.entries(updates)) {
+            if (value === null) {
+              unsetFields[field] = "";
+            } else {
+              setFields[field] = value;
+            }
+          }
+
+          const updateOps: Record<string, any> = {};
+          if (Object.keys(setFields).length > 0) updateOps.$set = setFields;
+          if (Object.keys(unsetFields).length > 0) updateOps.$unset = unsetFields;
+
+          const result = await collection2.updateOne(
+            { $or: getDocumentFilters(documentId) },
+            updateOps
+          );
+          res.json({ modifiedCount: result.modifiedCount });
         } else if (req.method === 'PUT') {
           // Update document
           const updateDoc = req.body;

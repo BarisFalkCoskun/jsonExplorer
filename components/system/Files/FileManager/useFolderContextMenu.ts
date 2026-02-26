@@ -394,6 +394,10 @@ const useFolderContextMenu = (
         const isMongoFS = mountUrl
           ? rootFs?.mntMap[mountUrl]?.getName?.() === "MongoDBFS"
           : false;
+        const mongoDepth = isMongoFS && mountUrl
+          ? url.slice(mountUrl.length).split("/").filter(Boolean).length
+          : 0;
+        const isMongoCollection = isMongoFS && mongoDepth >= 2;
         const isReadOnly =
           MOUNTABLE_EXTENSIONS.has(getExtension(url)) ||
           (mountUrl && !isMountedFolder(rootFs?.mntMap[mountUrl]));
@@ -492,29 +496,37 @@ const useFolderContextMenu = (
                   label: "Paste",
                 },
                 MENU_SEPERATOR,
-                {
-                  label: "New",
-                  menu: [
-                    {
-                      action: () => newEntry(isMongoFS ? NEW_MONGO_FOLDER : NEW_FOLDER, undefined, event),
-                      icon: FOLDER_ICON,
-                      label: "Folder",
-                    },
-                    MENU_SEPERATOR,
-                    {
-                      action: () =>
-                        newEntry(NEW_RTF_DOCUMENT, Buffer.from(""), event),
-                      icon: getIconByFileExtension(".whtml"),
-                      label: "Rich Text Document",
-                    },
-                    {
-                      action: () =>
-                        newEntry(NEW_TEXT_DOCUMENT, Buffer.from(""), event),
-                      icon: getIconByFileExtension(".txt"),
-                      label: "Text Document",
-                    },
-                  ],
-                },
+                ...(isMongoCollection
+                  ? []
+                  : [
+                      {
+                        label: "New",
+                        menu: [
+                          {
+                            action: () => newEntry(isMongoFS ? NEW_MONGO_FOLDER : NEW_FOLDER, undefined, event),
+                            icon: FOLDER_ICON,
+                            label: "Folder",
+                          },
+                          ...(isMongoFS
+                            ? []
+                            : [
+                                MENU_SEPERATOR,
+                                {
+                                  action: () =>
+                                    newEntry(NEW_RTF_DOCUMENT, Buffer.from(""), event),
+                                  icon: getIconByFileExtension(".whtml"),
+                                  label: "Rich Text Document",
+                                },
+                                {
+                                  action: () =>
+                                    newEntry(NEW_TEXT_DOCUMENT, Buffer.from(""), event),
+                                  icon: getIconByFileExtension(".txt"),
+                                  label: "Text Document",
+                                },
+                              ]),
+                        ],
+                      },
+                    ]),
                 ...(isDesktop
                   ? []
                   : [

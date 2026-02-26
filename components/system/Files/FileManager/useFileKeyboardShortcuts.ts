@@ -11,6 +11,8 @@ import { type FileManagerViewNames } from "components/system/Files/Views";
 import { useFileSystem } from "contexts/fileSystem";
 import { useProcesses } from "contexts/process";
 import { useSession } from "contexts/session";
+import { getMountUrl } from "contexts/fileSystem/core";
+import { MongoDBFileSystem } from "contexts/fileSystem/MongoDBFS";
 import {
   DESKTOP_PATH,
   PREVENT_SCROLL,
@@ -38,10 +40,10 @@ const useFileKeyboardShortcuts = (
   isDesktop?: boolean,
   setView?: (newView: FileManagerViewNames) => void
 ): KeyboardShortcutEntry => {
-  const { copyEntries, deletePath, moveEntries } = useFileSystem();
+  const { copyEntries, deletePath, moveEntries, rootFs } = useFileSystem();
   const { open, url: changeUrl } = useProcesses();
   const { openTransferDialog } = useTransferDialog();
-  const { foregroundId, setIconPositions } = useSession();
+  const { foregroundId, hideCategorized, setHideCategorized, setIconPositions } = useSession();
 
   useEffect(() => {
     const pasteHandler = (event: ClipboardEvent): void => {
@@ -131,6 +133,20 @@ const useFileKeyboardShortcuts = (
             case "d":
               onDelete();
               break;
+            case "h": {
+              haltEvent(event);
+              const mntUrl = rootFs?.mntMap
+                ? getMountUrl(url, rootFs.mntMap)
+                : undefined;
+              const mntFs = mntUrl ? rootFs?.mntMap[mntUrl] : undefined;
+              if (mntFs?.getName() === "MongoDBFS") {
+                const mongoFs = mntFs as MongoDBFileSystem;
+                mongoFs.hideCategorized = !mongoFs.hideCategorized;
+                setHideCategorized(mongoFs.hideCategorized);
+                updateFiles();
+              }
+              break;
+            }
             case "r":
               haltEvent(event);
               updateFiles();
@@ -300,12 +316,15 @@ const useFileKeyboardShortcuts = (
       files,
       focusEntry,
       focusedEntries,
+      hideCategorized,
       id,
       isDesktop,
       isStartMenu,
       moveEntries,
       open,
       pasteToFolder,
+      rootFs?.mntMap,
+      setHideCategorized,
       setIconPositions,
       setRenaming,
       setView,

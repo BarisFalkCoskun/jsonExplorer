@@ -57,7 +57,8 @@ import { getNavButtonByTitle } from "hooks/useGlobalKeyboardShortcuts";
 import useTransferDialog, {
   type ObjectReader,
 } from "components/system/Dialogs/Transfer/useTransferDialog";
-import { isMountedFolder } from "contexts/fileSystem/core";
+import { getMountUrl, isMountedFolder } from "contexts/fileSystem/core";
+import { MongoDBFileSystem } from "contexts/fileSystem/MongoDBFS";
 
 const useFileContextMenu = (
   url: string,
@@ -163,6 +164,14 @@ const useFileContextMenu = (
             });
           }
 
+          const mountUrl = rootFs?.mntMap
+            ? getMountUrl(path, rootFs.mntMap)
+            : undefined;
+          const mountedFs = mountUrl ? rootFs?.mntMap[mountUrl] : undefined;
+          const isMongoDocument =
+            mountedFs?.getName() === "MongoDBFS" &&
+            path.replace(mountUrl || "", "").split("/").filter(Boolean).length >= 3;
+
           menuItems.push(
             {
               action: () => {
@@ -175,6 +184,40 @@ const useFileContextMenu = (
               label: "Delete",
             },
             { action: () => setRenaming(baseName), label: "Rename" },
+            ...(isMongoDocument
+              ? [
+                  MENU_SEPERATOR,
+                  {
+                    action: () => {
+                      const value = window.prompt("Enter category name:");
+                      if (value) {
+                        const mongoFs = mountedFs as MongoDBFileSystem;
+                        const relativePath = path.replace(
+                          `${mountUrl}/`,
+                          ""
+                        );
+                        mongoFs
+                          .patchDocument(relativePath, { category: value })
+                          .catch(console.error);
+                      }
+                    },
+                    label: "Set Category",
+                  },
+                  {
+                    action: () => {
+                      const mongoFs = mountedFs as MongoDBFileSystem;
+                      const relativePath = path.replace(
+                        `${mountUrl}/`,
+                        ""
+                      );
+                      mongoFs
+                        .patchDocument(relativePath, { category: null })
+                        .catch(console.error);
+                    },
+                    label: "Remove Category",
+                  },
+                ]
+              : []),
             MENU_SEPERATOR,
             {
               action: () => {

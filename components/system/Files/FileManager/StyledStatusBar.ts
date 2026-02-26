@@ -37,6 +37,27 @@ const StyledStatusBar = styled.footer`
     }
   }
 
+  .hide-toggle {
+    background: transparent;
+    border: 1px solid transparent;
+    color: rgb(247 247 247);
+    cursor: pointer;
+    font-size: 11px;
+    margin-left: auto;
+    margin-right: 8px;
+    padding: 1px 8px;
+
+    &:hover {
+      background-color: rgb(77 77 77);
+      border: 1px solid rgb(99 99 99);
+    }
+
+    &.active {
+      background-color: rgb(0 120 212);
+      border: 1px solid rgb(0 120 212);
+    }
+  }
+
   nav {
     align-items: center;
     display: flex;

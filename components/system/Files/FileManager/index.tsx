@@ -31,6 +31,8 @@ import {
 import { getExtension, haltEvent } from "utils/functions";
 import Columns from "components/system/Files/FileManager/Columns";
 import { useSession } from "contexts/session";
+import { getMountUrl } from "contexts/fileSystem/core";
+import { MongoDBFileSystem } from "contexts/fileSystem/MongoDBFS";
 
 const StyledEmpty = dynamic(
   () => import("components/system/Files/FileManager/StyledEmpty")
@@ -71,7 +73,7 @@ const FileManager: FC<FileManagerProps> = ({
   skipSorting,
   url,
 }) => {
-  const { iconZoomLevel, setIconZoomLevel, views, setViews } = useSession();
+  const { hideCategorized, iconZoomLevel, setHideCategorized, setIconZoomLevel, views, setViews } = useSession();
   const view = useMemo(() => {
     if (isDesktop) return "icon";
     if (isStartMenu) return "list";
@@ -101,6 +103,23 @@ const FileManager: FC<FileManagerProps> = ({
       skipSorting,
     });
   const { lstat, mountFs, rootFs } = useFileSystem();
+  const { mountUrl, isMongoFS, mongoFs } = useMemo(() => {
+    const mUrl = rootFs?.mntMap ? getMountUrl(url, rootFs.mntMap) : undefined;
+    const mFs = mUrl ? rootFs?.mntMap[mUrl] : undefined;
+    const isMongo = mFs?.getName() === "MongoDBFS";
+    return {
+      isMongoFS: isMongo,
+      mongoFs: isMongo ? (mFs as MongoDBFileSystem) : undefined,
+      mountUrl: mUrl,
+    };
+  }, [rootFs?.mntMap, url]);
+  const handleToggleHideCategorized = useCallback(() => {
+    if (mongoFs) {
+      mongoFs.hideCategorized = !mongoFs.hideCategorized;
+      setHideCategorized(mongoFs.hideCategorized);
+      updateFiles();
+    }
+  }, [mongoFs, setHideCategorized, updateFiles]);
   const { StyledFileEntry, StyledFileManager } = FileManagerViews[view];
   const { isSelecting, selectionRect, selectionStyling, selectionEvents } =
     useSelection(fileManagerRef, focusedEntries, focusFunctions, isDesktop);
@@ -282,6 +301,13 @@ const FileManager: FC<FileManagerProps> = ({
     };
   }, [hasMore, loadMore]);
 
+  useEffect(() => {
+    if (mongoFs && mongoFs.hideCategorized !== hideCategorized) {
+      mongoFs.hideCategorized = hideCategorized;
+      updateFiles();
+    }
+  }, [mongoFs, hideCategorized]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <>
       {loading && <StyledLoading $hasColumns={isDetailsView} />}
@@ -357,6 +383,12 @@ const FileManager: FC<FileManagerProps> = ({
           count={loading ? 0 : fileKeys.length}
           directory={url}
           fileDrop={fileDrop}
+          {...(isMongoFS
+            ? {
+                hideCategorized,
+                onToggleHideCategorized: handleToggleHideCategorized,
+              }
+            : {})}
           iconZoomLevel={iconZoomLevel}
           selected={focusedEntries}
           setIconZoomLevel={setIconZoomLevel}

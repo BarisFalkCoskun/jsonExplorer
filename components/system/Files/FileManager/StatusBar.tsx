@@ -23,7 +23,9 @@ type StatusBarProps = {
   count: number;
   directory: string;
   fileDrop: FileDrop;
+  hideCategorized?: boolean;
   iconZoomLevel: number;
+  onToggleHideCategorized?: () => void;
   selected: string[];
   setIconZoomLevel: React.Dispatch<React.SetStateAction<number>>;
   setView: (view: FileManagerViewNames) => void;
@@ -36,7 +38,9 @@ const StatusBar: FC<StatusBarProps> = ({
   count,
   directory,
   fileDrop,
+  hideCategorized,
   iconZoomLevel,
+  onToggleHideCategorized,
   selected,
   setIconZoomLevel,
   setView,
@@ -111,6 +115,15 @@ const StatusBar: FC<StatusBarProps> = ({
             ? `\u00A0\u00A0${getFormattedSize(selectedSize)}`
             : ""}
         </div>
+      )}
+      {onToggleHideCategorized && (
+        <Button
+          className={`hide-toggle${hideCategorized ? " active" : ""}`}
+          onClick={onToggleHideCategorized}
+          {...label("Toggle visibility of categorized items (Ctrl+H)")}
+        >
+          {hideCategorized ? "Show All" : "Hide Labeled"}
+        </Button>
       )}
       <nav className="views">
         <Button
