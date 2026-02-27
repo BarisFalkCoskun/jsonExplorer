@@ -36,11 +36,14 @@ export const isSelectionIntersecting = (
   const { x = 0, y = 0, width = 0, height = 0 } = selection;
   const selectionRect = new DOMRect(x, y, Number(width), Number(height));
 
+  const elementTop = element.top - containerElement.top + containerScrollTop;
+  const elementBottom =
+    element.bottom - containerElement.top + containerScrollTop;
+
   return !(
     element.left - containerElement.left >= selectionRect.right ||
-    element.top - containerElement.top >= selectionRect.bottom ||
+    elementTop >= selectionRect.bottom ||
     element.right - containerElement.left <= selectionRect.left ||
-    element.bottom - containerElement.top + containerScrollTop <=
-      selectionRect.top
+    elementBottom <= selectionRect.top
   );
 };
