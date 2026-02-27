@@ -63,6 +63,19 @@ const useMenuContextState = (): MenuContextState => {
         domRect?: DOMRect,
         options?: MenuOptions
       ): void => {
+        // On macOS, Ctrl+left-click fires a contextmenu event.
+        // Suppress both the native and custom menu so Ctrl+click
+        // can be used purely for multi-selection.
+        if (
+          event &&
+          "button" in event &&
+          event.ctrlKey &&
+          event.button !== 2
+        ) {
+          if (event.cancelable) event.preventDefault();
+          return;
+        }
+
         const { staticX, staticY } = options || {};
         let x = 0;
         let y = 0;
