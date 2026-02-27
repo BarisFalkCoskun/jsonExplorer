@@ -14,8 +14,11 @@ Building a **product categorization tool** for organizing grocery store product 
 2. Open a collection folder (e.g., `products`) -> see documents as `.json` files with thumbnail previews
 3. Right-click a product -> "Set Category" -> type a category name (e.g., "Fruit")
 4. Press **Ctrl+H** to hide already-categorized items -> see only unlabeled products
-5. Continue labeling the remaining products
-6. Press **Ctrl+H** again to show all items and review progress
+5. Press **Ctrl+D** to dismiss selected items you don't want to deal with right now
+6. Press **Ctrl+Shift+D** to toggle hiding dismissed items
+7. Press **Space** on a selected item to Quick Look (preview) it
+8. Continue labeling the remaining products
+9. Press **Ctrl+H** / **Ctrl+Shift+D** again to show hidden items and review progress
 
 ### Key Requirement
 
@@ -40,8 +43,30 @@ The **Ctrl+H toggle must be instant** (zero network requests). Users label hundr
 | `components/system/Files/FileEntry/useFileContextMenu.ts` | "Set Category" / "Remove Category" right-click menu items |
 | `components/system/Files/FileManager/useFileKeyboardShortcuts.ts` | Ctrl+H shortcut (delegates to toggle callback) |
 | `components/system/Files/FileManager/StatusBar.tsx` | "Hide Labeled" / "Show All" toggle button |
-| `components/system/Files/FileManager/StyledStatusBar.ts` | CSS for `.hide-toggle` button (flex-based positioning) |
+| `components/system/Files/FileManager/StyledStatusBar.ts` | CSS for `.hide-toggle` / `.hide-toggles` container (flex-based positioning) |
 | `components/system/Files/FileManager/index.tsx` | Wires toggle logic: `handleToggleHideCategorized` with `allFilesRef` for instant save/restore |
+
+### Dismiss/Skip Feature (implemented)
+
+Lets users temporarily hide products they don't want to deal with right now, separate from the categorization hide.
+
+| File | Role |
+|------|------|
+| `contexts/fileSystem/MongoDBFS.ts` | `hideDismissed` flag, `getCachedDismissedNames()`, `isCachedDismissed()`, filtering in `readdir` |
+| `contexts/session/types.ts` | `hideDismissed` in session state |
+| `contexts/session/useSessionContextState.ts` | Persists `hideDismissed` across page reloads |
+| `components/system/Files/FileEntry/useFileContextMenu.ts` | "Dismiss" / "Undismiss" right-click menu items |
+| `components/system/Files/FileManager/useFileKeyboardShortcuts.ts` | Ctrl+D (dismiss selected), Ctrl+Shift+D (toggle visibility) |
+| `components/system/Files/FileManager/StatusBar.tsx` | "Hide Dismissed" / "Show Dismissed" toggle button |
+| `components/system/Files/FileManager/index.tsx` | `handleToggleHideDismissed`, `handleDismiss` with instant toggle pattern |
+
+### Quick Look (implemented)
+
+Press **Space** on a selected file to preview it in a modal overlay (like macOS Quick Look).
+
+### macOS Ctrl+Click Fix
+
+On macOS, Ctrl+click fires a `contextmenu` event. This is suppressed in `contexts/menu/useMenuContextState.ts` so that Ctrl+click can be used for multi-selection without triggering the context menu. Only real right-clicks (button 2 / two-finger tap) open the menu.
 
 ### How Instant Toggle Works
 
@@ -68,10 +93,16 @@ MongoDB connection is configured in the app. The API routes at `/api/mongodb/` p
 
 ## Current State
 
-The categorization feature is fully implemented and tested:
+Core labeling workflow is fully implemented:
 - Right-click context menu for setting/removing categories
-- Ctrl+H instant toggle (0 network requests both directions, verified with Playwright)
-- Status bar toggle button with proper positioning (no overlap with zoom slider)
-- Session persistence of toggle state
+- Ctrl+H instant toggle for hiding categorized items (0 network requests)
+- Ctrl+D to dismiss selected items, Ctrl+Shift+D to toggle dismissed visibility
+- Right-click Dismiss/Undismiss menu items
+- Status bar with "Hide Labeled" and "Hide Dismissed" toggle buttons
+- Quick Look preview (Space key)
+- Ctrl+click multi-selection works on macOS (no false context menu)
+- Session persistence of all toggle states
 - Lazy loading / infinite scroll for large collections
 - Zoom capability for icon sizes
+
+See `todo.md` for future ideas (substitute group labeling for ML training).
