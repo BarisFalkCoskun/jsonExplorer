@@ -150,7 +150,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
         const documents = await collection.find(
           filter,
-          metaOnly ? { projection: { _id: 1, name: 1, category: 1 } } : undefined
+          metaOnly ? { projection: { _id: 1, name: 1, category: 1, dismissed: 1 } } : undefined
         ).sort({ name: 1 }).toArray();
         res.json(documents);
         break;

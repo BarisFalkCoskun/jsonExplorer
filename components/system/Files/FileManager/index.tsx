@@ -240,44 +240,9 @@ const FileManager: FC<FileManagerProps> = ({
         setFiles(allDismissedFilesRef.current as any);
         allDismissedFilesRef.current = null;
       } else {
-        const cachedDocs = mongoFs.getCachedDismissedNames();
-
-        if (cachedDocs !== null) {
-          if (cachedDocs.size > 0) {
-            setFiles((currentFiles) => {
-              if (!currentFiles) return currentFiles;
-
-              const restored = { ...currentFiles };
-              const now = new Date();
-
-              for (const docName of cachedDocs) {
-                const fileName = `${docName}.json`;
-
-                if (!(fileName in restored)) {
-                  restored[fileName] = {
-                    size: -1,
-                    mode: 33188,
-                    isFile: () => true,
-                    isDirectory: () => false,
-                    isBlockDevice: () => false,
-                    isCharacterDevice: () => false,
-                    isSymbolicLink: () => false,
-                    isFIFO: () => false,
-                    isSocket: () => false,
-                    mtime: now,
-                    atime: now,
-                    ctime: now,
-                    birthtime: now,
-                  } as any;
-                }
-              }
-
-              return restored;
-            });
-          }
-        } else {
-          updateFiles();
-        }
+        // Session restore case — no saved state, do a full refresh.
+        // hideDismissed is already false so readdir will return everything.
+        updateFiles();
       }
     }
   }, [files, mongoFs, setFiles, setHideDismissed, updateFiles]);
