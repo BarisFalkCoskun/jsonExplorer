@@ -39,7 +39,9 @@ const useFileKeyboardShortcuts = (
   setView?: (newView: FileManagerViewNames) => void,
   onToggleHideCategorized?: () => void,
   onSetCategory?: (entries: string[]) => void,
-  onQuickLook?: (entry: string) => void
+  onQuickLook?: (entry: string) => void,
+  onDismiss?: (entries: string[]) => void,
+  onToggleHideDismissed?: () => void
 ): KeyboardShortcutEntry => {
   const { copyEntries, deletePath, moveEntries } = useFileSystem();
   const { open, url: changeUrl } = useProcesses();
@@ -72,24 +74,31 @@ const useFileKeyboardShortcuts = (
         const { altKey, ctrlKey, key, target, shiftKey } = event;
 
         if (shiftKey) {
-          if (ctrlKey && !isDesktop) {
-            const updateViewAndFocus = (
-              newView: FileManagerViewNames
-            ): void => {
-              setView?.(newView);
-              requestAnimationFrame(() =>
-                fileManagerRef.current?.focus(PREVENT_SCROLL)
-              );
-            };
+          if (ctrlKey) {
+            if (!isDesktop) {
+              const updateViewAndFocus = (
+                newView: FileManagerViewNames
+              ): void => {
+                setView?.(newView);
+                requestAnimationFrame(() =>
+                  fileManagerRef.current?.focus(PREVENT_SCROLL)
+                );
+              };
 
-            // eslint-disable-next-line default-case
-            switch (key) {
-              case "#": // 3
-                updateViewAndFocus("icon");
-                break;
-              case "^": // 6
-                updateViewAndFocus("details");
-                break;
+              // eslint-disable-next-line default-case
+              switch (key) {
+                case "#": // 3
+                  updateViewAndFocus("icon");
+                  break;
+                case "^": // 6
+                  updateViewAndFocus("details");
+                  break;
+              }
+            }
+
+            if (key === "D" && onToggleHideDismissed) {
+              haltEvent(event);
+              onToggleHideDismissed();
             }
           }
 
@@ -132,7 +141,12 @@ const useFileKeyboardShortcuts = (
               copyEntries(focusedEntries.map((entry) => join(url, entry)));
               break;
             case "d":
-              onDelete();
+              if (onDismiss && focusedEntries.length > 0) {
+                haltEvent(event);
+                onDismiss(focusedEntries);
+              } else {
+                onDelete();
+              }
               break;
             case "h": {
               if (onToggleHideCategorized) {
@@ -327,9 +341,11 @@ const useFileKeyboardShortcuts = (
       isDesktop,
       isStartMenu,
       moveEntries,
+      onDismiss,
       onQuickLook,
       onSetCategory,
       onToggleHideCategorized,
+      onToggleHideDismissed,
       open,
       pasteToFolder,
       setIconPositions,

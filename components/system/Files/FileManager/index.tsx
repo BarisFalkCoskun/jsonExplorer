@@ -78,7 +78,7 @@ const FileManager: FC<FileManagerProps> = ({
   skipSorting,
   url,
 }) => {
-  const { hideCategorized, iconZoomLevel, setHideCategorized, setIconZoomLevel, views, setViews } = useSession();
+  const { hideCategorized, hideDismissed, iconZoomLevel, setHideCategorized, setHideDismissed, setIconZoomLevel, views, setViews } = useSession();
   const view = useMemo(() => {
     if (isDesktop) return "icon";
     if (isStartMenu) return "list";
@@ -203,6 +203,116 @@ const FileManager: FC<FileManagerProps> = ({
       }
     }
   }, [files, mongoFs, setFiles, setHideCategorized, updateFiles]);
+  const allDismissedFilesRef = useRef<Record<string, any> | null>(null);
+  const handleToggleHideDismissed = useCallback(() => {
+    if (!mongoFs) return;
+
+    const newHidden = !mongoFs.hideDismissed;
+    mongoFs.hideDismissed = newHidden;
+    setHideDismissed(newHidden);
+
+    if (newHidden) {
+      allDismissedFilesRef.current = { ...files };
+
+      const cachedDocs = mongoFs.getCachedDismissedNames();
+
+      if (cachedDocs) {
+        setFiles((currentFiles) => {
+          if (!currentFiles) return currentFiles;
+
+          const filtered: typeof currentFiles = {};
+
+          for (const [name, stat] of Object.entries(currentFiles)) {
+            const docName = name.replace(/\.json$/, "");
+
+            if (!cachedDocs.has(docName)) {
+              filtered[name] = stat;
+            }
+          }
+
+          return filtered;
+        });
+      } else {
+        updateFiles();
+      }
+    } else {
+      if (allDismissedFilesRef.current) {
+        setFiles(allDismissedFilesRef.current as any);
+        allDismissedFilesRef.current = null;
+      } else {
+        const cachedDocs = mongoFs.getCachedDismissedNames();
+
+        if (cachedDocs !== null) {
+          if (cachedDocs.size > 0) {
+            setFiles((currentFiles) => {
+              if (!currentFiles) return currentFiles;
+
+              const restored = { ...currentFiles };
+              const now = new Date();
+
+              for (const docName of cachedDocs) {
+                const fileName = `${docName}.json`;
+
+                if (!(fileName in restored)) {
+                  restored[fileName] = {
+                    size: -1,
+                    mode: 33188,
+                    isFile: () => true,
+                    isDirectory: () => false,
+                    isBlockDevice: () => false,
+                    isCharacterDevice: () => false,
+                    isSymbolicLink: () => false,
+                    isFIFO: () => false,
+                    isSocket: () => false,
+                    mtime: now,
+                    atime: now,
+                    ctime: now,
+                    birthtime: now,
+                  } as any;
+                }
+              }
+
+              return restored;
+            });
+          }
+        } else {
+          updateFiles();
+        }
+      }
+    }
+  }, [files, mongoFs, setFiles, setHideDismissed, updateFiles]);
+  const handleDismiss = useCallback(
+    (entries: string[]) => {
+      if (!mongoFs || !mountUrl) return;
+
+      entries.forEach((entry) => {
+        const relativePath = `${url.replace(`${mountUrl}/`, "")}/${entry}`.replace(
+          /\.json$/,
+          ""
+        );
+        mongoFs
+          .patchDocument(relativePath, { dismissed: true })
+          .catch(console.error);
+      });
+
+      if (mongoFs.hideDismissed) {
+        setFiles((currentFiles) => {
+          if (!currentFiles) return currentFiles;
+
+          const filtered: typeof currentFiles = {};
+
+          for (const [name, stat] of Object.entries(currentFiles)) {
+            if (!entries.includes(name)) {
+              filtered[name] = stat;
+            }
+          }
+
+          return filtered;
+        });
+      }
+    },
+    [mongoFs, mountUrl, setFiles, url]
+  );
   const handleSetCategory = useCallback(
     (entries: string[]) => {
       if (!mongoFs || !mountUrl) return;
@@ -309,7 +419,9 @@ const FileManager: FC<FileManagerProps> = ({
     setView,
     isMongoFS ? handleToggleHideCategorized : undefined,
     isMongoFS ? handleSetCategory : undefined,
-    isMongoFS ? handleQuickLook : undefined
+    isMongoFS ? handleQuickLook : undefined,
+    isMongoFS ? handleDismiss : undefined,
+    isMongoFS ? handleToggleHideDismissed : undefined
   );
   const [permission, setPermission] = useState<PermissionState>("prompt");
   const requestingPermissions = useRef(false);
@@ -446,8 +558,9 @@ const FileManager: FC<FileManagerProps> = ({
   useEffect(() => {
     if (mongoFs) {
       mongoFs.hideCategorized = hideCategorized;
+      mongoFs.hideDismissed = hideDismissed;
     }
-  }, [mongoFs, hideCategorized]);
+  }, [mongoFs, hideCategorized, hideDismissed]);
 
   return (
     <>
@@ -535,7 +648,9 @@ const FileManager: FC<FileManagerProps> = ({
           {...(isMongoFS
             ? {
                 hideCategorized,
+                hideDismissed,
                 onToggleHideCategorized: handleToggleHideCategorized,
+                onToggleHideDismissed: handleToggleHideDismissed,
               }
             : {})}
           iconZoomLevel={iconZoomLevel}

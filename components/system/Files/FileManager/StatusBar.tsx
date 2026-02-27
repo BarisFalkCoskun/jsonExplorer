@@ -24,8 +24,10 @@ type StatusBarProps = {
   directory: string;
   fileDrop: FileDrop;
   hideCategorized?: boolean;
+  hideDismissed?: boolean;
   iconZoomLevel: number;
   onToggleHideCategorized?: () => void;
+  onToggleHideDismissed?: () => void;
   selected: string[];
   setIconZoomLevel: React.Dispatch<React.SetStateAction<number>>;
   setView: (view: FileManagerViewNames) => void;
@@ -39,8 +41,10 @@ const StatusBar: FC<StatusBarProps> = ({
   directory,
   fileDrop,
   hideCategorized,
+  hideDismissed,
   iconZoomLevel,
   onToggleHideCategorized,
+  onToggleHideDismissed,
   selected,
   setIconZoomLevel,
   setView,
@@ -116,14 +120,27 @@ const StatusBar: FC<StatusBarProps> = ({
             : ""}
         </div>
       )}
-      {onToggleHideCategorized && (
-        <Button
-          className={`hide-toggle${hideCategorized ? " active" : ""}`}
-          onClick={onToggleHideCategorized}
-          {...label("Toggle visibility of categorized items (Ctrl+H)")}
-        >
-          {hideCategorized ? "Show All" : "Hide Labeled"}
-        </Button>
+      {(onToggleHideCategorized || onToggleHideDismissed) && (
+        <div className="hide-toggles">
+          {onToggleHideCategorized && (
+            <Button
+              className={`hide-toggle${hideCategorized ? " active" : ""}`}
+              onClick={onToggleHideCategorized}
+              {...label("Toggle visibility of categorized items (Ctrl+H)")}
+            >
+              {hideCategorized ? "Show All" : "Hide Labeled"}
+            </Button>
+          )}
+          {onToggleHideDismissed && (
+            <Button
+              className={`hide-toggle${hideDismissed ? " active" : ""}`}
+              onClick={onToggleHideDismissed}
+              {...label("Toggle visibility of dismissed items (Ctrl+Shift+D)")}
+            >
+              {hideDismissed ? "Show Dismissed" : "Hide Dismissed"}
+            </Button>
+          )}
+        </div>
       )}
       <nav className="views">
         <Button

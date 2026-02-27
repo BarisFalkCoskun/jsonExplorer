@@ -63,6 +63,7 @@ const useSessionContextState = (): SessionContextState => {
   const [cursor, setCursor] = useState<string | undefined>();
   const [aiEnabled, setAiEnabled] = useState(false);
   const [hideCategorized, setHideCategorized] = useState(false);
+  const [hideDismissed, setHideDismissed] = useState(false);
   const [lazySheep, setLazySheep] = useState(false);
   const [windowStates, setWindowStates] = useState<WindowStates>({});
   const [sortOrders, setSortOrders] = useState<SortOrders>({});
@@ -216,6 +217,7 @@ const useSessionContextState = (): SessionContextState => {
             clockSource,
             cursor,
             hideCategorized,
+            hideDismissed,
             iconPositions,
             iconZoomLevel,
             lazySheep,
@@ -238,6 +240,7 @@ const useSessionContextState = (): SessionContextState => {
     cursor,
     haltSession,
     hideCategorized,
+    hideDismissed,
     iconPositions,
     iconZoomLevel,
     lazySheep,
@@ -285,6 +288,7 @@ const useSessionContextState = (): SessionContextState => {
           if (session.cursor) setCursor(session.cursor);
           if (session.aiEnabled) setAiEnabled(session.aiEnabled);
           if (session.hideCategorized) setHideCategorized(session.hideCategorized);
+          if (session.hideDismissed) setHideDismissed(session.hideDismissed);
           if (session.themeName) setThemeName(session.themeName);
           if (session.wallpaperImage) {
             setWallpaper(session.wallpaperImage, session.wallpaperFit);
@@ -397,6 +401,7 @@ const useSessionContextState = (): SessionContextState => {
     cursor,
     foregroundId,
     hideCategorized,
+    hideDismissed,
     iconPositions,
     iconZoomLevel,
     prependToStack,
@@ -410,6 +415,7 @@ const useSessionContextState = (): SessionContextState => {
     setForegroundId,
     setHaltSession,
     setHideCategorized,
+    setHideDismissed,
     setIconPositions: setAndUpdateIconPositions,
     setIconZoomLevel,
     setRunHistory,

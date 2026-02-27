@@ -237,6 +237,31 @@ const useFileContextMenu = (
                     },
                     label: "Remove Category",
                   },
+                  MENU_SEPERATOR,
+                  (() => {
+                    const mongoFs = mountedFs as MongoDBFileSystem;
+                    const entries = absoluteEntries();
+                    const allDismissed = entries.every((entry) =>
+                      mongoFs.isCachedDismissed(basename(entry, ".json"))
+                    );
+
+                    return {
+                      action: () => {
+                        entries.forEach((entry) => {
+                          const relativePath = entry.replace(
+                            `${mountUrl}/`,
+                            ""
+                          );
+                          mongoFs
+                            .patchDocument(relativePath, {
+                              dismissed: allDismissed ? null : true,
+                            })
+                            .catch(console.error);
+                        });
+                      },
+                      label: allDismissed ? "Undismiss" : "Dismiss",
+                    };
+                  })(),
                 ]
               : []),
             MENU_SEPERATOR,

@@ -14,7 +14,7 @@ const StyledStatusBar = styled.footer`
   white-space: nowrap;
   width: 100%;
 
-  div {
+  > div:not(.hide-toggles) {
     display: flex;
     margin-top: -1px;
     padding: 0 3px 0 9px;
@@ -44,8 +44,7 @@ const StyledStatusBar = styled.footer`
     cursor: pointer;
     flex-shrink: 0;
     font-size: 11px;
-    margin-left: auto;
-    margin-right: 136px;
+    margin-left: 4px;
     padding: 1px 8px;
 
     &:hover {
@@ -59,11 +58,18 @@ const StyledStatusBar = styled.footer`
     }
   }
 
+  .hide-toggles {
+    display: flex;
+    flex-shrink: 0;
+    gap: 4px;
+    margin-left: auto;
+  }
+
   nav {
     align-items: center;
     display: flex;
-    position: absolute;
-    right: 4px;
+    flex-shrink: 0;
+    margin-left: auto;
 
     button {
       border: 1px solid transparent;

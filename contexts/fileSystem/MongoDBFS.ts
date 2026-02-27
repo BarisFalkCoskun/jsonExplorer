@@ -40,6 +40,7 @@ export class MongoDBFileSystem implements FileSystem {
   private readonly collectionEntriesCache = new Map<string, CachedCollectionEntries>();
   private readonly documentsListCache = new Map<string, CachedDocumentsList>();
   public hideCategorized = false;
+  public hideDismissed = false;
 
   constructor(connectionString = "mongodb://localhost:27017") {
     this.connectionString = connectionString;
@@ -388,6 +389,37 @@ export class MongoDBFileSystem implements FileSystem {
     return null;
   }
 
+  /**
+   * Returns a Set of document names that have a `dismissed` field,
+   * using the in-memory documents cache. Returns null if no cache is available.
+   */
+  public getCachedDismissedNames(): Set<string> | null {
+    for (const cached of this.documentsListCache.values()) {
+      const dismissed = new Set<string>();
+
+      for (const doc of cached.documents) {
+        if (doc.dismissed) {
+          dismissed.add(this.getDocumentIdentifier(doc));
+        }
+      }
+
+      return dismissed;
+    }
+
+    return null;
+  }
+
+  public isCachedDismissed(docName: string): boolean {
+    for (const cached of this.documentsListCache.values()) {
+      for (const doc of cached.documents) {
+        if (this.getDocumentIdentifier(doc) === docName) {
+          return !!doc.dismissed;
+        }
+      }
+    }
+    return false;
+  }
+
   public getCachedDocumentCategory(docName: string): string | null {
     for (const cached of this.documentsListCache.values()) {
       for (const doc of cached.documents) {
@@ -677,9 +709,9 @@ export class MongoDBFileSystem implements FileSystem {
 
       // Collection path - list documents as JSON files
       const allDocuments = await this.getDocuments(database, collection, true);
-      const documents = this.hideCategorized
-        ? allDocuments.filter((doc) => !("category" in doc))
-        : allDocuments;
+      const documents = allDocuments
+        .filter((doc) => !this.hideCategorized || !("category" in doc))
+        .filter((doc) => !this.hideDismissed || !doc.dismissed);
       const entries = documents.map((doc) => this.getDocumentIdentifier(doc));
       this.setCachedCollectionEntries(database, collection, entries);
 
