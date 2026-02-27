@@ -238,29 +238,69 @@ const useFileContextMenu = (
                     label: "Remove Category",
                   },
                   MENU_SEPERATOR,
-                  (() => {
+                  ...(() => {
                     const mongoFs = mountedFs as MongoDBFileSystem;
                     const entries = absoluteEntries();
-                    const allDismissed = entries.every((entry) =>
+                    const someDismissed = entries.some((entry) =>
                       mongoFs.isCachedDismissed(basename(entry, ".json"))
                     );
+                    const someNotDismissed = entries.some(
+                      (entry) =>
+                        !mongoFs.isCachedDismissed(basename(entry, ".json"))
+                    );
+                    const items: MenuItem[] = [];
 
-                    return {
-                      action: () => {
-                        entries.forEach((entry) => {
-                          const relativePath = entry.replace(
-                            `${mountUrl}/`,
-                            ""
-                          );
-                          mongoFs
-                            .patchDocument(relativePath, {
-                              dismissed: allDismissed ? null : true,
-                            })
-                            .catch(console.error);
-                        });
-                      },
-                      label: allDismissed ? "Undismiss" : "Dismiss",
-                    };
+                    if (someNotDismissed) {
+                      items.push({
+                        action: () => {
+                          entries.forEach((entry) => {
+                            if (
+                              !mongoFs.isCachedDismissed(
+                                basename(entry, ".json")
+                              )
+                            ) {
+                              const relativePath = entry.replace(
+                                `${mountUrl}/`,
+                                ""
+                              );
+                              mongoFs
+                                .patchDocument(relativePath, {
+                                  dismissed: true,
+                                })
+                                .catch(console.error);
+                            }
+                          });
+                        },
+                        label: "Dismiss",
+                      });
+                    }
+
+                    if (someDismissed) {
+                      items.push({
+                        action: () => {
+                          entries.forEach((entry) => {
+                            if (
+                              mongoFs.isCachedDismissed(
+                                basename(entry, ".json")
+                              )
+                            ) {
+                              const relativePath = entry.replace(
+                                `${mountUrl}/`,
+                                ""
+                              );
+                              mongoFs
+                                .patchDocument(relativePath, {
+                                  dismissed: null,
+                                })
+                                .catch(console.error);
+                            }
+                          });
+                        },
+                        label: "Undismiss",
+                      });
+                    }
+
+                    return items;
                   })(),
                 ]
               : []),
