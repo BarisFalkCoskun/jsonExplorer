@@ -2,7 +2,6 @@
   "compilerOptions": {
     "allowJs": true,
     "allowUnreachableCode": false,
-    "baseUrl": ".",
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "incremental": true,
@@ -10,7 +9,11 @@
     "jsx": "preserve",
     "lib": ["dom", "dom.iterable", "esnext", "webworker"],
     "module": "esnext",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
+    "paths": {
+      "*": ["./*"],
+      "resedit/dist/resource": ["./node_modules/resedit/dist/resource/index"]
+    },
     "noEmit": true,
     "noImplicitOverride": true,
     "noImplicitReturns": true,

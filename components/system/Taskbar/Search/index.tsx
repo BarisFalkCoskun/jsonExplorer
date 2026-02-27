@@ -74,7 +74,9 @@ type TabData = {
 
 export const NO_RESULTS = "NO_RESULTS";
 
-const SUGGESTED = ["FileExplorer", "Terminal", "Messenger", "Browser", "Paint"];
+const SUGGESTED = ["FileExplorer", "Terminal", "Messenger", "Browser", "Paint"].filter(
+  (app) => app in directory
+);
 
 const GAMES = ["SpaceCadet", "Quake3", "DXBall"];
 
