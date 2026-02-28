@@ -230,10 +230,15 @@ const handleDocument = async (
     res.json({ modifiedCount: result.modifiedCount });
   } else if (req.method === 'PUT') {
     const updateDoc = req.body as Record<string, unknown>;
-    const docFilter = updateDoc._id ? { _id: updateDoc._id } : { name: documentId };
+    const { _id: rawId, ...docWithoutId } = updateDoc;
+    const filterDocId = typeof rawId === "string" ? rawId : documentId;
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any -- dynamic MongoDB document
-    await collection.replaceOne(docFilter as any, updateDoc as any, { upsert: true });
+    await collection.replaceOne(
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any -- dynamic MongoDB document
+      { $or: getDocumentFilters(filterDocId) } as any,
+      docWithoutId as any,
+      { upsert: true }
+    );
     res.json({ success: true });
   } else if (req.method === 'DELETE') {
     const result = await collection.deleteOne({

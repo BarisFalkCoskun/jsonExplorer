@@ -41,6 +41,10 @@ const types = {
 };
 
 const extensions: Record<string, Extension> = {
+  ".json": {
+    process: ["MonacoEditor"],
+    type: "JSON File",
+  },
   ".iso": types.MountableDiscImage,
   ".m3u8": types.MediaPlaylist,
   ".mp3": types.Music,

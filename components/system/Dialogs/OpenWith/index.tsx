@@ -84,7 +84,7 @@ const OpenWith: FC<ComponentProcessProps> = ({ id }) => {
     if (closeOnBlur) {
       if (!isForeground) closeWithTransition(id);
     } else {
-      if (!isForeground) setForegroundId(id);
+      if (!isForeground) setForegroundId?.(id);
 
       setTimeout(
         () => setCloseOnBlur(true),

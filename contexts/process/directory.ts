@@ -27,6 +27,16 @@ const directory: Processes = {
     icon: "/System/Icons/unknown.webp",
     title: "Open With",
   },
+  MonacoEditor: {
+    Component: dynamic(() => import("components/apps/MonacoEditor")),
+    backgroundColor: "#1e1e1e",
+    defaultSize: {
+      height: 480,
+      width: 640,
+    },
+    icon: "/System/Icons/monaco.webp",
+    title: "Monaco Editor",
+  },
   MongoDB: {
     Component: dynamic(() => import("components/system/Dialogs/MongoDB")),
     allowResizing: false,

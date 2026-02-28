@@ -154,53 +154,10 @@ const FileManager: FC<FileManagerProps> = ({
         updateFiles();
       }
     } else {
-      // Restore the full file list
-      if (allFilesRef.current) {
-        setFiles(allFilesRef.current as any);
-        allFilesRef.current = null;
-      } else {
-        // Session restore case: reconstruct from cache instead of full reload
-        const cachedDocs = mongoFs.getCachedDocumentNames();
-
-        if (cachedDocs !== null) {
-          if (cachedDocs.size > 0) {
-            // Add back categorized items with minimal stats
-            setFiles((currentFiles) => {
-              if (!currentFiles) return currentFiles;
-
-              const restored = { ...currentFiles };
-              const now = new Date();
-
-              for (const docName of cachedDocs) {
-                const fileName = `${docName}.json`;
-
-                if (!(fileName in restored)) {
-                  restored[fileName] = {
-                    size: -1,
-                    mode: 33188,
-                    isFile: () => true,
-                    isDirectory: () => false,
-                    isBlockDevice: () => false,
-                    isCharacterDevice: () => false,
-                    isSymbolicLink: () => false,
-                    isFIFO: () => false,
-                    isSocket: () => false,
-                    mtime: now,
-                    atime: now,
-                    ctime: now,
-                    birthtime: now,
-                  } as any;
-                }
-              }
-
-              return restored;
-            });
-          }
-          // If cachedDocs.size === 0: no categorized items, current files are complete
-        } else {
-          updateFiles();
-        }
-      }
+      allFilesRef.current = null;
+      // Always do a full refresh when showing categorized items, because
+      // the user may have changed categories since the snapshot was taken.
+      updateFiles();
     }
   }, [files, mongoFs, setFiles, setHideCategorized, updateFiles]);
   const allDismissedFilesRef = useRef<Record<string, any> | null>(null);
@@ -236,14 +193,10 @@ const FileManager: FC<FileManagerProps> = ({
         updateFiles();
       }
     } else {
-      if (allDismissedFilesRef.current) {
-        setFiles(allDismissedFilesRef.current as any);
-        allDismissedFilesRef.current = null;
-      } else {
-        // Session restore case — no saved state, do a full refresh.
-        // hideDismissed is already false so readdir will return everything.
-        updateFiles();
-      }
+      allDismissedFilesRef.current = null;
+      // Always do a full refresh when showing dismissed items, because
+      // the user may have undismissed items since the snapshot was taken.
+      updateFiles();
     }
   }, [files, mongoFs, setFiles, setHideDismissed, updateFiles]);
   const handleDismiss = useCallback(
