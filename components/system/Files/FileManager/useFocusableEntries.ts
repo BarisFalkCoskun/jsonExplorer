@@ -35,9 +35,11 @@ const useFocusableEntries = (
       setFocusedEntries(
         entry
           ? (currentFocusedEntries) =>
-              currentFocusedEntries.filter(
-                (focusedEntry) => focusedEntry !== entry
-              )
+              currentFocusedEntries.includes(entry)
+                ? currentFocusedEntries.filter(
+                    (focusedEntry) => focusedEntry !== entry
+                  )
+                : currentFocusedEntries
           : []
       ),
     []
