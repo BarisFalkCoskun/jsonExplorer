@@ -558,7 +558,7 @@ const FileManager: FC<FileManagerProps> = ({
                   isHeading={isDesktop && files[file].systemShortcut}
                   isLoadingFileManager={isLoading}
                   loadIconImmediately={loadIconsImmediately}
-                  name={basename(file, SHORTCUT_EXTENSION)}
+                  name={isMongoFS ? MongoDBFileSystem.decodeDocumentIdentifier(basename(file, SHORTCUT_EXTENSION)) : basename(file, SHORTCUT_EXTENSION)}
                   path={join(url, file)}
                   readOnly={readOnly}
                   renaming={renaming === file}

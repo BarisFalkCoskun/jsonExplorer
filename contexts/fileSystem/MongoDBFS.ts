@@ -582,8 +582,12 @@ export class MongoDBFileSystem implements FileSystem {
 
   private getDocumentIdentifier(document: MongoDocument): string {
     const raw = String(document.name || document._id || "");
-    // Replace / with _ to prevent path-parsing confusion
-    return raw.replace(/\//g, "_") || String(document._id || "unnamed");
+    if (!raw) return String(document._id || "unnamed");
+    return encodeURIComponent(raw);
+  }
+
+  public static decodeDocumentIdentifier(encoded: string): string {
+    try { return decodeURIComponent(encoded); } catch { return encoded; }
   }
 
   private async getDocument(

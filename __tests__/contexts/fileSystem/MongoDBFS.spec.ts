@@ -97,7 +97,7 @@ describe("MongoDBFileSystem cache scoping", () => {
 });
 
 describe("MongoDBFileSystem document identity", () => {
-  it("sanitizes / in document names to prevent path confusion", () => {
+  it("percent-encodes / in document names", () => {
     const fs = createFS();
     const key = fs.getCollectionCacheKey("db1", "products");
 
@@ -108,12 +108,50 @@ describe("MongoDBFileSystem document identity", () => {
       ],
     });
 
-    // The identifier should be safe for use in paths (no raw /)
     const categorized = fs.getCachedDocumentNames("db1", "products");
     expect(categorized).toBeDefined();
-    for (const id of categorized!) {
-      expect(id).not.toContain("/");
-    }
+    expect(categorized!.has("weird%2Fname")).toBe(true);
+  });
+
+  it("does not collide a/b with a_b", () => {
+    const fs = createFS();
+    const key = fs.getCollectionCacheKey("db1", "products");
+
+    fs.documentsListCache.set(key, {
+      cachedAt: Date.now(),
+      documents: [
+        { _id: "1", name: "a/b", category: "x" },
+        { _id: "2", name: "a_b", category: "y" },
+      ],
+    });
+
+    const categorized = fs.getCachedDocumentNames("db1", "products");
+    expect(categorized).toBeDefined();
+    expect(categorized!.size).toBe(2);
+    expect(categorized!.has("a%2Fb")).toBe(true);
+    expect(categorized!.has("a_b")).toBe(true);
+  });
+
+  it("is reversible via decodeURIComponent", () => {
+    const fs = createFS();
+    const key = fs.getCollectionCacheKey("db1", "products");
+
+    fs.documentsListCache.set(key, {
+      cachedAt: Date.now(),
+      documents: [
+        { _id: "1", name: "weird/name", category: "fruit" },
+      ],
+    });
+
+    const categorized = fs.getCachedDocumentNames("db1", "products");
+    expect(categorized).toBeDefined();
+    const encoded = [...categorized!][0];
+    expect(decodeURIComponent(encoded)).toBe("weird/name");
+  });
+
+  it("decode helper handles invalid sequences gracefully", () => {
+    expect(MongoDBFileSystem.decodeDocumentIdentifier("valid%2Fname")).toBe("valid/name");
+    expect(MongoDBFileSystem.decodeDocumentIdentifier("%ZZinvalid")).toBe("%ZZinvalid");
   });
 
   it("uses _id as string when name is missing", () => {
