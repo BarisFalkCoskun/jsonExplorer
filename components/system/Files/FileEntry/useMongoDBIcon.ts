@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFileSystem } from "contexts/fileSystem";
 import { MongoDBFileSystem } from "contexts/fileSystem/MongoDBFS";
 import { type RootFileSystem } from "contexts/fileSystem/useAsyncFs";
@@ -58,17 +58,18 @@ export const useMongoDBIcon = (path: string, visible = false) => {
   const hasLoadedRef = useRef(false);
   const isLoadingRef = useRef(false);
 
+  const mongoData = useMemo(() => findMongoDBFileSystem(path, rootFs), [path, rootFs]);
+
   // Check if this is a MongoDB document
   const isMongoDocument = useCallback(() => {
-    const mongoData = findMongoDBFileSystem(path, rootFs);
     if (!mongoData) return false;
 
     return mongoData.mongoFS.isMongoDBDocument(mongoData.relativePath);
-  }, [path, rootFs]);
+  }, [mongoData]);
 
   // Load images from MongoDB document
   const loadImages = useCallback(async () => {
-    if (!isMongoDocument() || !rootFs || isLoadingRef.current) return;
+    if (!mongoData || !isMongoDocument() || isLoadingRef.current) return;
 
     const abortController = new AbortController();
     loadingRef.current = abortController;
@@ -77,16 +78,6 @@ export const useMongoDBIcon = (path: string, visible = false) => {
     setState(prev => ({ ...prev, isLoading: true, error: null }));
 
     try {
-      // Find the MongoDB filesystem instance for this path
-      const mongoData = findMongoDBFileSystem(path, rootFs);
-
-      if (!mongoData) {
-        setState(prev => ({ ...prev, isLoading: false, error: "MongoDB filesystem not found" }));
-        isLoadingRef.current = false;
-        return;
-      }
-
-      // Get images for the document
       const images = await mongoData.mongoFS.getDocumentImages(mongoData.relativePath);
 
       if (abortController.signal.aborted) return;
@@ -111,7 +102,7 @@ export const useMongoDBIcon = (path: string, visible = false) => {
         error: error instanceof Error ? error.message : 'Unknown error',
       }));
     }
-  }, [isMongoDocument, path, rootFs]);
+  }, [isMongoDocument, mongoData]);
 
   // Navigate to previous image
   const goToPreviousImage = useCallback(() => {

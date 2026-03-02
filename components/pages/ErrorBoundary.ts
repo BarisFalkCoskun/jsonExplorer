@@ -19,11 +19,19 @@ export class ErrorBoundary extends Component<
   }
 
   public override shouldComponentUpdate(): boolean {
-    return false;
+    return true;
   }
 
   public static getDerivedStateFromError(): ErrorBoundaryState {
     return { hasError: true };
+  }
+
+  public override componentDidCatch(): void {
+    const { FallbackRender } = this.props;
+
+    if (!FallbackRender && !isDev()) {
+      window.location.reload();
+    }
   }
 
   public override render(): React.ReactNode {
@@ -31,10 +39,6 @@ export class ErrorBoundary extends Component<
       props: { children, FallbackRender },
       state: { hasError },
     } = this;
-
-    if (hasError && !FallbackRender && !isDev()) {
-      window.location.reload();
-    }
 
     return hasError ? FallbackRender : children;
   }
