@@ -401,8 +401,12 @@ export default async function handler(
     return;
   }
 
-  const connectionString =
-    (req.headers['x-mongodb-connection'] as string) || 'mongodb://localhost:27017';
+  const connectionString = req.headers['x-mongodb-connection'] as string | undefined;
+
+  if (!connectionString) {
+    res.status(400).json({ error: 'Missing x-mongodb-connection header' });
+    return;
+  }
 
   try {
     const client = await connectToMongoDB(connectionString);
