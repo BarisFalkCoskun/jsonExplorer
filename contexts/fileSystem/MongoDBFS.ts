@@ -39,8 +39,6 @@ export class MongoDBFileSystem implements FileSystem {
   private readonly connectionString: string;
   private readonly collectionEntriesCache = new Map<string, CachedCollectionEntries>();
   private readonly documentsListCache = new Map<string, CachedDocumentsList>();
-  public hideCategorized = false;
-  public hideDismissed = false;
 
   constructor(connectionString = "mongodb://localhost:27017") {
     this.connectionString = connectionString;
@@ -738,10 +736,7 @@ export class MongoDBFileSystem implements FileSystem {
       }
 
       // Collection path - list documents as JSON files
-      const allDocuments = await this.getDocuments(database, collection, true);
-      const documents = allDocuments
-        .filter((doc) => !this.hideCategorized || !("category" in doc))
-        .filter((doc) => !this.hideDismissed || !doc.dismissed);
+      const documents = await this.getDocuments(database, collection, true);
       const entries = documents.map((doc) => this.getDocumentIdentifier(doc));
       this.setCachedCollectionEntries(database, collection, entries);
 

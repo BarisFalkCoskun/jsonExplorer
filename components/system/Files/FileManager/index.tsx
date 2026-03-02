@@ -127,19 +127,13 @@ const FileManager: FC<FileManagerProps> = ({
     const parts = relativePath.split("/").filter(Boolean);
     return { database: parts[0] || "", collection: parts[1] || "" };
   }, [isMongoFS, mountUrl, url]);
-  const allFilesRef = useRef<Record<string, any> | null>(null);
   const handleToggleHideCategorized = useCallback(() => {
     if (!mongoFs) return;
 
-    const newHidden = !mongoFs.hideCategorized;
-    mongoFs.hideCategorized = newHidden;
+    const newHidden = !hideCategorized;
     setHideCategorized(newHidden);
 
     if (newHidden) {
-      // Save the full file list before filtering
-      allFilesRef.current = { ...files };
-
-      // Get cached docs with category info to know which to hide
       const cachedDocs = mongoFs.getCachedDocumentNames(mongoCollection.database, mongoCollection.collection);
 
       if (cachedDocs) {
@@ -159,27 +153,19 @@ const FileManager: FC<FileManagerProps> = ({
           return filtered;
         });
       } else {
-        // No cache available, fall back to full refresh
         updateFiles();
       }
     } else {
-      allFilesRef.current = null;
-      // Always do a full refresh when showing categorized items, because
-      // the user may have changed categories since the snapshot was taken.
       updateFiles();
     }
-  }, [files, mongoFs, setFiles, setHideCategorized, updateFiles]);
-  const allDismissedFilesRef = useRef<Record<string, any> | null>(null);
+  }, [hideCategorized, mongoCollection, mongoFs, setFiles, setHideCategorized, updateFiles]);
   const handleToggleHideDismissed = useCallback(() => {
     if (!mongoFs) return;
 
-    const newHidden = !mongoFs.hideDismissed;
-    mongoFs.hideDismissed = newHidden;
+    const newHidden = !hideDismissed;
     setHideDismissed(newHidden);
 
     if (newHidden) {
-      allDismissedFilesRef.current = { ...files };
-
       const cachedDocs = mongoFs.getCachedDismissedNames(mongoCollection.database, mongoCollection.collection);
 
       if (cachedDocs) {
@@ -202,12 +188,9 @@ const FileManager: FC<FileManagerProps> = ({
         updateFiles();
       }
     } else {
-      allDismissedFilesRef.current = null;
-      // Always do a full refresh when showing dismissed items, because
-      // the user may have undismissed items since the snapshot was taken.
       updateFiles();
     }
-  }, [files, mongoFs, setFiles, setHideDismissed, updateFiles]);
+  }, [hideDismissed, mongoCollection, mongoFs, setFiles, setHideDismissed, updateFiles]);
   const handleDismiss = useCallback(
     async (entries: string[]) => {
       if (!mongoFs || !mountUrl) return;
@@ -498,12 +481,43 @@ const FileManager: FC<FileManagerProps> = ({
     };
   }, [hasMore, loadMore]);
 
+  // Re-apply active filters when files change (e.g. after readdir refresh)
   useEffect(() => {
-    if (mongoFs) {
-      mongoFs.hideCategorized = hideCategorized;
-      mongoFs.hideDismissed = hideDismissed;
-    }
-  }, [mongoFs, hideCategorized, hideDismissed]);
+    if (!mongoFs || (!hideCategorized && !hideDismissed)) return;
+
+    const { database, collection } = mongoCollection;
+    const categorizedNames = hideCategorized
+      ? mongoFs.getCachedDocumentNames(database, collection)
+      : null;
+    const dismissedNames = hideDismissed
+      ? mongoFs.getCachedDismissedNames(database, collection)
+      : null;
+
+    if (!categorizedNames && !dismissedNames) return;
+
+    setFiles((currentFiles) => {
+      if (!currentFiles) return currentFiles;
+
+      const filtered: typeof currentFiles = {};
+      let changed = false;
+
+      for (const [name, stat] of Object.entries(currentFiles)) {
+        const docName = name.replace(/\.json$/, "");
+        const shouldHide =
+          (categorizedNames?.has(docName) ?? false) ||
+          (dismissedNames?.has(docName) ?? false);
+
+        if (shouldHide) {
+          changed = true;
+        } else {
+          filtered[name] = stat;
+        }
+      }
+
+      return changed ? filtered : currentFiles;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [files]);
 
   return (
     <>
