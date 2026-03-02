@@ -16,6 +16,35 @@ type MongoImage = {
   small?: string;
 };
 
+const normalizeImageUrl = (img: unknown): string => {
+  if (typeof img === 'string' && img.trim().length > 0) {
+    return img.trim();
+  }
+
+  if (img && typeof img === 'object') {
+    const imgObj = img as MongoImage;
+    return imgObj.medium || imgObj.small || imgObj.large || "";
+  }
+
+  return "";
+};
+
+const addThumbnailFields = (doc: Record<string, unknown>): Record<string, unknown> => {
+  const images = Array.isArray(doc.images) ? (doc.images as unknown[]) : [];
+  const oldImages = Array.isArray(doc.oldImages) ? (doc.oldImages as unknown[]) : [];
+  const allImages = [...images, ...oldImages];
+
+  const firstUrl = allImages.length > 0 ? normalizeImageUrl(allImages[0]) : "";
+
+  const result = { ...doc };
+  result.thumbnail = firstUrl || undefined;
+  result.imageCount = allImages.length;
+  delete result.images;
+  delete result.oldImages;
+
+  return result;
+};
+
 const clientCache = new Map<string, MongoClientCacheEntry>();
 
 const evictStaleClients = (): void => {
@@ -236,12 +265,12 @@ const handleDocuments = async (
 
   /* eslint-disable unicorn/no-array-callback-reference, unicorn/no-array-method-this-argument -- MongoDB Collection.find, not Array.find */
   const cursor = metaOnly
-    ? collection.find(filter, { projection: { _id: 1, category: 1, dismissed: 1, name: 1 } })
+    ? collection.find(filter, { projection: { _id: 1, category: 1, dismissed: 1, images: { $slice: 1 }, name: 1, oldImages: { $slice: 1 } } })
     : collection.find(filter);
   /* eslint-enable unicorn/no-array-callback-reference, unicorn/no-array-method-this-argument */
   const documents = await cursor.sort({ name: 1 }).toArray();
 
-  res.json(documents);
+  res.json(metaOnly ? documents.map((doc) => addThumbnailFields(doc as Record<string, unknown>)) : documents);
 };
 
 const handleDocument = async (
@@ -355,19 +384,7 @@ const handleImages = async (
   }
 
   const validImages = images
-    .map((img) => {
-      if (typeof img === 'string' && img.trim().length > 0) {
-        return img.trim();
-      }
-
-      if (img && typeof img === 'object') {
-        const imgObj = img as MongoImage;
-
-        return imgObj.medium || imgObj.small || imgObj.large || "";
-      }
-
-      return "";
-    })
+    .map((img) => normalizeImageUrl(img))
     .filter((url): url is string => url.length > 0);
 
   res.json({
