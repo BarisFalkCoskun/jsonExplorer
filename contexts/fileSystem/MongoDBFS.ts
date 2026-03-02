@@ -514,7 +514,7 @@ export class MongoDBFileSystem implements FileSystem {
       database: parts[0],
       collection: parts[1],
       document: parts[2]
-        ? MongoDBFileSystem.decodeDocumentIdentifier(parts[2].replace(".json", ""))
+        ? MongoDBFileSystem.decodeDocumentIdentifier(parts[2].replace(/\.json$/, ""))
         : undefined,
     };
   }

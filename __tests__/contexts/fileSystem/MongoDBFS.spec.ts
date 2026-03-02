@@ -220,6 +220,12 @@ describe("parsePath decoding", () => {
     const result = fs.parsePath("db1/col1");
     expect(result).toEqual({ database: "db1", collection: "col1", document: undefined });
   });
+
+  it("only strips trailing .json extension, not internal occurrences", () => {
+    const fs = createFS();
+    const result = fs.parsePath("db1/col1/data.json.backup.json");
+    expect(result).toEqual({ database: "db1", collection: "col1", document: "data.json.backup" });
+  });
 });
 
 describe("unlink error codes", () => {
