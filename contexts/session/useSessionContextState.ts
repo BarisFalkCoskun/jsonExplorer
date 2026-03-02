@@ -206,33 +206,40 @@ const useSessionContextState = (): SessionContextState => {
     [readdir, sortOrders]
   );
   const loadingDebounceRef = useRef(0);
+  const saveDebounceRef = useRef(0);
 
   useEffect(() => {
     if (!loadingDebounceRef.current && sessionLoaded && !haltSession) {
-      maybeRequestIdleCallback(() => {
-        writeFile(
-          SESSION_FILE,
-          JSON.stringify({
-            aiEnabled,
-            clockSource,
-            cursor,
-            hideCategorized,
-            hideDismissed,
-            iconPositions,
-            iconZoomLevel,
-            lazySheep,
-            recentFiles,
-            runHistory,
-            sortOrders,
-            themeName,
-            views,
-            wallpaperFit,
-            wallpaperImage,
-            windowStates,
-          }),
-          true
-        );
-      });
+      if (saveDebounceRef.current) {
+        window.clearTimeout(saveDebounceRef.current);
+      }
+      saveDebounceRef.current = window.setTimeout(() => {
+        saveDebounceRef.current = 0;
+        maybeRequestIdleCallback(() => {
+          writeFile(
+            SESSION_FILE,
+            JSON.stringify({
+              aiEnabled,
+              clockSource,
+              cursor,
+              hideCategorized,
+              hideDismissed,
+              iconPositions,
+              iconZoomLevel,
+              lazySheep,
+              recentFiles,
+              runHistory,
+              sortOrders,
+              themeName,
+              views,
+              wallpaperFit,
+              wallpaperImage,
+              windowStates,
+            }),
+            true
+          );
+        });
+      }, 500);
     }
   }, [
     aiEnabled,
@@ -279,9 +286,10 @@ const useSessionContextState = (): SessionContextState => {
             session.wallpaperImage || DEFAULT_WALLPAPER;
 
           if (sessionWallpaperImage in WALLPAPER_PATHS) {
-            WALLPAPER_PATHS[sessionWallpaperImage]().then(({ libs }) =>
-              preloadLibs(libs)
-            );
+            WALLPAPER_PATHS[sessionWallpaperImage]()
+              .then(({ libs }) => preloadLibs(libs))
+              // eslint-disable-next-line @typescript-eslint/no-empty-function
+              .catch(() => {});
           }
 
           if (session.clockSource) setClockSource(session.clockSource);
@@ -391,7 +399,7 @@ const useSessionContextState = (): SessionContextState => {
         setSessionLoaded(true);
       };
 
-      initSession();
+      initSession().catch(console.error);
     }
   }, [deletePath, lstat, readFile, rootFs, setWallpaper]);
 
