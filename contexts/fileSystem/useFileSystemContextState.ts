@@ -491,6 +491,7 @@ const useFileSystemContextState = (): FileSystemContextState => {
     ): Promise<string[]> =>
       new Promise((resolve) => {
         const fileInput = document.createElement("input");
+        let resolved = false;
 
         fileInput.type = "file";
         fileInput.multiple = multiple;
@@ -499,6 +500,7 @@ const useFileSystemContextState = (): FileSystemContextState => {
         fileInput.addEventListener(
           "change",
           (event) => {
+            resolved = true;
             handleFileInputEvent(
               event as InputChangeEvent,
               callback,
@@ -528,6 +530,18 @@ const useFileSystemContextState = (): FileSystemContextState => {
         );
         document.body.append(fileInput);
         fileInput.click();
+        window.addEventListener(
+          "focus",
+          () => {
+            setTimeout(() => {
+              if (!resolved) {
+                fileInput.remove();
+                resolve([]);
+              }
+            }, 100);
+          },
+          { once: true }
+        );
       }),
     [openTransferDialog]
   );
@@ -687,7 +701,7 @@ const useFileSystemContextState = (): FileSystemContextState => {
         if (mappedOntoDesktop) updateFolder(DESKTOP_PATH);
       };
 
-      restoreFsHandles();
+      restoreFsHandles().catch(console.error);
     }
   }, [exists, mapFs, rootFs, updateFolder]);
 
@@ -773,7 +787,7 @@ const useFileSystemContextState = (): FileSystemContextState => {
         }
       };
 
-      restoreMongoConnections();
+      restoreMongoConnections().catch(console.error);
     }
   }, [rootFs, updateFolder]);
 
