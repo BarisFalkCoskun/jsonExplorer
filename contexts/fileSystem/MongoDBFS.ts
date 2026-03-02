@@ -901,6 +901,7 @@ export class MongoDBFileSystem implements FileSystem {
         headers: {
           'x-mongodb-connection': this.connectionString,
         },
+        method: 'POST',
       });
 
       if (!response.ok) {

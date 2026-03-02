@@ -371,12 +371,31 @@ const handleTest = async (
   res.json({ message: 'Connected to MongoDB', success: true });
 };
 
+const ALLOWED_METHODS: Record<string, string[]> = {
+  'collections': ['GET'],
+  'databases': ['GET'],
+  'document': ['DELETE', 'GET', 'PATCH', 'PUT'],
+  'documents': ['GET'],
+  'drop-collection': ['DELETE'],
+  'drop-database': ['DELETE'],
+  'images': ['GET'],
+  'mkdir': ['POST'],
+  'test': ['GET'],
+};
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ): Promise<void> {
   const { params } = req.query;
   const [operation, ...operationParams] = params as string[];
+
+  const allowed = ALLOWED_METHODS[operation];
+  if (allowed && !allowed.includes(req.method ?? '')) {
+    res.setHeader('Allow', allowed.join(', '));
+    res.status(405).json({ error: `Method ${req.method} not allowed for ${operation}` });
+    return;
+  }
 
   const connectionString =
     (req.headers['x-mongodb-connection'] as string) || 'mongodb://localhost:27017';
