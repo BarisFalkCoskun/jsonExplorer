@@ -172,7 +172,7 @@ const MongoDBDialog: FC<ComponentProcessProps> = ({ id }) => {
     }
   }, [formData, addConnection]);
 
-  const isFormValid = formData.connectionString.trim() && formData.alias.trim() && !testResult.tested || testResult.success;
+  const isFormValid = formData.connectionString.trim() && formData.alias.trim() && (!testResult.tested || testResult.success);
 
   return (
     <StyledMongoDBDialog>
