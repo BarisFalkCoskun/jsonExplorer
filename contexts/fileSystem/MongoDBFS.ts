@@ -169,10 +169,34 @@ export class MongoDBFileSystem implements FileSystem {
             return { deletedCount: result.deletedCount };
           },
           drop: async () => {
-            // Collection drop would need to be implemented if needed
+            if (!dbName) throw new Error("No database name");
+            const response = await fetch(
+              `/api/mongodb/drop-collection/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}`,
+              {
+                method: 'DELETE',
+                headers: { 'x-mongodb-connection': this.connectionString },
+              }
+            );
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
             return { ok: 1 };
           }
-        })
+        }),
+        dropDatabase: async () => {
+          if (!dbName) throw new Error("No database name");
+          const response = await fetch(
+            `/api/mongodb/drop-database/${encodeURIComponent(dbName)}`,
+            {
+              method: 'DELETE',
+              headers: { 'x-mongodb-connection': this.connectionString },
+            }
+          );
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          return { ok: 1 };
+        }
       }),
       close: async () => {},
       connect: async () => {}
@@ -370,62 +394,62 @@ export class MongoDBFileSystem implements FileSystem {
 
   /**
    * Returns a Set of document names that have a `category` field,
-   * using the in-memory documents cache. Returns null if no cache is available.
+   * scoped to a specific database/collection cache entry.
    * Does NOT check TTL — the toggle should use whatever was loaded this session.
    */
-  public getCachedDocumentNames(): Set<string> | null {
-    for (const cached of this.documentsListCache.values()) {
-      const categorized = new Set<string>();
+  public getCachedDocumentNames(database: string, collection: string): Set<string> | null {
+    const key = this.getCollectionCacheKey(database, collection);
+    const cached = this.documentsListCache.get(key);
+    if (!cached) return null;
 
-      for (const doc of cached.documents) {
-        if ("category" in doc) {
-          categorized.add(this.getDocumentIdentifier(doc));
-        }
+    const categorized = new Set<string>();
+    for (const doc of cached.documents) {
+      if ("category" in doc) {
+        categorized.add(this.getDocumentIdentifier(doc));
       }
-
-      return categorized;
     }
-
-    return null;
+    return categorized;
   }
 
   /**
    * Returns a Set of document names that have a `dismissed` field,
-   * using the in-memory documents cache. Returns null if no cache is available.
+   * scoped to a specific database/collection cache entry.
    */
-  public getCachedDismissedNames(): Set<string> | null {
-    for (const cached of this.documentsListCache.values()) {
-      const dismissed = new Set<string>();
+  public getCachedDismissedNames(database: string, collection: string): Set<string> | null {
+    const key = this.getCollectionCacheKey(database, collection);
+    const cached = this.documentsListCache.get(key);
+    if (!cached) return null;
 
-      for (const doc of cached.documents) {
-        if (doc.dismissed) {
-          dismissed.add(this.getDocumentIdentifier(doc));
-        }
+    const dismissed = new Set<string>();
+    for (const doc of cached.documents) {
+      if (doc.dismissed) {
+        dismissed.add(this.getDocumentIdentifier(doc));
       }
-
-      return dismissed;
     }
-
-    return null;
+    return dismissed;
   }
 
-  public isCachedDismissed(docName: string): boolean {
-    for (const cached of this.documentsListCache.values()) {
-      for (const doc of cached.documents) {
-        if (this.getDocumentIdentifier(doc) === docName) {
-          return !!doc.dismissed;
-        }
+  public isCachedDismissed(docName: string, database: string, collection: string): boolean {
+    const key = this.getCollectionCacheKey(database, collection);
+    const cached = this.documentsListCache.get(key);
+    if (!cached) return false;
+
+    for (const doc of cached.documents) {
+      if (this.getDocumentIdentifier(doc) === docName) {
+        return !!doc.dismissed;
       }
     }
     return false;
   }
 
-  public getCachedDocumentCategory(docName: string): string | null {
-    for (const cached of this.documentsListCache.values()) {
-      for (const doc of cached.documents) {
-        if (this.getDocumentIdentifier(doc) === docName && "category" in doc) {
-          return doc.category;
-        }
+  public getCachedDocumentCategory(docName: string, database: string, collection: string): string | null {
+    const key = this.getCollectionCacheKey(database, collection);
+    const cached = this.documentsListCache.get(key);
+    if (!cached) return null;
+
+    for (const doc of cached.documents) {
+      if (this.getDocumentIdentifier(doc) === docName && "category" in doc) {
+        return doc.category;
       }
     }
     return null;
@@ -495,7 +519,7 @@ export class MongoDBFileSystem implements FileSystem {
     };
   }
 
-  private getCollectionCacheKey(database: string, collection: string): string {
+  public getCollectionCacheKey(database: string, collection: string): string {
     return `${database}/${collection}`;
   }
 
@@ -557,7 +581,9 @@ export class MongoDBFileSystem implements FileSystem {
   }
 
   private getDocumentIdentifier(document: MongoDocument): string {
-    return String(document.name || document._id || "unnamed");
+    const raw = String(document.name || document._id || "");
+    // Replace / with _ to prevent path-parsing confusion
+    return raw.replace(/\//g, "_") || String(document._id || "unnamed");
   }
 
   private async getDocument(

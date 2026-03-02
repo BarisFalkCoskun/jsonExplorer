@@ -118,6 +118,12 @@ const FileManager: FC<FileManagerProps> = ({
       mountUrl: mUrl,
     };
   }, [rootFs?.mntMap, url]);
+  const mongoCollection = useMemo(() => {
+    if (!isMongoFS || !mountUrl) return { database: "", collection: "" };
+    const relativePath = url.replace(`${mountUrl}/`, "").replace(`${mountUrl}`, "");
+    const parts = relativePath.split("/").filter(Boolean);
+    return { database: parts[0] || "", collection: parts[1] || "" };
+  }, [isMongoFS, mountUrl, url]);
   const allFilesRef = useRef<Record<string, any> | null>(null);
   const handleToggleHideCategorized = useCallback(() => {
     if (!mongoFs) return;
@@ -131,7 +137,7 @@ const FileManager: FC<FileManagerProps> = ({
       allFilesRef.current = { ...files };
 
       // Get cached docs with category info to know which to hide
-      const cachedDocs = mongoFs.getCachedDocumentNames();
+      const cachedDocs = mongoFs.getCachedDocumentNames(mongoCollection.database, mongoCollection.collection);
 
       if (cachedDocs) {
         setFiles((currentFiles) => {
@@ -171,7 +177,7 @@ const FileManager: FC<FileManagerProps> = ({
     if (newHidden) {
       allDismissedFilesRef.current = { ...files };
 
-      const cachedDocs = mongoFs.getCachedDismissedNames();
+      const cachedDocs = mongoFs.getCachedDismissedNames(mongoCollection.database, mongoCollection.collection);
 
       if (cachedDocs) {
         setFiles((currentFiles) => {
@@ -200,18 +206,24 @@ const FileManager: FC<FileManagerProps> = ({
     }
   }, [files, mongoFs, setFiles, setHideDismissed, updateFiles]);
   const handleDismiss = useCallback(
-    (entries: string[]) => {
+    async (entries: string[]) => {
       if (!mongoFs || !mountUrl) return;
 
-      entries.forEach((entry) => {
-        const relativePath = `${url.replace(`${mountUrl}/`, "")}/${entry}`.replace(
-          /\.json$/,
-          ""
-        );
-        mongoFs
-          .patchDocument(relativePath, { dismissed: true })
-          .catch(console.error);
-      });
+      const results = await Promise.allSettled(
+        entries.map(async (entry) => {
+          const relativePath = `${url.replace(`${mountUrl}/`, "")}/${entry}`.replace(
+            /\.json$/,
+            ""
+          );
+          await mongoFs.patchDocument(relativePath, { dismissed: true });
+        })
+      );
+
+      const failures = results.filter((r) => r.status === "rejected");
+      if (failures.length > 0) {
+        console.error(`${failures.length} dismiss operation(s) failed:`, failures);
+        window.alert(`${failures.length} of ${entries.length} items failed to dismiss.`);
+      }
 
       if (mongoFs.hideDismissed) {
         setFiles((currentFiles) => {
@@ -232,12 +244,14 @@ const FileManager: FC<FileManagerProps> = ({
     [mongoFs, mountUrl, setFiles, url]
   );
   const handleSetCategory = useCallback(
-    (entries: string[]) => {
+    async (entries: string[]) => {
       if (!mongoFs || !mountUrl) return;
+
+      const { database, collection } = mongoCollection;
 
       // Pre-fill only when ALL selected entries share the same category
       const categories = entries.map((e) =>
-        mongoFs.getCachedDocumentCategory(e.replace(/\.json$/, ""))
+        mongoFs.getCachedDocumentCategory(e.replace(/\.json$/, ""), database, collection)
       );
       const first = categories[0];
       const allSame =
@@ -255,26 +269,34 @@ const FileManager: FC<FileManagerProps> = ({
       if (raw) {
         const newLabels = raw.toLowerCase().split(",").map((l) => l.trim()).filter(Boolean);
 
-        entries.forEach((entry) => {
-          const existing = mongoFs.getCachedDocumentCategory(
-            entry.replace(/\.json$/, "")
-          );
-          const existingLabels = existing ? existing.split(",").map((l) => l.trim().toLowerCase()) : [];
-          const labelsToAdd = newLabels.filter((l) => !existingLabels.includes(l));
-          if (labelsToAdd.length === 0) return;
+        const results = await Promise.allSettled(
+          entries.map(async (entry) => {
+            const existing = mongoFs.getCachedDocumentCategory(
+              entry.replace(/\.json$/, ""),
+              database,
+              collection
+            );
+            const existingLabels = existing ? existing.split(",").map((l) => l.trim().toLowerCase()) : [];
+            const labelsToAdd = newLabels.filter((l) => !existingLabels.includes(l));
+            if (labelsToAdd.length === 0) return;
 
-          const merged = [...existingLabels, ...labelsToAdd].join(", ");
-          const relativePath = `${url.replace(`${mountUrl}/`, "")}/${entry}`.replace(
-            /\.json$/,
-            ""
-          );
-          mongoFs
-            .patchDocument(relativePath, { category: merged })
-            .catch(console.error);
-        });
+            const merged = [...existingLabels, ...labelsToAdd].join(", ");
+            const relativePath = `${url.replace(`${mountUrl}/`, "")}/${entry}`.replace(
+              /\.json$/,
+              ""
+            );
+            await mongoFs.patchDocument(relativePath, { category: merged });
+          })
+        );
+
+        const failures = results.filter((r) => r.status === "rejected");
+        if (failures.length > 0) {
+          console.error(`${failures.length} label operation(s) failed:`, failures);
+          window.alert(`${failures.length} of ${entries.length} items failed to save.`);
+        }
       }
     },
-    [mongoFs, mountUrl, url]
+    [mongoCollection, mongoFs, mountUrl, url]
   );
   const [quickLookPath, setQuickLookPath] = useState("");
   const handleQuickLook = useCallback(
