@@ -59,6 +59,8 @@ import useTransferDialog, {
 } from "components/system/Dialogs/Transfer/useTransferDialog";
 import { getMountUrl, isMountedFolder } from "contexts/fileSystem/core";
 import { MongoDBFileSystem } from "contexts/fileSystem/MongoDBFS";
+import { runMongoPatchBatch } from "utils/mongoMutations";
+import { useToast } from "components/system/Toast/useToast";
 
 const useFileContextMenu = (
   url: string,
@@ -108,6 +110,7 @@ const useFileContextMenu = (
   const { contextMenu } = useMenu();
   const hasWindowAI = useWindowAI();
   const { openTransferDialog } = useTransferDialog();
+  const { showToast } = useToast();
   const { onContextMenuCapture, ...contextMenuHandlers } = useMemo(
     () =>
       contextMenu?.(() => {
@@ -210,24 +213,24 @@ const useFileContextMenu = (
                       const raw = window.prompt("Enter category (comma-separated for multiple):", defaultValue);
                       if (raw) {
                         const newLabels = raw.toLowerCase().split(",").map((l) => l.trim()).filter(Boolean);
-                        const results = await Promise.allSettled(
-                          entries.map(async (entry) => {
+                        const { succeeded, failed } = await runMongoPatchBatch(
+                          entries.map((entry) => () => {
                             const existing = mongoFs.getCachedDocumentCategory(basename(entry, ".json"), mongoDb, mongoCol);
                             const existingLabels = existing ? existing.split(",").map((l) => l.trim().toLowerCase()) : [];
                             const labelsToAdd = newLabels.filter((l) => !existingLabels.includes(l));
-                            if (labelsToAdd.length === 0) return;
+                            if (labelsToAdd.length === 0) return Promise.resolve();
                             const merged = [...existingLabels, ...labelsToAdd].join(", ");
                             const relativePath = entry.replace(
                               `${mountUrl}/`,
                               ""
                             );
-                            await mongoFs.patchDocument(relativePath, { category: merged });
+                            return mongoFs.patchDocument(relativePath, { category: merged });
                           })
                         );
-                        const failures = results.filter((r) => r.status === "rejected");
-                        if (failures.length > 0) {
-                          console.error(`${failures.length} label operation(s) failed:`, failures);
-                          window.alert(`${failures.length} of ${entries.length} items failed to save.`);
+                        if (failed > 0) {
+                          showToast(`${failed} of ${entries.length} items failed to save.`, "error");
+                        } else if (succeeded > 0) {
+                          showToast(`Category set for ${succeeded} item(s).`, "success");
                         }
                       }
                     },
@@ -236,19 +239,19 @@ const useFileContextMenu = (
                   {
                     action: async () => {
                       const entries = absoluteEntries();
-                      const results = await Promise.allSettled(
-                        entries.map(async (entry) => {
+                      const { succeeded, failed } = await runMongoPatchBatch(
+                        entries.map((entry) => () => {
                           const relativePath = entry.replace(
                             `${mountUrl}/`,
                             ""
                           );
-                          await mongoFs.patchDocument(relativePath, { category: null });
+                          return mongoFs.patchDocument(relativePath, { category: null });
                         })
                       );
-                      const failures = results.filter((r) => r.status === "rejected");
-                      if (failures.length > 0) {
-                        console.error(`${failures.length} remove-category operation(s) failed:`, failures);
-                        window.alert(`${failures.length} of ${entries.length} items failed to update.`);
+                      if (failed > 0) {
+                        showToast(`${failed} of ${entries.length} items failed to update.`, "error");
+                      } else if (succeeded > 0) {
+                        showToast(`Category removed from ${succeeded} item(s).`, "success");
                       }
                     },
                     label: "Remove Category",
@@ -272,19 +275,19 @@ const useFileContextMenu = (
                             (entry) =>
                               !mongoFs.isCachedDismissed(basename(entry, ".json"), mongoDb, mongoCol)
                           );
-                          const results = await Promise.allSettled(
-                            toDismiss.map(async (entry) => {
+                          const { succeeded, failed } = await runMongoPatchBatch(
+                            toDismiss.map((entry) => () => {
                               const relativePath = entry.replace(
                                 `${mountUrl}/`,
                                 ""
                               );
-                              await mongoFs.patchDocument(relativePath, { dismissed: true });
+                              return mongoFs.patchDocument(relativePath, { dismissed: true });
                             })
                           );
-                          const failures = results.filter((r) => r.status === "rejected");
-                          if (failures.length > 0) {
-                            console.error(`${failures.length} dismiss operation(s) failed:`, failures);
-                            window.alert(`${failures.length} of ${toDismiss.length} items failed to dismiss.`);
+                          if (failed > 0) {
+                            showToast(`${failed} of ${toDismiss.length} items failed to dismiss.`, "error");
+                          } else if (succeeded > 0) {
+                            showToast(`${succeeded} item(s) dismissed.`, "success");
                           }
                         },
                         label: "Dismiss",
@@ -298,19 +301,19 @@ const useFileContextMenu = (
                             (entry) =>
                               mongoFs.isCachedDismissed(basename(entry, ".json"), mongoDb, mongoCol)
                           );
-                          const results = await Promise.allSettled(
-                            toUndismiss.map(async (entry) => {
+                          const { succeeded, failed } = await runMongoPatchBatch(
+                            toUndismiss.map((entry) => () => {
                               const relativePath = entry.replace(
                                 `${mountUrl}/`,
                                 ""
                               );
-                              await mongoFs.patchDocument(relativePath, { dismissed: null });
+                              return mongoFs.patchDocument(relativePath, { dismissed: null });
                             })
                           );
-                          const failures = results.filter((r) => r.status === "rejected");
-                          if (failures.length > 0) {
-                            console.error(`${failures.length} undismiss operation(s) failed:`, failures);
-                            window.alert(`${failures.length} of ${toUndismiss.length} items failed to undismiss.`);
+                          if (failed > 0) {
+                            showToast(`${failed} of ${toUndismiss.length} items failed to undismiss.`, "error");
+                          } else if (succeeded > 0) {
+                            showToast(`${succeeded} item(s) undismissed.`, "success");
                           }
                         },
                         label: "Undismiss",
@@ -805,6 +808,7 @@ const useFileContextMenu = (
       setIconPositions,
       setRenaming,
       setWallpaper,
+      showToast,
       stats,
       unMapFs,
       updateFolder,

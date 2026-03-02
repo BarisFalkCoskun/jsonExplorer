@@ -1,0 +1,27 @@
+import { useContext } from "react";
+import { createPortal } from "react-dom";
+import { StyledToastContainer, StyledToastItem } from "./StyledToast";
+import { ToastContext } from "./useToast";
+
+const ToastRenderer: FC = () => {
+  const { toasts, dismissToast } = useContext(ToastContext);
+
+  if (toasts.length === 0) return null;
+
+  return createPortal(
+    <StyledToastContainer>
+      {toasts.map((toast) => (
+        <StyledToastItem
+          key={toast.id}
+          $severity={toast.severity}
+          onClick={() => dismissToast(toast.id)}
+        >
+          {toast.message}
+        </StyledToastItem>
+      ))}
+    </StyledToastContainer>,
+    document.body
+  );
+};
+
+export default ToastRenderer;

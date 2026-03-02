@@ -33,6 +33,8 @@ import Columns from "components/system/Files/FileManager/Columns";
 import { useSession } from "contexts/session";
 import { getMountUrl } from "contexts/fileSystem/core";
 import { MongoDBFileSystem } from "contexts/fileSystem/MongoDBFS";
+import { runMongoPatchBatch } from "utils/mongoMutations";
+import { useToast } from "components/system/Toast/useToast";
 
 const QuickLook = dynamic(
   () => import("components/system/Files/FileManager/QuickLook/QuickLook"),
@@ -79,6 +81,7 @@ const FileManager: FC<FileManagerProps> = ({
   url,
 }) => {
   const { hideCategorized, hideDismissed, iconZoomLevel, setHideCategorized, setHideDismissed, setIconZoomLevel, views, setViews } = useSession();
+  const { showToast } = useToast();
   const view = useMemo(() => {
     if (isDesktop) return "icon";
     if (isStartMenu) return "list";
@@ -209,23 +212,23 @@ const FileManager: FC<FileManagerProps> = ({
     async (entries: string[]) => {
       if (!mongoFs || !mountUrl) return;
 
-      const results = await Promise.allSettled(
-        entries.map(async (entry) => {
+      const { succeeded, failed } = await runMongoPatchBatch(
+        entries.map((entry) => () => {
           const relativePath = `${url.replace(`${mountUrl}/`, "")}/${entry}`.replace(
             /\.json$/,
             ""
           );
-          await mongoFs.patchDocument(relativePath, { dismissed: true });
+          return mongoFs.patchDocument(relativePath, { dismissed: true });
         })
       );
 
-      const failures = results.filter((r) => r.status === "rejected");
-      if (failures.length > 0) {
-        console.error(`${failures.length} dismiss operation(s) failed:`, failures);
-        window.alert(`${failures.length} of ${entries.length} items failed to dismiss.`);
+      if (failed > 0) {
+        showToast(`${failed} of ${entries.length} items failed to dismiss.`, "error");
+      } else if (succeeded > 0) {
+        showToast(`${succeeded} item(s) dismissed.`, "success");
       }
 
-      if (mongoFs.hideDismissed) {
+      if (hideDismissed) {
         setFiles((currentFiles) => {
           if (!currentFiles) return currentFiles;
 
@@ -241,7 +244,7 @@ const FileManager: FC<FileManagerProps> = ({
         });
       }
     },
-    [mongoFs, mountUrl, setFiles, url]
+    [hideDismissed, mongoFs, mountUrl, setFiles, showToast, url]
   );
   const handleSetCategory = useCallback(
     async (entries: string[]) => {
@@ -269,8 +272,8 @@ const FileManager: FC<FileManagerProps> = ({
       if (raw) {
         const newLabels = raw.toLowerCase().split(",").map((l) => l.trim()).filter(Boolean);
 
-        const results = await Promise.allSettled(
-          entries.map(async (entry) => {
+        const { succeeded, failed } = await runMongoPatchBatch(
+          entries.map((entry) => () => {
             const existing = mongoFs.getCachedDocumentCategory(
               entry.replace(/\.json$/, ""),
               database,
@@ -278,25 +281,25 @@ const FileManager: FC<FileManagerProps> = ({
             );
             const existingLabels = existing ? existing.split(",").map((l) => l.trim().toLowerCase()) : [];
             const labelsToAdd = newLabels.filter((l) => !existingLabels.includes(l));
-            if (labelsToAdd.length === 0) return;
+            if (labelsToAdd.length === 0) return Promise.resolve();
 
             const merged = [...existingLabels, ...labelsToAdd].join(", ");
             const relativePath = `${url.replace(`${mountUrl}/`, "")}/${entry}`.replace(
               /\.json$/,
               ""
             );
-            await mongoFs.patchDocument(relativePath, { category: merged });
+            return mongoFs.patchDocument(relativePath, { category: merged });
           })
         );
 
-        const failures = results.filter((r) => r.status === "rejected");
-        if (failures.length > 0) {
-          console.error(`${failures.length} label operation(s) failed:`, failures);
-          window.alert(`${failures.length} of ${entries.length} items failed to save.`);
+        if (failed > 0) {
+          showToast(`${failed} of ${entries.length} items failed to save.`, "error");
+        } else if (succeeded > 0) {
+          showToast(`Category set for ${succeeded} item(s).`, "success");
         }
       }
     },
-    [mongoCollection, mongoFs, mountUrl, url]
+    [mongoCollection, mongoFs, mountUrl, showToast, url]
   );
   const [quickLookPath, setQuickLookPath] = useState("");
   const handleQuickLook = useCallback(
