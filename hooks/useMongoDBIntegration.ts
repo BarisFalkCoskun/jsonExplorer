@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useFileSystem } from "contexts/fileSystem";
 import { DESKTOP_PATH } from "utils/constants";
 
@@ -190,9 +190,14 @@ export const useMongoDBIntegration = () => {
     }
   }, [saveConnections]);
 
-  // Restore connections on mount
+  // Restore connections on mount (single source of truth)
+  const restoredRef = useRef(false);
+
   useEffect(() => {
-    const restoreConnections = async () => {
+    if (restoredRef.current || state.connections.length === 0 || !rootFs) return;
+    restoredRef.current = true;
+
+    const restoreConnections = async (): Promise<void> => {
       for (const connection of state.connections) {
         const mountPath = `${DESKTOP_PATH}/${connection.alias}`;
         const isMounted = Boolean(rootFs?.mntMap?.[mountPath]);
@@ -207,10 +212,8 @@ export const useMongoDBIntegration = () => {
       }
     };
 
-    if (state.connections.length > 0 && rootFs) {
-      restoreConnections();
-    }
-  }, [state.connections, rootFs, addConnection]); // Run when connections or rootFs change
+    restoreConnections();
+  }, [state.connections, rootFs, addConnection]);
 
   return {
     ...state,

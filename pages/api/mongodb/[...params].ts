@@ -331,6 +331,38 @@ const handleMkdir = async (
   res.json({ success: true });
 };
 
+const handleDropCollection = async (
+  client: MongoClient,
+  operationParams: string[],
+  res: NextApiResponse
+): Promise<void> => {
+  const [dbName, collectionName] = operationParams;
+
+  if (!dbName || !collectionName) {
+    res.status(400).json({ error: 'Database and collection name required' });
+    return;
+  }
+
+  await client.db(dbName).collection(collectionName).drop();
+  res.json({ success: true });
+};
+
+const handleDropDatabase = async (
+  client: MongoClient,
+  operationParams: string[],
+  res: NextApiResponse
+): Promise<void> => {
+  const [dbName] = operationParams;
+
+  if (!dbName) {
+    res.status(400).json({ error: 'Database name required' });
+    return;
+  }
+
+  await client.db(dbName).dropDatabase();
+  res.json({ success: true });
+};
+
 const handleTest = async (
   client: MongoClient,
   res: NextApiResponse
@@ -370,6 +402,12 @@ export default async function handler(
         break;
       case 'mkdir':
         await handleMkdir(client, operationParams, res);
+        break;
+      case 'drop-collection':
+        await handleDropCollection(client, operationParams, res);
+        break;
+      case 'drop-database':
+        await handleDropDatabase(client, operationParams, res);
         break;
       case 'test':
         await handleTest(client, res);

@@ -185,14 +185,20 @@ const useFileContextMenu = (
             },
             { action: () => setRenaming(baseName), label: "Rename" },
             ...(isMongoDocument
-              ? [
+              ? (() => {
+                  const mongoFs = mountedFs as MongoDBFileSystem;
+                  const mongoRelPath = path.replace(`${mountUrl}/`, "");
+                  const mongoParts = mongoRelPath.split("/").filter(Boolean);
+                  const mongoDb = mongoParts[0] || "";
+                  const mongoCol = mongoParts[1] || "";
+
+                  return [
                   MENU_SEPERATOR,
                   {
-                    action: () => {
-                      const mongoFs = mountedFs as MongoDBFileSystem;
+                    action: async () => {
                       const entries = absoluteEntries();
                       const categories = entries.map((e) =>
-                        mongoFs.getCachedDocumentCategory(basename(e, ".json"))
+                        mongoFs.getCachedDocumentCategory(basename(e, ".json"), mongoDb, mongoCol)
                       );
                       const first = categories[0];
                       const allSame =
@@ -204,72 +210,82 @@ const useFileContextMenu = (
                       const raw = window.prompt("Enter category (comma-separated for multiple):", defaultValue);
                       if (raw) {
                         const newLabels = raw.toLowerCase().split(",").map((l) => l.trim()).filter(Boolean);
-                        entries.forEach((entry) => {
-                          const existing = mongoFs.getCachedDocumentCategory(basename(entry, ".json"));
-                          const existingLabels = existing ? existing.split(",").map((l) => l.trim().toLowerCase()) : [];
-                          const labelsToAdd = newLabels.filter((l) => !existingLabels.includes(l));
-                          if (labelsToAdd.length === 0) return;
-                          const merged = [...existingLabels, ...labelsToAdd].join(", ");
-                          const relativePath = entry.replace(
-                            `${mountUrl}/`,
-                            ""
-                          );
-                          mongoFs
-                            .patchDocument(relativePath, { category: merged })
-                            .catch(console.error);
-                        });
+                        const results = await Promise.allSettled(
+                          entries.map(async (entry) => {
+                            const existing = mongoFs.getCachedDocumentCategory(basename(entry, ".json"), mongoDb, mongoCol);
+                            const existingLabels = existing ? existing.split(",").map((l) => l.trim().toLowerCase()) : [];
+                            const labelsToAdd = newLabels.filter((l) => !existingLabels.includes(l));
+                            if (labelsToAdd.length === 0) return;
+                            const merged = [...existingLabels, ...labelsToAdd].join(", ");
+                            const relativePath = entry.replace(
+                              `${mountUrl}/`,
+                              ""
+                            );
+                            await mongoFs.patchDocument(relativePath, { category: merged });
+                          })
+                        );
+                        const failures = results.filter((r) => r.status === "rejected");
+                        if (failures.length > 0) {
+                          console.error(`${failures.length} label operation(s) failed:`, failures);
+                          window.alert(`${failures.length} of ${entries.length} items failed to save.`);
+                        }
                       }
                     },
                     label: "Set Category",
                   },
                   {
-                    action: () => {
-                      const mongoFs = mountedFs as MongoDBFileSystem;
-                      absoluteEntries().forEach((entry) => {
-                        const relativePath = entry.replace(
-                          `${mountUrl}/`,
-                          ""
-                        );
-                        mongoFs
-                          .patchDocument(relativePath, { category: null })
-                          .catch(console.error);
-                      });
+                    action: async () => {
+                      const entries = absoluteEntries();
+                      const results = await Promise.allSettled(
+                        entries.map(async (entry) => {
+                          const relativePath = entry.replace(
+                            `${mountUrl}/`,
+                            ""
+                          );
+                          await mongoFs.patchDocument(relativePath, { category: null });
+                        })
+                      );
+                      const failures = results.filter((r) => r.status === "rejected");
+                      if (failures.length > 0) {
+                        console.error(`${failures.length} remove-category operation(s) failed:`, failures);
+                        window.alert(`${failures.length} of ${entries.length} items failed to update.`);
+                      }
                     },
                     label: "Remove Category",
                   },
                   MENU_SEPERATOR,
                   ...(() => {
-                    const mongoFs = mountedFs as MongoDBFileSystem;
                     const entries = absoluteEntries();
                     const someDismissed = entries.some((entry) =>
-                      mongoFs.isCachedDismissed(basename(entry, ".json"))
+                      mongoFs.isCachedDismissed(basename(entry, ".json"), mongoDb, mongoCol)
                     );
                     const someNotDismissed = entries.some(
                       (entry) =>
-                        !mongoFs.isCachedDismissed(basename(entry, ".json"))
+                        !mongoFs.isCachedDismissed(basename(entry, ".json"), mongoDb, mongoCol)
                     );
                     const items: MenuItem[] = [];
 
                     if (someNotDismissed) {
                       items.push({
-                        action: () => {
-                          entries.forEach((entry) => {
-                            if (
-                              !mongoFs.isCachedDismissed(
-                                basename(entry, ".json")
-                              )
-                            ) {
+                        action: async () => {
+                          const toDismiss = entries.filter(
+                            (entry) =>
+                              !mongoFs.isCachedDismissed(basename(entry, ".json"), mongoDb, mongoCol)
+                          );
+                          const results = await Promise.allSettled(
+                            toDismiss.map(async (entry) => {
                               const relativePath = entry.replace(
                                 `${mountUrl}/`,
                                 ""
                               );
-                              mongoFs
-                                .patchDocument(relativePath, {
-                                  dismissed: true,
-                                })
-                                .catch(console.error);
-                            }
-                          });
+                              await mongoFs.patchDocument(relativePath, { dismissed: true });
+                            })
+                          );
+                          const failures = results.filter((r) => r.status === "rejected");
+                          if (failures.length > 0) {
+                            console.error(`${failures.length} dismiss operation(s) failed:`, failures);
+                            window.alert(`${failures.length} of ${toDismiss.length} items failed to dismiss.`);
+                          }
                         },
                         label: "Dismiss",
                       });
@@ -277,24 +293,25 @@ const useFileContextMenu = (
 
                     if (someDismissed) {
                       items.push({
-                        action: () => {
-                          entries.forEach((entry) => {
-                            if (
-                              mongoFs.isCachedDismissed(
-                                basename(entry, ".json")
-                              )
-                            ) {
+                        action: async () => {
+                          const toUndismiss = entries.filter(
+                            (entry) =>
+                              mongoFs.isCachedDismissed(basename(entry, ".json"), mongoDb, mongoCol)
+                          );
+                          const results = await Promise.allSettled(
+                            toUndismiss.map(async (entry) => {
                               const relativePath = entry.replace(
                                 `${mountUrl}/`,
                                 ""
                               );
-                              mongoFs
-                                .patchDocument(relativePath, {
-                                  dismissed: null,
-                                })
-                                .catch(console.error);
-                            }
-                          });
+                              await mongoFs.patchDocument(relativePath, { dismissed: null });
+                            })
+                          );
+                          const failures = results.filter((r) => r.status === "rejected");
+                          if (failures.length > 0) {
+                            console.error(`${failures.length} undismiss operation(s) failed:`, failures);
+                            window.alert(`${failures.length} of ${toUndismiss.length} items failed to undismiss.`);
+                          }
                         },
                         label: "Undismiss",
                       });
@@ -302,7 +319,8 @@ const useFileContextMenu = (
 
                     return items;
                   })(),
-                ]
+                  ];
+                })()
               : []),
             MENU_SEPERATOR,
             {
