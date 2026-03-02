@@ -32,7 +32,7 @@ import { type SelectionRect } from "components/system/Files/FileManager/Selectio
 import { type FileStat } from "components/system/Files/FileManager/functions";
 import useFileDrop from "components/system/Files/FileManager/useFileDrop";
 import { type FocusEntryFunctions } from "components/system/Files/FileManager/useFocusableEntries";
-import { type FileActions } from "components/system/Files/FileManager/useFolder";
+import { type FileActions, type Files } from "components/system/Files/FileManager/useFolder";
 import { ICON_ZOOM_LEVELS } from "components/system/Files/FileManager/constants";
 import {
   type FileManagerViewNames,
@@ -106,6 +106,7 @@ type FileEntryProps = {
   readOnly?: boolean;
   renaming: boolean;
   selectionRect?: SelectionRect;
+  setFiles?: React.Dispatch<React.SetStateAction<Files | undefined>>;
   setRenaming: React.Dispatch<React.SetStateAction<string>>;
   stats: FileStat;
   view: FileManagerViewNames;
@@ -154,6 +155,7 @@ const FileEntry: FC<FileEntryProps> = ({
   readOnly,
   renaming,
   selectionRect,
+  setFiles,
   setRenaming,
   stats,
   hasNewFolderIcon,
@@ -631,7 +633,8 @@ const FileEntry: FC<FileEntryProps> = ({
           focusedEntries,
           stats,
           fileManagerId,
-          readOnly
+          readOnly,
+          setFiles
         )}
       >
         <StyledFigure

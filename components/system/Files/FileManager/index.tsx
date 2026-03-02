@@ -280,9 +280,19 @@ const FileManager: FC<FileManagerProps> = ({
         } else if (succeeded > 0) {
           showToast(`Category set for ${succeeded} item(s).`, "success");
         }
+        if (succeeded > 0 && hideCategorized) {
+          setFiles((currentFiles) => {
+            if (!currentFiles) return currentFiles;
+            const updated = { ...currentFiles };
+            for (const entry of entries) {
+              delete updated[entry];
+            }
+            return updated;
+          });
+        }
       }
     },
-    [mongoCollection, mongoFs, mountUrl, showToast, url]
+    [hideCategorized, mongoCollection, mongoFs, mountUrl, setFiles, showToast, url]
   );
   const [quickLookPath, setQuickLookPath] = useState("");
   const handleQuickLook = useCallback(
@@ -580,6 +590,7 @@ const FileManager: FC<FileManagerProps> = ({
                   readOnly={readOnly}
                   renaming={renaming === file}
                   selectionRect={selectionRect}
+                  setFiles={isMongoFS ? setFiles : undefined}
                   setRenaming={setRenaming}
                   stats={files[file]}
                   view={view}

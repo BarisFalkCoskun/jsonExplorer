@@ -9,7 +9,7 @@ import {
 } from "components/system/Files/FileEntry/functions";
 import useFile from "components/system/Files/FileEntry/useFile";
 import { type FocusEntryFunctions } from "components/system/Files/FileManager/useFocusableEntries";
-import { type FileActions } from "components/system/Files/FileManager/useFolder";
+import { type FileActions, type Files } from "components/system/Files/FileManager/useFolder";
 import { useFileSystem } from "contexts/fileSystem";
 import { useMenu } from "contexts/menu";
 import {
@@ -78,12 +78,15 @@ const useFileContextMenu = (
   focusedEntries: string[],
   stats: FileStat,
   fileManagerId?: string,
-  readOnly?: boolean
+  readOnly?: boolean,
+  setFiles?: React.Dispatch<React.SetStateAction<Files | undefined>>
 ): ContextMenuCapture => {
   const { close, minimize, open, url: changeUrl } = useProcesses();
   const processesRef = useProcessesRef();
   const {
     aiEnabled,
+    hideCategorized,
+    hideDismissed,
     setCursor,
     setForegroundId,
     setIconPositions,
@@ -232,6 +235,16 @@ const useFileContextMenu = (
                         } else if (succeeded > 0) {
                           showToast(`Category set for ${succeeded} item(s).`, "success");
                         }
+                        if (succeeded > 0 && hideCategorized && setFiles) {
+                          setFiles((currentFiles) => {
+                            if (!currentFiles) return currentFiles;
+                            const updated = { ...currentFiles };
+                            for (const entry of entries) {
+                              delete updated[basename(entry)];
+                            }
+                            return updated;
+                          });
+                        }
                       }
                     },
                     label: "Set Category",
@@ -288,6 +301,16 @@ const useFileContextMenu = (
                             showToast(`${failed} of ${toDismiss.length} items failed to dismiss.`, "error");
                           } else if (succeeded > 0) {
                             showToast(`${succeeded} item(s) dismissed.`, "success");
+                          }
+                          if (succeeded > 0 && hideDismissed && setFiles) {
+                            setFiles((currentFiles) => {
+                              if (!currentFiles) return currentFiles;
+                              const updated = { ...currentFiles };
+                              for (const entry of toDismiss) {
+                                delete updated[basename(entry)];
+                              }
+                              return updated;
+                            });
                           }
                         },
                         label: "Dismiss",
@@ -787,6 +810,8 @@ const useFileContextMenu = (
       fileManagerId,
       focusedEntries,
       hasWindowAI,
+      hideCategorized,
+      hideDismissed,
       isFocusedEntry,
       lstat,
       mapFs,
@@ -804,6 +829,7 @@ const useFileContextMenu = (
       rootFs?.mntMap,
       rootFs?.mountList,
       setCursor,
+      setFiles,
       setForegroundId,
       setIconPositions,
       setRenaming,
