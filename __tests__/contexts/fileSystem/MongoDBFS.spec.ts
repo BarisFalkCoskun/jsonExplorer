@@ -6,6 +6,7 @@ type MongoDBFSTestable = MongoDBFileSystem & {
   documentsListCache: Map<string, { cachedAt: number; documents: any[] }>;
   getCollectionCacheKey(db: string, col: string): string;
   parsePath(path: string): { database?: string; collection?: string; document?: string };
+  unlink(path: string, callback: (error: any) => void): Promise<void>;
 };
 
 const createFS = (): MongoDBFSTestable =>
@@ -218,5 +219,34 @@ describe("parsePath decoding", () => {
     const fs = createFS();
     const result = fs.parsePath("db1/col1");
     expect(result).toEqual({ database: "db1", collection: "col1", document: undefined });
+  });
+});
+
+describe("unlink error codes", () => {
+  it("returns EISDIR for collection-level paths", (done) => {
+    const fs = createFS();
+    fs.unlink("db1/col1", (error) => {
+      expect(error).not.toBeNull();
+      expect(error!.code).toBe("EISDIR");
+      done();
+    });
+  });
+
+  it("returns EISDIR for database-level paths", (done) => {
+    const fs = createFS();
+    fs.unlink("db1", (error) => {
+      expect(error).not.toBeNull();
+      expect(error!.code).toBe("EISDIR");
+      done();
+    });
+  });
+
+  it("returns EINVAL for empty paths", (done) => {
+    const fs = createFS();
+    fs.unlink("", (error) => {
+      expect(error).not.toBeNull();
+      expect(error!.code).toBe("EINVAL");
+      done();
+    });
   });
 });

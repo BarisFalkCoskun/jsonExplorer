@@ -922,9 +922,16 @@ export class MongoDBFileSystem implements FileSystem {
     try {
       const { database, collection, document } = this.parsePath(path);
 
-      if (!database || !collection || !document) {
+      if (!database) {
         const error = new Error("EINVAL: invalid argument") as ApiError;
         error.code = "EINVAL";
+        callback(error);
+        return;
+      }
+
+      if (!document) {
+        const error = new Error("EISDIR: is a directory") as ApiError;
+        error.code = "EISDIR";
         callback(error);
         return;
       }
