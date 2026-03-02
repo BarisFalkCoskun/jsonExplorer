@@ -479,6 +479,11 @@ export class MongoDBFileSystem implements FileSystem {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
+    const result = await response.json() as { matchedCount: number; modifiedCount: number };
+
+    // Only mutate cache if server confirmed the document was found
+    if (result.matchedCount === 0) return;
+
     // Update the in-memory documents cache in-place so that
     // getCachedDocumentCategory returns the new value immediately.
     const cacheKey = this.getCollectionCacheKey(database, collection);

@@ -255,7 +255,7 @@ const handleDocument = async (
       updateOps
     );
 
-    res.json({ modifiedCount: result.modifiedCount });
+    res.json({ matchedCount: result.matchedCount, modifiedCount: result.modifiedCount });
   } else if (req.method === 'PUT') {
     const updateDoc = req.body as Record<string, unknown>;
     const { _id: rawId, ...docWithoutId } = updateDoc;
