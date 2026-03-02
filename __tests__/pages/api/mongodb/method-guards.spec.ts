@@ -47,7 +47,7 @@ describe("API method guards", () => {
   });
 
   it("rejects POST for read-only operations", () => {
-    for (const op of ["databases", "collections", "images", "test"]) {
+    for (const op of ["databases", "collections", "documents", "images", "test"]) {
       expect(isMethodAllowed(op, "POST")).toBe(false);
     }
   });

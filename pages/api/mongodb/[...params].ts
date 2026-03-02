@@ -391,7 +391,11 @@ export default async function handler(
   const [operation, ...operationParams] = params as string[];
 
   const allowed = ALLOWED_METHODS[operation];
-  if (allowed && !allowed.includes(req.method ?? '')) {
+  if (!allowed) {
+    res.status(400).json({ error: 'Unknown operation' });
+    return;
+  }
+  if (!allowed.includes(req.method ?? '')) {
     res.setHeader('Allow', allowed.join(', '));
     res.status(405).json({ error: `Method ${req.method} not allowed for ${operation}` });
     return;
