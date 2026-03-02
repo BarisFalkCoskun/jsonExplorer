@@ -139,6 +139,27 @@ const handleCollections = async (
   res.json(collections.map((col: { name: string }) => col.name));
 };
 
+const SAFE_FILTER_OPERATORS = new Set([
+  '$all', '$and', '$elemMatch', '$eq', '$exists',
+  '$gt', '$gte', '$in', '$lt', '$lte',
+  '$ne', '$nin', '$nor', '$not', '$options',
+  '$or', '$regex', '$size', '$type',
+]);
+
+const sanitizeFilter = (obj: unknown): void => {
+  if (!obj || typeof obj !== 'object') return;
+  for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+    if (key.startsWith('$') && !SAFE_FILTER_OPERATORS.has(key)) {
+      throw new Error(`Disallowed filter operator: ${key}`);
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) sanitizeFilter(item);
+    } else if (value && typeof value === 'object') {
+      sanitizeFilter(value);
+    }
+  }
+};
+
 const handleDocuments = async (
   client: MongoClient,
   operationParams: string[],
@@ -164,6 +185,13 @@ const handleDocuments = async (
       res.status(400).json({ error: 'Invalid filter JSON' });
       return;
     }
+  }
+
+  try {
+    sanitizeFilter(filter);
+  } catch (sanitizeError) {
+    res.status(400).json({ error: sanitizeError instanceof Error ? sanitizeError.message : 'Invalid filter' });
+    return;
   }
 
   /* eslint-disable unicorn/no-array-callback-reference, unicorn/no-array-method-this-argument -- MongoDB Collection.find, not Array.find */
