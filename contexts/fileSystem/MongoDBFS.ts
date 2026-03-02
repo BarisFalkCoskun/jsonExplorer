@@ -5,13 +5,13 @@ import { type ApiError } from "browserfs/dist/node/core/api_error";
 import type Stats from "browserfs/dist/node/core/node_fs_stats";
 
 interface MongoDocument {
+  [key: string]: any;
   _id?: any;
   imageCount?: number;
   images?: string[];
   name?: string;
   oldImages?: string[];
   thumbnail?: string;
-  [key: string]: any;
 }
 
 interface MongoFSEntry {
