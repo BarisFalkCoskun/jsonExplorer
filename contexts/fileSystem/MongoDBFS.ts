@@ -945,7 +945,13 @@ export class MongoDBFileSystem implements FileSystem {
       // Try to delete by name first, then by _id
       const result = await col.deleteOne({ name: document });
       if (result.deletedCount === 0) {
-        await col.deleteOne({ _id: document });
+        const fallback = await col.deleteOne({ _id: document });
+        if (fallback.deletedCount === 0) {
+          const enoent = new Error("ENOENT: no such file or directory") as ApiError;
+          enoent.code = "ENOENT";
+          callback(enoent);
+          return;
+        }
       }
 
       this.invalidateCollectionCache(database, collection);

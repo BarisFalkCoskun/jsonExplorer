@@ -255,4 +255,13 @@ describe("unlink error codes", () => {
       done();
     });
   });
+
+  it("returns EIO when document path cannot connect to MongoDB", (done) => {
+    const fs = createFS();
+    fs.unlink("db1/col1/doc1.json", (error) => {
+      expect(error).not.toBeNull();
+      expect(error!.code).toBe("EIO");
+      done();
+    });
+  });
 });
