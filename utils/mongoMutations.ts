@@ -1,7 +1,7 @@
 type BatchResult = {
-  succeeded: number;
-  failed: number;
   errors: Error[];
+  failed: number;
+  succeeded: number;
 };
 
 const MAX_RETRIES = 2;
@@ -15,23 +15,29 @@ const isTransient = (error: unknown): boolean => {
 };
 
 const delay = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 
 const runWithRetry = async (
   task: () => Promise<void>,
   retries = MAX_RETRIES
 ): Promise<void> => {
   let lastError: unknown;
+
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
+      // eslint-disable-next-line no-await-in-loop
       await task();
       return;
     } catch (error) {
       lastError = error;
       if (!isTransient(error) || attempt === retries) break;
+      // eslint-disable-next-line no-await-in-loop
       await delay(BASE_DELAY_MS * 2 ** attempt);
     }
   }
+
   throw lastError;
 };
 
@@ -43,8 +49,8 @@ export const runMongoPatchBatch = async (
   );
 
   const errors: Error[] = [];
-  let succeeded = 0;
   let failed = 0;
+  let succeeded = 0;
 
   for (const result of results) {
     if (result.status === "fulfilled") {
@@ -59,5 +65,5 @@ export const runMongoPatchBatch = async (
     }
   }
 
-  return { succeeded, failed, errors };
+  return { errors, failed, succeeded };
 };
