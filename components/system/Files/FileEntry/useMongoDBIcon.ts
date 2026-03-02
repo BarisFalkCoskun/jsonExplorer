@@ -26,7 +26,11 @@ const INITIAL_STATE: MongoDBIconState = {
 const findMongoDBFileSystem = (
   path: string,
   rootFs: RootFileSystem | null | undefined
-): { mongoFS: MongoDBFileSystem; mountPoint: string; relativePath: string } | null => {
+): {
+  mongoFS: MongoDBFileSystem;
+  mountPoint: string;
+  relativePath: string;
+} | null => {
   if (!rootFs) return null;
 
   const pathParts = path.split("/");
@@ -57,8 +61,12 @@ export const useMongoDBIcon = (path: string, visible = false) => {
   const loadingRef = useRef<AbortController | null>(null);
   const hasLoadedRef = useRef(false);
   const isLoadingRef = useRef(false);
+  const hasFullImagesRef = useRef(false);
 
-  const mongoData = useMemo(() => findMongoDBFileSystem(path, rootFs), [path, rootFs]);
+  const mongoData = useMemo(
+    () => findMongoDBFileSystem(path, rootFs),
+    [path, rootFs]
+  );
 
   // Check if this is a MongoDB document
   const isMongoDocument = useCallback(() => {
@@ -67,7 +75,25 @@ export const useMongoDBIcon = (path: string, visible = false) => {
     return mongoData.mongoFS.isMongoDBDocument(mongoData.relativePath);
   }, [mongoData]);
 
-  // Load images from MongoDB document
+  // Load thumbnail from cache (synchronous, zero network)
+  const loadThumbnail = useCallback(() => {
+    if (!mongoData || !isMongoDocument() || hasLoadedRef.current) return;
+
+    const { thumbnail, imageCount } = mongoData.mongoFS.getDocumentThumbnail(
+      mongoData.relativePath
+    );
+
+    hasLoadedRef.current = true;
+
+    setState((prev) => ({
+      ...prev,
+      currentImageIndex: 0,
+      hasNavigationArrows: imageCount > 1,
+      images: thumbnail ? [thumbnail] : [],
+    }));
+  }, [isMongoDocument, mongoData]);
+
+  // Load full image array from network (called on arrow click)
   const loadImages = useCallback(async () => {
     if (!mongoData || !isMongoDocument() || isLoadingRef.current) return;
 
@@ -75,17 +101,19 @@ export const useMongoDBIcon = (path: string, visible = false) => {
     loadingRef.current = abortController;
     isLoadingRef.current = true;
 
-    setState(prev => ({ ...prev, isLoading: true, error: null }));
+    setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
     try {
-      const images = await mongoData.mongoFS.getDocumentImages(mongoData.relativePath);
+      const images = await mongoData.mongoFS.getDocumentImages(
+        mongoData.relativePath
+      );
 
       if (abortController.signal.aborted) return;
 
-      hasLoadedRef.current = true;
+      hasFullImagesRef.current = true;
       isLoadingRef.current = false;
 
-      setState(prev => ({
+      setState((prev) => ({
         ...prev,
         images,
         isLoading: false,
@@ -96,17 +124,22 @@ export const useMongoDBIcon = (path: string, visible = false) => {
       if (abortController.signal.aborted) return;
 
       isLoadingRef.current = false;
-      setState(prev => ({
+      setState((prev) => ({
         ...prev,
         isLoading: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: error instanceof Error ? error.message : "Unknown error",
       }));
     }
   }, [isMongoDocument, mongoData]);
 
-  // Navigate to previous image
+  // Navigate to previous image — fetch full images first if needed
   const goToPreviousImage = useCallback(() => {
-    setState(prev => {
+    if (!hasFullImagesRef.current) {
+      loadImages();
+      return;
+    }
+
+    setState((prev) => {
       if (prev.images.length <= 1 || prev.currentImageIndex <= 0) return prev;
 
       return {
@@ -114,19 +147,29 @@ export const useMongoDBIcon = (path: string, visible = false) => {
         currentImageIndex: prev.currentImageIndex - 1,
       };
     });
-  }, []);
+  }, [loadImages]);
 
-  // Navigate to next image
+  // Navigate to next image — fetch full images first if needed
   const goToNextImage = useCallback(() => {
-    setState(prev => {
-      if (prev.images.length <= 1 || prev.currentImageIndex >= prev.images.length - 1) return prev;
+    if (!hasFullImagesRef.current) {
+      loadImages();
+      return;
+    }
+
+    setState((prev) => {
+      if (
+        prev.images.length <= 1 ||
+        prev.currentImageIndex >= prev.images.length - 1
+      ) {
+        return prev;
+      }
 
       return {
         ...prev,
         currentImageIndex: prev.currentImageIndex + 1,
       };
     });
-  }, []);
+  }, [loadImages]);
 
   // Get current image URL
   const getCurrentImageUrl = useCallback(() => {
@@ -138,12 +181,12 @@ export const useMongoDBIcon = (path: string, visible = false) => {
   const canGoToPrevious = state.currentImageIndex > 0;
   const canGoToNext = state.currentImageIndex < state.images.length - 1;
 
-  // Only load images when visible and not already loaded
+  // Load thumbnail from cache when visible (zero network)
   useEffect(() => {
-    if (visible && !hasLoadedRef.current && !isLoadingRef.current) {
-      loadImages();
+    if (visible && !hasLoadedRef.current) {
+      loadThumbnail();
     }
-  }, [visible, loadImages]);
+  }, [visible, loadThumbnail]);
 
   // Abort on unmount
   useEffect(() => {
@@ -161,6 +204,7 @@ export const useMongoDBIcon = (path: string, visible = false) => {
     }
     hasLoadedRef.current = false;
     isLoadingRef.current = false;
+    hasFullImagesRef.current = false;
     setState(INITIAL_STATE);
   }, [path]);
 
