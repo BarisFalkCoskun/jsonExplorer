@@ -42,10 +42,11 @@ const StyledStatusBar = styled.footer`
     border: 1px solid transparent;
     color: rgb(247 247 247);
     cursor: pointer;
-    flex-shrink: 0;
     font-size: 11px;
-    margin-left: 4px;
+    overflow: hidden;
     padding: 1px 8px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 
     &:hover {
       background-color: rgb(77 77 77);
@@ -60,9 +61,10 @@ const StyledStatusBar = styled.footer`
 
   .hide-toggles {
     display: flex;
-    flex-shrink: 0;
     gap: 4px;
     margin-left: auto;
+    min-width: 0;
+    overflow: hidden;
   }
 
   nav {
