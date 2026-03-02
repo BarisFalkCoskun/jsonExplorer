@@ -5,6 +5,7 @@ import { useMongoDBIntegration } from "hooks/useMongoDBIntegration";
 import { type ComponentProcessProps } from "components/system/Apps/RenderComponent";
 import { useProcesses } from "contexts/process";
 import { type FC } from "react";
+import { maskConnectionString } from "utils/functions";
 
 const StyledMongoDBDialog = styled.div`
   display: flex;
@@ -233,7 +234,7 @@ const MongoDBDialog: FC<ComponentProcessProps> = ({ id }) => {
             <div key={connection.alias} className="connection-item">
               <div className="connection-info">
                 <div className="alias">{connection.alias}</div>
-                <div className="connection-string">{connection.connectionString}</div>
+                <div className="connection-string">{maskConnectionString(connection.connectionString)}</div>
                 <div className={`status ${connection.isConnected ? "connected" : "disconnected"}`}>
                   {connection.isConnected ? "Connected" : "Disconnected"}
                 </div>

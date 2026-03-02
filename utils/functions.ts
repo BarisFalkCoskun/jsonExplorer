@@ -1223,4 +1223,10 @@ export const maybeRequestIdleCallback = (
   }
 };
 
+export const maskConnectionString = (connectionString: string): string =>
+  connectionString.replace(
+    /^(mongodb(?:\+srv)?:\/\/[^:]+:)([^@]+)(@)/i,
+    "$1****$3"
+  );
+
 export const isDev = (): boolean => "__nextDevClientId" in window;
