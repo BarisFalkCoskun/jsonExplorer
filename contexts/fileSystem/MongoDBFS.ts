@@ -6,9 +6,11 @@ import type Stats from "browserfs/dist/node/core/node_fs_stats";
 
 interface MongoDocument {
   _id?: any;
-  name?: string;
+  imageCount?: number;
   images?: string[];
+  name?: string;
   oldImages?: string[];
+  thumbnail?: string;
   [key: string]: any;
 }
 
@@ -388,6 +390,37 @@ export class MongoDBFileSystem implements FileSystem {
       console.warn(`Failed to get images for ${path}:`, error);
       return [];
     }
+  }
+
+  public getDocumentThumbnail(
+    path: string
+  ): { imageCount: number; thumbnail: string | undefined } {
+    const { database, collection, document } = this.parsePath(path);
+
+    if (!database || !collection || !document) {
+      return { imageCount: 0, thumbnail: undefined };
+    }
+
+    const cached = this.getCachedDocumentsList(database, collection);
+
+    if (!cached) {
+      return { imageCount: 0, thumbnail: undefined };
+    }
+
+    for (const doc of cached) {
+      if (
+        MongoDBFileSystem.decodeDocumentIdentifier(
+          this.getDocumentIdentifier(doc)
+        ) === document
+      ) {
+        return {
+          imageCount: doc.imageCount ?? 0,
+          thumbnail: doc.thumbnail ?? undefined,
+        };
+      }
+    }
+
+    return { imageCount: 0, thumbnail: undefined };
   }
 
   /**
