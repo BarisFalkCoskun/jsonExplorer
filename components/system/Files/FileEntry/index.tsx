@@ -135,7 +135,12 @@ const truncateName = (
   return nonBreakingName;
 };
 
-const focusing: string[] = [];
+const focusingMap = new Map<string, string[]>();
+
+const getFocusing = (id: string): string[] => {
+  if (!focusingMap.has(id)) focusingMap.set(id, []);
+  return focusingMap.get(id)!;
+};
 
 const FileEntry: FC<FileEntryProps> = ({
   columns,
@@ -571,12 +576,13 @@ const FileEntry: FC<FileEntryProps> = ({
 
   useLayoutEffect(() => {
     if (buttonRef.current && fileManagerRef.current) {
+      const currentFocusing = getFocusing(fileManagerId);
       const inFocusedEntries = focusedEntries.includes(fileName);
-      const inFocusing = focusing.includes(fileName);
+      const inFocusing = currentFocusing.includes(fileName);
       const isFocused = inFocusedEntries || inFocusing;
 
       if (inFocusedEntries && inFocusing) {
-        focusing.splice(focusing.indexOf(fileName), 1);
+        currentFocusing.splice(currentFocusing.indexOf(fileName), 1);
       }
 
       if (selectionRect) {
@@ -588,7 +594,7 @@ const FileEntry: FC<FileEntryProps> = ({
         );
 
         if (selected && !isFocused) {
-          focusing.push(fileName);
+          currentFocusing.push(fileName);
           focusEntry(fileName);
           buttonRef.current.focus(PREVENT_SCROLL);
         } else if (!selected && isFocused) {
@@ -605,6 +611,7 @@ const FileEntry: FC<FileEntryProps> = ({
     }
   }, [
     blurEntry,
+    fileManagerId,
     fileManagerRef,
     fileName,
     focusEntry,
