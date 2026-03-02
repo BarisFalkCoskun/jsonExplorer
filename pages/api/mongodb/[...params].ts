@@ -4,7 +4,11 @@ import { MongoClient, ObjectId } from 'mongodb';
 type MongoClientCacheEntry = {
   client?: MongoClient;
   connecting?: Promise<MongoClient>;
+  lastUsed: number;
 };
+
+const MAX_CLIENTS = 10;
+const CLIENT_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 type MongoImage = {
   large?: string;
@@ -14,10 +18,43 @@ type MongoImage = {
 
 const clientCache = new Map<string, MongoClientCacheEntry>();
 
+const evictStaleClients = (): void => {
+  const now = Date.now();
+  for (const [key, entry] of clientCache) {
+    if (now - entry.lastUsed > CLIENT_TTL_MS && entry.client) {
+      // eslint-disable-next-line @typescript-eslint/no-empty-function -- fire-and-forget close
+      entry.client.close().catch(() => {});
+      clientCache.delete(key);
+    }
+  }
+};
+
+const evictOldestClient = (): void => {
+  let oldestKey = "";
+  let oldestTime = Infinity;
+
+  for (const [key, entry] of clientCache) {
+    if (entry.lastUsed < oldestTime) {
+      oldestTime = entry.lastUsed;
+      oldestKey = key;
+    }
+  }
+
+  if (oldestKey) {
+    const entry = clientCache.get(oldestKey);
+    // eslint-disable-next-line @typescript-eslint/no-empty-function -- fire-and-forget close
+    if (entry?.client) entry.client.close().catch(() => {});
+    clientCache.delete(oldestKey);
+  }
+};
+
 async function connectToMongoDB(connectionString: string): Promise<MongoClient> {
+  evictStaleClients();
+
   const cachedEntry = clientCache.get(connectionString);
 
   if (cachedEntry?.client) {
+    cachedEntry.lastUsed = Date.now();
     return cachedEntry.client;
   }
 
@@ -34,7 +71,10 @@ async function connectToMongoDB(connectionString: string): Promise<MongoClient> 
   const connecting = client
     .connect()
     .then(() => {
-      clientCache.set(connectionString, { client });
+      if (clientCache.size >= MAX_CLIENTS) {
+        evictOldestClient();
+      }
+      clientCache.set(connectionString, { client, lastUsed: Date.now() });
       return client;
     })
     .catch((error) => {
@@ -42,7 +82,7 @@ async function connectToMongoDB(connectionString: string): Promise<MongoClient> 
       throw error;
     });
 
-  clientCache.set(connectionString, { connecting });
+  clientCache.set(connectionString, { connecting, lastUsed: Date.now() });
 
   return connecting;
 }
