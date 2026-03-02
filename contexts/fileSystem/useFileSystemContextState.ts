@@ -691,6 +691,92 @@ const useFileSystemContextState = (): FileSystemContextState => {
     }
   }, [exists, mapFs, rootFs, updateFolder]);
 
+  const restoredMongoConnections = useRef(false);
+
+  useEffect(() => {
+    if (!restoredMongoConnections.current && rootFs?.mount) {
+      restoredMongoConnections.current = true;
+
+      const restoreMongoConnections = async (): Promise<void> => {
+        let savedConnections: string | null = null;
+
+        try {
+          savedConnections = localStorage.getItem("mongodbConnections");
+        } catch {
+          return;
+        }
+
+        const defaultConnection = {
+          connectionString: "mongodb://localhost:27017",
+          alias: "Local",
+        };
+
+        let connections: { connectionString: string; alias: string }[];
+
+        if (savedConnections) {
+          try {
+            connections = JSON.parse(savedConnections);
+          } catch {
+            connections = [defaultConnection];
+          }
+
+          if (!Array.isArray(connections) || connections.length === 0) {
+            connections = [defaultConnection];
+          }
+        } else {
+          connections = [defaultConnection];
+        }
+
+        try {
+          localStorage.setItem("mongodbConnections", JSON.stringify(connections));
+        } catch {
+          // Ignore localStorage write errors
+        }
+
+        const { Create } = await import("contexts/fileSystem/MongoDBFS");
+
+        let mounted = false;
+
+        for (const { connectionString, alias } of connections) {
+          if (!connectionString || !alias) continue;
+
+          const mountPath = `${DESKTOP_PATH}/${alias}`;
+
+          if (rootFs.mntMap[mountPath]) continue;
+
+          try {
+            await new Promise<void>((resolve, reject) => {
+              Create({ connectionString }, (error, mongoFS) => {
+                if (error || !mongoFS) {
+                  reject(error || new Error("Failed to create MongoDBFS"));
+                  return;
+                }
+
+                try {
+                  rootFs?.mount?.(mountPath, mongoFS);
+                  mounted = true;
+                  resolve();
+                } catch (mountError) {
+                  reject(mountError);
+                }
+              });
+            });
+          } catch (error) {
+            console.warn(`Failed to restore MongoDB connection ${alias}:`, error);
+          }
+        }
+
+        if (mounted) {
+          for (const { alias } of connections) {
+            if (alias) updateFolder(DESKTOP_PATH, alias);
+          }
+        }
+      };
+
+      restoreMongoConnections();
+    }
+  }, [rootFs, updateFolder]);
+
   return {
     addFile,
     addFsWatcher,

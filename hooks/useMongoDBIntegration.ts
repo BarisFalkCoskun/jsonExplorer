@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useFileSystem } from "contexts/fileSystem";
 import { DESKTOP_PATH } from "utils/constants";
 
@@ -190,30 +190,24 @@ export const useMongoDBIntegration = () => {
     }
   }, [saveConnections]);
 
-  // Restore connections on mount (single source of truth)
-  const restoredRef = useRef(false);
-
+  // Sync isConnected state with what's actually mounted (global restore may have already mounted)
   useEffect(() => {
-    if (restoredRef.current || state.connections.length === 0 || !rootFs) return;
-    restoredRef.current = true;
+    if (state.connections.length === 0 || !rootFs) return;
 
-    const restoreConnections = async (): Promise<void> => {
-      for (const connection of state.connections) {
-        const mountPath = `${DESKTOP_PATH}/${connection.alias}`;
+    setState(prev => {
+      let changed = false;
+      const updated = prev.connections.map(conn => {
+        const mountPath = `${DESKTOP_PATH}/${conn.alias}`;
         const isMounted = Boolean(rootFs?.mntMap?.[mountPath]);
-
-        if (!isMounted) {
-          try {
-            await addConnection(connection.connectionString, connection.alias);
-          } catch (error) {
-            console.error(`Failed to restore connection ${connection.alias}:`, error);
-          }
+        if (conn.isConnected !== isMounted) {
+          changed = true;
+          return { ...conn, isConnected: isMounted };
         }
-      }
-    };
-
-    restoreConnections();
-  }, [state.connections, rootFs, addConnection]);
+        return conn;
+      });
+      return changed ? { ...prev, connections: updated } : prev;
+    });
+  }, [state.connections, rootFs]);
 
   return {
     ...state,
