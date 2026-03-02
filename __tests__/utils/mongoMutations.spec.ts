@@ -102,4 +102,26 @@ describe("runMongoPatchBatch", () => {
     expect(attempts).toBe(2);
     expect(result).toEqual({ succeeded: 1, failed: 0, errors: [] });
   });
+
+  it("limits concurrency to at most 10 parallel tasks", async () => {
+    jest.useRealTimers();
+
+    let concurrent = 0;
+    let maxConcurrent = 0;
+
+    const tasks = Array.from({ length: 30 }, () => () =>
+      new Promise<void>((resolve) => {
+        concurrent++;
+        maxConcurrent = Math.max(maxConcurrent, concurrent);
+        setTimeout(() => {
+          concurrent--;
+          resolve();
+        }, 10);
+      })
+    );
+
+    await runMongoPatchBatch(tasks);
+    expect(maxConcurrent).toBeLessThanOrEqual(10);
+    expect(maxConcurrent).toBeGreaterThan(1);
+  });
 });

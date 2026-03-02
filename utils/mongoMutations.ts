@@ -41,27 +41,33 @@ const runWithRetry = async (
   throw lastError;
 };
 
+const CONCURRENCY_LIMIT = 10;
+
 export const runMongoPatchBatch = async (
   tasks: (() => Promise<void>)[]
 ): Promise<BatchResult> => {
-  const results = await Promise.allSettled(
-    tasks.map((task) => runWithRetry(task))
-  );
-
   const errors: Error[] = [];
   let failed = 0;
   let succeeded = 0;
 
-  for (const result of results) {
-    if (result.status === "fulfilled") {
-      succeeded++;
-    } else {
-      failed++;
-      errors.push(
-        result.reason instanceof Error
-          ? result.reason
-          : new Error(String(result.reason))
-      );
+  for (let i = 0; i < tasks.length; i += CONCURRENCY_LIMIT) {
+    const chunk = tasks.slice(i, i + CONCURRENCY_LIMIT);
+    // eslint-disable-next-line no-await-in-loop
+    const results = await Promise.allSettled(
+      chunk.map((task) => runWithRetry(task))
+    );
+
+    for (const result of results) {
+      if (result.status === "fulfilled") {
+        succeeded++;
+      } else {
+        failed++;
+        errors.push(
+          result.reason instanceof Error
+            ? result.reason
+            : new Error(String(result.reason))
+        );
+      }
     }
   }
 
