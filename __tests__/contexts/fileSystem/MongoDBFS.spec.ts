@@ -5,6 +5,7 @@ import { MongoDBFileSystem } from "contexts/fileSystem/MongoDBFS";
 type MongoDBFSTestable = MongoDBFileSystem & {
   documentsListCache: Map<string, { cachedAt: number; documents: any[] }>;
   getCollectionCacheKey(db: string, col: string): string;
+  parsePath(path: string): { database?: string; collection?: string; document?: string };
 };
 
 const createFS = (): MongoDBFSTestable =>
@@ -184,5 +185,38 @@ describe("MongoDBFileSystem document identity", () => {
     expect(categorized).toBeDefined();
     expect(categorized!.has("unnamed")).toBe(false);
     expect(categorized!.has("fallback-id")).toBe(true);
+  });
+});
+
+describe("parsePath decoding", () => {
+  it("decodes percent-encoded slash in document name", () => {
+    const fs = createFS();
+    const result = fs.parsePath("db1/col1/a%2Fb.json");
+    expect(result).toEqual({ database: "db1", collection: "col1", document: "a/b" });
+  });
+
+  it("leaves normal names unchanged", () => {
+    const fs = createFS();
+    const result = fs.parsePath("db1/col1/laptop.json");
+    expect(result).toEqual({ database: "db1", collection: "col1", document: "laptop" });
+  });
+
+  it("decodes percent-encoded space in document name", () => {
+    const fs = createFS();
+    const result = fs.parsePath("db1/col1/hello%20world.json");
+    expect(result).toEqual({ database: "db1", collection: "col1", document: "hello world" });
+  });
+
+  it("round-trips a raw percent sign correctly", () => {
+    const fs = createFS();
+    // raw "%ZZ" → encoded "%25ZZ" → decoded "%ZZ"
+    const result = fs.parsePath("db1/col1/%25ZZ.json");
+    expect(result).toEqual({ database: "db1", collection: "col1", document: "%ZZ" });
+  });
+
+  it("returns undefined document when path has no document segment", () => {
+    const fs = createFS();
+    const result = fs.parsePath("db1/col1");
+    expect(result).toEqual({ database: "db1", collection: "col1", document: undefined });
   });
 });

@@ -486,7 +486,7 @@ export class MongoDBFileSystem implements FileSystem {
 
     if (cached) {
       for (const doc of cached.documents) {
-        if (this.getDocumentIdentifier(doc) === document) {
+        if (MongoDBFileSystem.decodeDocumentIdentifier(this.getDocumentIdentifier(doc)) === document) {
           for (const [k, v] of Object.entries(updates)) {
             if (v === null) {
               delete doc[k];
@@ -513,7 +513,9 @@ export class MongoDBFileSystem implements FileSystem {
     return {
       database: parts[0],
       collection: parts[1],
-      document: parts[2]?.replace(".json", ""),
+      document: parts[2]
+        ? MongoDBFileSystem.decodeDocumentIdentifier(parts[2].replace(".json", ""))
+        : undefined,
     };
   }
 
