@@ -110,6 +110,7 @@ const FileManager: FC<FileManagerProps> = ({
       skipFsWatcher,
       skipSorting,
     });
+  const allFilesRef = useRef<typeof files>(undefined);
   const { lstat, mountFs, rootFs } = useFileSystem();
   const { mountUrl, isMongoFS, mongoFs } = useMemo(() => {
     const mUrl = rootFs?.mntMap ? getMountUrl(url, rootFs.mntMap) : undefined;
@@ -140,6 +141,8 @@ const FileManager: FC<FileManagerProps> = ({
         setFiles((currentFiles) => {
           if (!currentFiles) return currentFiles;
 
+          allFilesRef.current = currentFiles;
+
           const filtered: typeof currentFiles = {};
 
           for (const [name, stat] of Object.entries(currentFiles)) {
@@ -155,6 +158,9 @@ const FileManager: FC<FileManagerProps> = ({
       } else {
         updateFiles();
       }
+    } else if (allFilesRef.current) {
+      setFiles(allFilesRef.current);
+      allFilesRef.current = undefined;
     } else {
       updateFiles();
     }
@@ -172,6 +178,8 @@ const FileManager: FC<FileManagerProps> = ({
         setFiles((currentFiles) => {
           if (!currentFiles) return currentFiles;
 
+          allFilesRef.current = currentFiles;
+
           const filtered: typeof currentFiles = {};
 
           for (const [name, stat] of Object.entries(currentFiles)) {
@@ -187,6 +195,9 @@ const FileManager: FC<FileManagerProps> = ({
       } else {
         updateFiles();
       }
+    } else if (allFilesRef.current) {
+      setFiles(allFilesRef.current);
+      allFilesRef.current = undefined;
     } else {
       updateFiles();
     }
