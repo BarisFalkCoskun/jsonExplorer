@@ -1,36 +1,63 @@
-describe("PUT replacement document preserves _id", () => {
-  it("includes _id in replacement when rawId is a string", () => {
+describe("PUT replace-then-insert pattern", () => {
+  it("replaces without _id to avoid type mismatch", () => {
     const updateDoc = { _id: "my-doc-id", name: "test", data: "value" };
     const { _id: rawId, ...docWithoutId } = updateDoc;
 
-    // Simulate the fix: re-include _id when rawId is a string
-    const replacementDoc = typeof rawId === "string"
-      ? { _id: rawId, ...docWithoutId }
-      : docWithoutId;
-
-    expect(replacementDoc).toHaveProperty("_id", "my-doc-id");
-    expect(replacementDoc).toHaveProperty("name", "test");
+    // replaceOne receives docWithoutId — no _id, safe for any existing _id type
+    expect(docWithoutId).not.toHaveProperty("_id");
+    expect(docWithoutId).toHaveProperty("name", "test");
+    expect(docWithoutId).toHaveProperty("data", "value");
   });
 
-  it("omits _id from replacement when rawId is not a string", () => {
-    const updateDoc = { name: "test", data: "value" };
+  it("inserts with string _id when no match found", () => {
+    const updateDoc = { _id: "my-doc-id", name: "test" };
     const { _id: rawId, ...docWithoutId } = updateDoc;
 
-    const replacementDoc = typeof rawId === "string"
+    const matchedCount = 0; // simulate no match from replaceOne
+    const shouldInsert = matchedCount === 0;
+    const insertDoc = typeof rawId === "string"
       ? { _id: rawId, ...docWithoutId }
       : docWithoutId;
 
-    expect(replacementDoc).not.toHaveProperty("_id");
+    expect(shouldInsert).toBe(true);
+    expect(insertDoc).toHaveProperty("_id", "my-doc-id");
+    expect(insertDoc).toHaveProperty("name", "test");
   });
 
-  it("includes ObjectId-style _id in replacement", () => {
-    const updateDoc = { _id: "507f1f77bcf86cd799439011", name: "test" };
+  it("inserts without _id when rawId is not a string", () => {
+    const updateDoc = { name: "test" };
     const { _id: rawId, ...docWithoutId } = updateDoc;
 
-    const replacementDoc = typeof rawId === "string"
+    const matchedCount = 0;
+    const shouldInsert = matchedCount === 0;
+    const insertDoc = typeof rawId === "string"
       ? { _id: rawId, ...docWithoutId }
       : docWithoutId;
 
-    expect(replacementDoc).toHaveProperty("_id", "507f1f77bcf86cd799439011");
+    expect(shouldInsert).toBe(true);
+    expect(insertDoc).not.toHaveProperty("_id");
+  });
+
+  it("skips insert when existing doc matched", () => {
+    const matchedCount = 1; // simulate match from replaceOne
+    const shouldInsert = matchedCount === 0;
+
+    expect(shouldInsert).toBe(false);
+  });
+
+  it("uses filterDocId from rawId when rawId is a string", () => {
+    const rawId = "custom-id";
+    const documentId = "url-segment-id";
+    const filterDocId = typeof rawId === "string" ? rawId : documentId;
+
+    expect(filterDocId).toBe("custom-id");
+  });
+
+  it("falls back to documentId when rawId is not a string", () => {
+    const rawId = undefined;
+    const documentId = "url-segment-id";
+    const filterDocId = typeof rawId === "string" ? rawId : documentId;
+
+    expect(filterDocId).toBe("url-segment-id");
   });
 });

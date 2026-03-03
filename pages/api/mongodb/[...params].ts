@@ -329,16 +329,23 @@ const handleDocument = async (
     const updateDoc = req.body as Record<string, unknown>;
     const { _id: rawId, ...docWithoutId } = updateDoc;
     const filterDocId = typeof rawId === "string" ? rawId : documentId;
-    const replacementDoc = typeof rawId === "string"
-      ? { _id: rawId, ...docWithoutId }
-      : docWithoutId;
 
-    await collection.replaceOne(
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any -- dynamic MongoDB document
+    // Replace-then-insert: avoids _id type mismatch when existing doc has ObjectId _id
+    /* eslint-disable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment -- dynamic MongoDB document */
+    const result = await collection.replaceOne(
       { $or: getDocumentFilters(filterDocId) } as any,
-      replacementDoc as any,
-      { upsert: true }
+      docWithoutId as any,
+      { upsert: false }
     );
+
+    if (result.matchedCount === 0) {
+      const insertDoc = typeof rawId === "string"
+        ? { _id: rawId as any, ...docWithoutId }
+        : docWithoutId;
+      await collection.insertOne(insertDoc as any);
+    }
+    /* eslint-enable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment */
+
     res.json({ success: true });
   } else if (req.method === 'DELETE') {
     const result = await collection.deleteOne({
