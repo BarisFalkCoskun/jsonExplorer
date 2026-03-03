@@ -660,6 +660,48 @@ export class MongoDBFileSystem implements FileSystem {
     });
   }
 
+  /**
+   * Incrementally merge a page of documents into both caches.
+   * If no cache entry exists yet, creates one. If one exists, appends
+   * new documents (skipping duplicates by identifier).
+   */
+  private mergePagesIntoCaches(
+    database: string,
+    collection: string,
+    documents: MongoDocument[]
+  ): void {
+    const key = this.getCollectionCacheKey(database, collection);
+
+    // --- documentsListCache ---
+    const existingDocsList = this.documentsListCache.get(key);
+    if (existingDocsList) {
+      for (const doc of documents) {
+        const identifier = MongoDBFileSystem.decodeDocumentIdentifier(
+          this.getDocumentIdentifier(doc)
+        );
+        if (!existingDocsList.documentIndex.has(identifier)) {
+          existingDocsList.documents.push(doc);
+          existingDocsList.documentIndex.set(identifier, doc);
+        }
+      }
+      existingDocsList.cachedAt = Date.now();
+    } else {
+      this.setCachedDocumentsList(database, collection, documents);
+    }
+
+    // --- collectionEntriesCache (encoded identifiers, matching stat lookup path) ---
+    const existingEntries = this.collectionEntriesCache.get(key);
+    if (existingEntries) {
+      for (const doc of documents) {
+        existingEntries.entries.add(this.getDocumentIdentifier(doc));
+      }
+      existingEntries.cachedAt = Date.now();
+    } else {
+      const identifiers = documents.map((doc) => this.getDocumentIdentifier(doc));
+      this.setCachedCollectionEntries(database, collection, identifiers);
+    }
+  }
+
   private invalidateCollectionCache(database?: string, collection?: string): void {
     if (database && collection) {
       const key = this.getCollectionCacheKey(database, collection);
@@ -909,6 +951,8 @@ export class MongoDBFileSystem implements FileSystem {
       hasMore: boolean;
       nextCursor?: { afterId: string; afterName: string };
     };
+
+    this.mergePagesIntoCaches(database, collection, result.documents);
 
     const pagedEntries = result.documents.map((doc) => `${this.getDocumentIdentifier(doc)}.json`);
 

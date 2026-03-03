@@ -7,6 +7,7 @@ interface MongoDocument {
 
 // Access private members for testing via double cast (TS private is compile-time only)
 type MongoDBFSTestable = {
+  collectionEntriesCache: Map<string, { cachedAt: number; entries: Set<string> }>;
   documentsListCache: Map<string, { cachedAt: number; documentIndex: Map<string, MongoDocument>; documents: MongoDocument[] }>;
   getCachedDismissedNames: (database: string, collection: string) => Set<string> | null;
   getCachedDocumentCategory: (docName: string, database: string, collection: string) => string | null;
@@ -15,6 +16,8 @@ type MongoDBFSTestable = {
   getDocumentIdentifier: (doc: MongoDocument) => string;
   isCachedDismissed: (docName: string, database: string, collection: string) => boolean;
   parsePath: (path: string) => { collection?: string; database?: string; document?: string };
+  readdirPaged: (path: string, cursor?: { afterId: string; afterName: string }, limit?: number) => Promise<{ entries: string[]; hasMore: boolean; nextCursor?: { afterId: string; afterName: string } }>;
+  stat: (path: string, isLstat: boolean | ((error: unknown, stats?: unknown) => void), callback?: (error: unknown, stats?: unknown) => void) => Promise<void>;
   unlink: (path: string, callback: (error: { code: string; message: string } | undefined) => void) => Promise<void>;
 };
 
@@ -307,5 +310,95 @@ describe("patchDocument cache mutation", () => {
 
     // Array reflects mutation
     expect(arrayDoc?.dismissed).toBe(true);
+  });
+});
+
+const mockPagedResponse = (
+  documents: MongoDocument[],
+  nextCursor?: { afterId: string; afterName: string },
+  hasMore = false,
+): Response =>
+  ({
+    json: () => Promise.resolve({ documents, hasMore, nextCursor }),
+    ok: true,
+  }) as unknown as Response;
+
+describe("readdirPaged cache hydration", () => {
+  let fetchMock: jest.Mock;
+
+  beforeEach(() => {
+    fetchMock = jest.fn();
+    globalThis.fetch = fetchMock;
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it("populates documentsListCache from paged response", async () => {
+    const fs = createFS();
+    const docs: MongoDocument[] = [
+      { _id: "1", category: "fruit", name: "apple" },
+      { _id: "2", name: "banana" },
+    ];
+    fetchMock.mockResolvedValueOnce(mockPagedResponse(docs));
+
+    await fs.readdirPaged("db1/products");
+
+    const categorized = fs.getCachedDocumentNames("db1", "products");
+    expect(categorized).not.toBeNull();
+    expect(categorized).toEqual(new Set(["1"]));
+  });
+
+  it("merges subsequent pages into existing cache", async () => {
+    const fs = createFS();
+
+    const page1Docs: MongoDocument[] = [
+      { _id: "1", category: "fruit", name: "apple" },
+    ];
+    const page2Docs: MongoDocument[] = [
+      { _id: "2", category: "vegetable", name: "carrot" },
+    ];
+
+    fetchMock
+      .mockResolvedValueOnce(mockPagedResponse(page1Docs, { afterId: "1", afterName: "apple" }, true))
+      .mockResolvedValueOnce(mockPagedResponse(page2Docs));
+
+    await fs.readdirPaged("db1/products");
+    await fs.readdirPaged("db1/products", { afterId: "1", afterName: "apple" });
+
+    const categorized = fs.getCachedDocumentNames("db1", "products");
+    expect(categorized).not.toBeNull();
+    expect(categorized).toEqual(new Set(["1", "2"]));
+
+    // Also verify both docs are in the documents array
+    const key = fs.getCollectionCacheKey("db1", "products");
+    const cached = fs.documentsListCache.get(key);
+    expect(cached?.documents).toHaveLength(2);
+  });
+
+  it("populates collectionEntriesCache for stat lookups", async () => {
+    const fs = createFS();
+    const docs: MongoDocument[] = [
+      { _id: "doc1", name: "apple" },
+      { _id: "doc2", name: "banana" },
+    ];
+    fetchMock.mockResolvedValueOnce(mockPagedResponse(docs));
+
+    await fs.readdirPaged("db1/products");
+
+    // Reset fetch mock so we can detect if stat makes any new calls
+    fetchMock.mockClear();
+
+    // stat() should resolve from cache without additional fetch calls
+    const statResult = await new Promise<{ error: unknown; stats: unknown }>((resolve) => {
+      fs.stat("db1/products/doc1.json", (error: unknown, stats: unknown) => {
+        resolve({ error, stats });
+      });
+    });
+
+    expect(statResult.error).toBeNull();
+    expect(statResult.stats).toBeDefined();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
