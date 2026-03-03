@@ -180,7 +180,7 @@ const handleDocuments = async (
   const db = client.db(dbName);
   const collection = db.collection(collectionName);
   const metaOnly = req.query.meta === '1' || req.query.meta === 'true';
-  let filter = {};
+  let filter: Record<string, unknown> = {};
 
   if (typeof req.query.filter === 'string') {
     try {
@@ -198,14 +198,58 @@ const handleDocuments = async (
     return;
   }
 
+  // Keyset pagination (not used with meta=1 which always returns full list)
+  const limit = Math.min(Number(req.query.limit) || 500, 2000);
+  const afterName = typeof req.query.afterName === 'string' ? req.query.afterName : undefined;
+  const afterId = typeof req.query.afterId === 'string' ? req.query.afterId : undefined;
+
+  if (!metaOnly && (afterName !== undefined || afterId !== undefined)) {
+    const cursorConditions: Record<string, unknown>[] = [];
+
+    if (afterName !== undefined && afterId !== undefined) {
+      cursorConditions.push(
+        { name: { $gt: afterName } },
+        // eslint-disable-next-line sort-keys-fix/sort-keys-fix -- MongoDB filter: name equality before _id tiebreaker
+        { name: afterName, _id: { $gt: afterId } }
+      );
+    } else if (afterName !== undefined) {
+      cursorConditions.push({ name: { $gt: afterName } });
+    }
+
+    if (cursorConditions.length > 0) {
+      filter = Object.keys(filter).length > 0
+        ? { $and: [filter, { $or: cursorConditions }] }
+        : { $or: cursorConditions };
+    }
+  }
+
   /* eslint-disable unicorn/no-array-callback-reference, unicorn/no-array-method-this-argument -- MongoDB Collection.find, not Array.find */
   const cursor = metaOnly
     ? collection.find(filter, { projection: { _id: 1, category: 1, dismissed: 1, images: { $slice: 1 }, name: 1, oldImages: { $slice: 1 } } })
     : collection.find(filter);
   /* eslint-enable unicorn/no-array-callback-reference, unicorn/no-array-method-this-argument */
-  const documents = await cursor.sort({ name: 1 }).toArray();
 
-  res.json(metaOnly ? documents.map((doc) => addThumbnailFields(doc as Record<string, unknown>)) : documents);
+  // eslint-disable-next-line sort-keys-fix/sort-keys-fix -- MongoDB sort order: name first, _id tiebreaker
+  const sortKey = { name: 1 as const, _id: 1 as const };
+  const documents = metaOnly
+    ? await cursor.sort(sortKey).toArray()
+    : await cursor.sort(sortKey).limit(limit + 1).toArray();
+
+  if (metaOnly) {
+    res.json(documents.map((doc) => addThumbnailFields(doc as Record<string, unknown>)));
+    return;
+  }
+
+  const hasMore = documents.length > limit;
+  if (hasMore) documents.pop();
+
+  const lastDoc = documents.at(-1);
+  const nextCursor = hasMore && lastDoc
+    ? { afterId: String(lastDoc._id ?? ""), afterName: String(lastDoc.name ?? "") }
+    // eslint-disable-next-line unicorn/no-null -- JSON response needs explicit null, not undefined (which is dropped)
+    : null;
+
+  res.json({ documents, hasMore, nextCursor });
 };
 
 const handleDocument = async (
