@@ -329,11 +329,14 @@ const handleDocument = async (
     const updateDoc = req.body as Record<string, unknown>;
     const { _id: rawId, ...docWithoutId } = updateDoc;
     const filterDocId = typeof rawId === "string" ? rawId : documentId;
+    const replacementDoc = typeof rawId === "string"
+      ? { _id: rawId, ...docWithoutId }
+      : docWithoutId;
 
     await collection.replaceOne(
       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any -- dynamic MongoDB document
       { $or: getDocumentFilters(filterDocId) } as any,
-      docWithoutId as any,
+      replacementDoc as any,
       { upsert: true }
     );
     res.json({ success: true });
