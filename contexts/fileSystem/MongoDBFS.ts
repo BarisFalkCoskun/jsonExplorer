@@ -791,6 +791,57 @@ export class MongoDBFileSystem implements FileSystem {
     }
   }
 
+  /**
+   * Paged readdir for large collections. Returns filenames for one page.
+   * BrowserFS readdir stays unchanged for non-paged callers.
+   */
+  public async readdirPaged(
+    path: string,
+    cursor?: { afterId: string; afterName: string },
+    limit = 500
+  ): Promise<{ entries: string[]; hasMore: boolean; nextCursor?: { afterId: string; afterName: string } }> {
+    const { database, collection } = this.parsePath(path);
+
+    if (!database || !collection) {
+      // Non-collection paths: delegate to regular readdir
+      return new Promise((resolve, reject) => {
+        this.readdir(path, (error, files) => {
+          if (error) { reject(error); return; }
+          resolve({ entries: files ?? [], hasMore: false });
+        });
+      });
+    }
+
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (cursor) {
+      params.set("afterId", cursor.afterId);
+      params.set("afterName", cursor.afterName);
+    }
+
+    const url = `/api/mongodb/documents/${encodeURIComponent(database)}/${encodeURIComponent(collection)}?${params}`;
+    const response = await fetch(url, {
+      headers: { "x-mongodb-connection": this.connectionString },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const result = (await response.json()) as {
+      documents: MongoDocument[];
+      hasMore: boolean;
+      nextCursor?: { afterId: string; afterName: string };
+    };
+
+    const entries = result.documents.map((doc) => `${this.getDocumentIdentifier(doc)}.json`);
+
+    return {
+      entries,
+      hasMore: result.hasMore,
+      nextCursor: result.nextCursor ?? undefined,
+    };
+  }
+
   async readFile(
     path: string,
     encoding: string | null,

@@ -29,6 +29,7 @@ import useSortBy, {
   type SortByOrder,
 } from "components/system/Files/FileManager/useSortBy";
 import { useFileSystem } from "contexts/fileSystem";
+import { MongoDBFileSystem } from "contexts/fileSystem/MongoDBFS";
 import { isApiError } from "contexts/fileSystem/functions";
 import { useProcesses } from "contexts/process";
 import { useSession } from "contexts/session";
@@ -138,6 +139,7 @@ const useFolder = (
     readFile,
     removeFsWatcher,
     rename,
+    rootFs,
     setPasteList,
     stat,
     updateFolder,
@@ -286,6 +288,17 @@ const useFolder = (
             filterSystemFiles(directory)
           );
 
+          // Detect if this directory is on a MongoDB filesystem
+          const mountedFs = rootFs?.mntMap
+            ? Object.entries(rootFs.mntMap).find(
+                ([mp]) => directory === mp || directory.startsWith(`${mp}/`)
+              )?.[1]
+            : undefined;
+          // eslint-disable-next-line unicorn/no-null -- refs use null as "no value" sentinel
+          mongoFsRef.current = mountedFs instanceof MongoDBFileSystem ? mountedFs : null;
+          // eslint-disable-next-line unicorn/no-null -- refs use null as "no value" sentinel
+          mongoCursorRef.current = null;
+
           if (dirContents.length === 0) {
             setFiles({});
             setIsLoading(false);
@@ -349,6 +362,7 @@ const useFolder = (
       isSimpleSort,
       lstat,
       readdir,
+      rootFs,
       setSortOrder,
       skipSorting,
       sortAscending,
@@ -359,6 +373,77 @@ const useFolder = (
     ]
   );
   const loadMore = useCallback(async () => {
+    // MongoDB keyset pagination path
+    if (mongoFsRef.current) {
+      if (isLoadingMoreRef.current) return;
+      const mongoFs = mongoFsRef.current;
+      isLoadingMoreRef.current = true;
+
+      try {
+        const result = await mongoFs.readdirPaged(
+          directory,
+          mongoCursorRef.current ?? undefined,
+          200
+        );
+
+        if (result.entries.length === 0) {
+          setHasMore(false);
+          return;
+        }
+
+        const mongoSortFn = isSimpleSort
+          ? undefined
+          : sortBy === "date"
+            ? sortByDate(directory)
+            : sortBySize;
+        const mongoSortOrder = (!skipSorting && sortOrder) || [];
+
+        const batchResults = await Promise.all(
+          result.entries
+            .filter(filterSystemFiles(directory))
+            .map(async (file) => {
+              try {
+                const filePath = join(directory, file);
+                const fileStats = isSimpleSort
+                  ? await lstat(filePath)
+                  : await stat(filePath);
+
+                // eslint-disable-next-line unicorn/no-null -- filter sentinel
+                if (hideFolders && fileStats.isDirectory()) return null;
+
+                const statsWithInfo = await statsWithShortcutInfo(file, fileStats);
+                return { file, stats: statsWithInfo };
+              } catch {
+                // eslint-disable-next-line unicorn/no-null -- filter sentinel
+                return null;
+              }
+            })
+        );
+
+        const batchFiles: Files = {};
+        for (const r of batchResults) {
+          if (r) batchFiles[r.file] = r.stats;
+        }
+
+        setFiles((prev = {}) =>
+          sortContents(
+            { ...prev, ...batchFiles },
+            mongoSortOrder,
+            mongoSortFn,
+            sortAscending
+          )
+        );
+
+        // eslint-disable-next-line unicorn/no-null -- ref sentinel for "no cursor"
+        mongoCursorRef.current = result.nextCursor ?? null;
+        setHasMore(result.hasMore);
+      } finally {
+        isLoadingMoreRef.current = false;
+      }
+      return;
+    }
+
+    // Existing non-Mongo loadMore path
     const BATCH_SIZE = 200;
     const allEntries = allEntriesRef.current;
 
@@ -878,6 +963,8 @@ const useFolder = (
   const allEntriesRef = useRef<string[]>([]);
   const loadedCountRef = useRef(0);
   const isLoadingMoreRef = useRef(false);
+  const mongoCursorRef = useRef<{ afterId: string; afterName: string } | null>(null);
+  const mongoFsRef = useRef<MongoDBFileSystem | null>(null);
 
   useEffect(() => {
     if (directory !== currentDirectory) {
