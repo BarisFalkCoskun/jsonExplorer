@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument -- e2e test constants are loosely typed */
 import { dirname, extname } from "path";
 import { expect, test } from "@playwright/test";
 import {
@@ -28,14 +27,6 @@ import {
   TEST_SEARCH,
   WINDOW_RESIZE_HANDLE_WIDTH,
 } from "e2e/constants";
-
-// These constants were removed from e2e/constants but are still needed by tests.
-// Values inferred from TEST_ROOT_FILE_DEFAULT_APP ("Marked") and TEST_SEARCH ("CREDITS").
-const TEST_ROOT_FILE = /^CREDITS.md$/;
-const TEST_ROOT_FILE_TEXT = "CREDITS.md";
-const TEST_ROOT_FILE_ALT_APP = "Monaco Editor";
-const TEST_ROOT_FILE_COPY = /^CREDITS \(1\).md$/;
-const TEST_SEARCH_RESULT = /^CREDITS.md$/;
 import {
   appIsOpen,
   captureConsoleLogs,
@@ -81,6 +72,13 @@ import {
   windowsAreVisible,
 } from "e2e/functions";
 import { UNKNOWN_ICON } from "components/system/Files/FileManager/icons";
+
+// These constants were removed from e2e/constants but are still needed by tests.
+const TEST_ROOT_FILE = /^CREDITS.md$/;
+const TEST_ROOT_FILE_TEXT = "CREDITS.md";
+const TEST_ROOT_FILE_ALT_APP = "Monaco Editor";
+const TEST_ROOT_FILE_COPY = /^CREDITS \(1\).md$/;
+const TEST_SEARCH_RESULT = /^CREDITS.md$/;
 
 test.beforeEach(captureConsoleLogs());
 test.beforeEach(disableWallpaper);

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument -- e2e test constants are loosely typed */
 import { expect, test } from "@playwright/test";
 import {
   START_MENU_APPS,
@@ -75,6 +74,7 @@ test.describe("has folders", () => {
   });
 
   test("has sub menus", async ({ page }) => {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- needed for entries type safety
     for (const [folder, entries] of Object.entries(START_MENU_FOLDERS) as [string, string[]][]) {
       // eslint-disable-next-line no-await-in-loop
       await clickStartMenuEntry(folder, { page });

@@ -98,7 +98,7 @@ describe("PATCH field validation", () => {
   });
 
   it("rejects $-prefixed field names", () => {
-    const ILLEGAL_FIELD_PATTERN = /^\$|[.]/;
+    const ILLEGAL_FIELD_PATTERN = /^\$|\./;
 
     expect(ILLEGAL_FIELD_PATTERN.test("$set")).toBe(true);
     expect(ILLEGAL_FIELD_PATTERN.test("$where")).toBe(true);

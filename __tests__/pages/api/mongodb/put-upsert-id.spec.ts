@@ -39,7 +39,7 @@ describe("PUT replace-then-insert pattern", () => {
   });
 
   it("skips insert when existing doc matched", () => {
-    const matchedCount: number = 1; // simulate match from replaceOne
+    const matchedCount = 1 as number; // simulate match from replaceOne
     const shouldInsert = matchedCount === 0;
 
     expect(shouldInsert).toBe(false);

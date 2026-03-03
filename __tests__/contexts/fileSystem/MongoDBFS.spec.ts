@@ -417,6 +417,7 @@ describe("paged initial load contract", () => {
 
     await fs.readdirPaged("testdb/products", undefined, 200);
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- accessing jest mock internals
     const fetchUrl = (global.fetch as jest.Mock).mock.calls[0][0] as string;
     expect(fetchUrl).toContain("limit=200");
     expect(fetchUrl).not.toContain("meta=1");
