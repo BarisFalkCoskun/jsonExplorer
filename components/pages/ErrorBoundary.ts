@@ -18,10 +18,6 @@ export class ErrorBoundary extends Component<
     this.state = { hasError: false };
   }
 
-  public override shouldComponentUpdate(): boolean {
-    return true;
-  }
-
   public static getDerivedStateFromError(): ErrorBoundaryState {
     return { hasError: true };
   }
@@ -30,7 +26,13 @@ export class ErrorBoundary extends Component<
     const { FallbackRender } = this.props;
 
     if (!FallbackRender && !isDev()) {
-      window.location.reload();
+      const RELOAD_KEY = "errorBoundaryReloads";
+      const count = Number(sessionStorage.getItem(RELOAD_KEY) || "0");
+
+      if (count < 1) {
+        sessionStorage.setItem(RELOAD_KEY, String(count + 1));
+        window.location.reload();
+      }
     }
   }
 
