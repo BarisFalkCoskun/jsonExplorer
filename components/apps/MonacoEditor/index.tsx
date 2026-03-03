@@ -29,6 +29,7 @@ const MonacoEditor: FC<ComponentProcessProps> = ({ id }) => {
     prependFileToTitle(basename(url), false);
   }, [prependFileToTitle, url, writeFile]);
 
+  /* eslint-disable consistent-return -- early-return is idiomatic for useEffect guards */
   useEffect(() => {
     if (!url || !containerRef.current || closing || loadedUrlRef.current === url)
       {return;}
@@ -45,7 +46,7 @@ const MonacoEditor: FC<ComponentProcessProps> = ({ id }) => {
       if (editorRef.current) {
         editorRef.current.setValue(fileContent.toString());
       } else {
-        const editor = monaco.editor.create(containerRef.current!, {
+        const editor = monaco.editor.create(containerRef.current as HTMLDivElement, {
           automaticLayout: true,
           language: "json",
           minimap: { enabled: false },
@@ -71,6 +72,7 @@ const MonacoEditor: FC<ComponentProcessProps> = ({ id }) => {
       disposed = true;
     };
   }, [closing, prependFileToTitle, readFile, url]);
+  /* eslint-enable consistent-return */
 
   useEffect(() => {
     if (unsaved) {

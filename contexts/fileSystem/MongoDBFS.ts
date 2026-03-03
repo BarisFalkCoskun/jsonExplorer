@@ -1067,7 +1067,7 @@ export class MongoDBFileSystem implements FileSystem {
         return;
       }
 
-      if (!documentName) {
+      if (!collection || !documentName) {
         const unlinkError = new Error("EISDIR: is a directory") as ApiError;
         unlinkError.code = "EISDIR";
         callback(unlinkError);

@@ -3,7 +3,7 @@ import type HTTPRequest from "browserfs/dist/node/backend/HTTPRequest";
 import type IndexedDBFileSystem from "browserfs/dist/node/backend/IndexedDB";
 import type OverlayFS from "browserfs/dist/node/backend/OverlayFS";
 import type InMemoryFileSystem from "browserfs/dist/node/backend/InMemory";
-import { type ApiError } from "browserfs/dist/node/core/api_error";
+import { type ApiError } from "browserfs/dist/node/core/api_error"; // eslint-disable-line import/no-unresolved
 import { type FileSystemObserver } from "contexts/fileSystem/useFileSystemContextState";
 import { FS_HANDLES } from "utils/constants";
 import { type RootFileSystem } from "contexts/fileSystem/useAsyncFs";

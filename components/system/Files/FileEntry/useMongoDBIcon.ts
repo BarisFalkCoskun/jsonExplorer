@@ -5,7 +5,7 @@ import { type RootFileSystem } from "contexts/fileSystem/useAsyncFs";
 
 interface MongoDBIconState {
   currentImageIndex: number;
-  error: string | null;
+  error: string | undefined;
   hasNavigationArrows: boolean;
   images: string[];
   isLoading: boolean;
@@ -13,7 +13,7 @@ interface MongoDBIconState {
 
 const INITIAL_STATE: MongoDBIconState = {
   currentImageIndex: 0,
-  error: null,
+  error: undefined,
   hasNavigationArrows: false,
   images: [],
   isLoading: false,
@@ -30,8 +30,8 @@ const findMongoDBFileSystem = (
   mongoFS: MongoDBFileSystem;
   mountPoint: string;
   relativePath: string;
-} | null => {
-  if (!rootFs?.mntMap) return null;
+} | undefined => {
+  if (!rootFs?.mntMap) return undefined;
 
   // Fast path: check if path starts with any known MongoDB mount point
   for (const [mountPoint, fs] of Object.entries(rootFs.mntMap)) {
@@ -45,9 +45,10 @@ const findMongoDBFileSystem = (
     }
   }
 
-  return null;
+  return undefined;
 };
 
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type, @typescript-eslint/explicit-module-boundary-types -- hook return type is inferred
 export const useMongoDBIcon = (path: string, visible = false) => {
   const [state, setState] = useState<MongoDBIconState>(INITIAL_STATE);
   const { rootFs } = useFileSystem();
@@ -97,7 +98,7 @@ export const useMongoDBIcon = (path: string, visible = false) => {
     loadingRef.current = abortController;
     isLoadingRef.current = true;
 
-    setState((prev) => ({ ...prev, error: null, isLoading: true }));
+    setState((prev) => ({ ...prev, error: undefined, isLoading: true }));
 
     try {
       const images = await mongoData.mongoFS.getDocumentImages(
@@ -168,9 +169,9 @@ export const useMongoDBIcon = (path: string, visible = false) => {
   }, [loadImages]);
 
   // Get current image URL
-  const getCurrentImageUrl = useCallback(() => {
-    if (state.images.length === 0) return null;
-    return state.images[state.currentImageIndex] || null;
+  const getCurrentImageUrl = useCallback((): string | undefined => {
+    if (state.images.length === 0) return undefined;
+    return state.images[state.currentImageIndex] || undefined;
   }, [state.images, state.currentImageIndex]);
 
   // Check if can navigate in direction
@@ -187,7 +188,7 @@ export const useMongoDBIcon = (path: string, visible = false) => {
     isLoadingRef.current = false;
     hasFullImagesRef.current = false;
     setState(INITIAL_STATE);
-  }, [path]);
+  }, [path]); // eslint-disable-line react-hooks-addons/no-unused-deps -- path reset is intentional
 
   // Abort on unmount
   useEffect(() => () => {

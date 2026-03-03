@@ -318,7 +318,7 @@ const FileManager: FC<FileManagerProps> = ({
         );
       const defaultValue = allSame ? first : "";
 
-      const raw = window.prompt(
+      const raw = window.prompt( // eslint-disable-line no-alert -- user-facing category input
         "Enter category (comma-separated for multiple):",
         defaultValue
       );
@@ -516,6 +516,7 @@ const FileManager: FC<FileManagerProps> = ({
     setColumns(isDetailsView ? DEFAULT_COLUMNS : undefined);
   }, [isDetailsView]);
 
+  /* eslint-disable consistent-return -- early-return is idiomatic for useEffect guards */
   useEffect(() => {
     const container = fileManagerRef.current;
 
@@ -534,7 +535,7 @@ const FileManager: FC<FileManagerProps> = ({
 
     container.addEventListener("wheel", onWheel, { passive: false });
 
-    return () => {
+    return (): void => {
       container.removeEventListener("wheel", onWheel);
     };
   }, [isDesktop, isIconView, quickLookPath, setIconZoomLevel]);
@@ -559,10 +560,11 @@ const FileManager: FC<FileManagerProps> = ({
 
     container.addEventListener("scroll", onScroll, { passive: true });
 
-    return () => {
+    return (): void => {
       container.removeEventListener("scroll", onScroll);
     };
   }, [hasMore, loadMore]);
+  /* eslint-enable consistent-return */
 
   // Re-apply active filters when files change (e.g. after readdir refresh)
   useEffect(() => {
@@ -571,10 +573,10 @@ const FileManager: FC<FileManagerProps> = ({
     const { database, collection } = mongoCollection;
     const categorizedNames = hideCategorized
       ? mongoFs.getCachedDocumentNames(database, collection)
-      : null;
+      : undefined;
     const dismissedNames = hideDismissed
       ? mongoFs.getCachedDismissedNames(database, collection)
-      : null;
+      : undefined;
 
     if (!categorizedNames && !dismissedNames) return;
 
@@ -608,7 +610,7 @@ const FileManager: FC<FileManagerProps> = ({
 
       return changed ? filtered : currentFiles;
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks-addons/no-unused-deps
   }, [files]);
 
   return (

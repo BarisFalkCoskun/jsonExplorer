@@ -109,6 +109,7 @@ describe("runMongoPatchBatch", () => {
     let concurrent = 0;
     let maxConcurrent = 0;
 
+    // eslint-disable-next-line unicorn/consistent-function-scoping -- task factory must be inline for Array.from
     const tasks = Array.from({ length: 30 }, () => () =>
       new Promise<void>((resolve) => {
         concurrent++;

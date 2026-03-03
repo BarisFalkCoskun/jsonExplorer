@@ -1,7 +1,7 @@
 describe("PUT replace-then-insert pattern", () => {
   it("replaces without _id to avoid type mismatch", () => {
     const updateDoc = { _id: "my-doc-id", data: "value", name: "test" };
-    const { _id: rawId, ...docWithoutId } = updateDoc;
+    const { _id: _rawId, ...docWithoutId } = updateDoc;
 
     // replaceOne receives docWithoutId — no _id, safe for any existing _id type
     expect(docWithoutId).not.toHaveProperty("_id");

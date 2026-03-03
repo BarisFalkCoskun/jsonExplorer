@@ -108,7 +108,7 @@ const QuickLook: FC<QuickLookProps> = ({ files, onClose, path, url }) => {
 
   const handleBackdropClick = useCallback(
     (event: React.MouseEvent) => {
-      if (event.target === containerRef.current) {
+      if (event.target === (containerRef.current as EventTarget)) {
         onClose();
       }
     },

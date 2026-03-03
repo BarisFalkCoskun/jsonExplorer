@@ -1,6 +1,6 @@
 import { basename, dirname, join } from "path";
 import ini from "ini";
-import { type FSModule } from "browserfs/dist/node/core/FS";
+import { type FSModule } from "browserfs/dist/node/core/FS"; // eslint-disable-line import/no-unresolved
 import type Stats from "browserfs/dist/node/core/node_fs_stats";
 import extensions from "components/system/Files/FileEntry/extensions";
 import { type FileInfo } from "components/system/Files/FileEntry/useFileInfo";

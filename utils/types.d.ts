@@ -177,7 +177,7 @@ declare module "browserfs/dist/node/backend/OverlayFS" {
 
 declare module "browserfs/dist/node/backend/IndexedDB" {
   export default interface IndexedDBFileSystem {
-    empty?: (cb: (error?: import("browserfs/dist/node/core/api_error").ApiError | null) => void) => void; // eslint-disable-line @typescript-eslint/consistent-type-imports, sonarjs/no-redundant-optional
+    empty?: (cb: (error?: import("browserfs/dist/node/core/api_error").ApiError | null) => void) => void; // eslint-disable-line @typescript-eslint/consistent-type-imports
     getName: () => string;
   }
 }
@@ -190,7 +190,7 @@ declare module "browserfs/dist/node/backend/HTTPRequest" {
 
 declare module "browserfs/dist/node/backend/InMemory" {
   export default interface InMemoryFileSystem {
-    empty?: (cb: (error?: import("browserfs/dist/node/core/api_error").ApiError | null) => void) => void; // eslint-disable-line @typescript-eslint/consistent-type-imports, sonarjs/no-redundant-optional
+    empty?: (cb: (error?: import("browserfs/dist/node/core/api_error").ApiError | null) => void) => void; // eslint-disable-line @typescript-eslint/consistent-type-imports
     getName: () => string;
   }
 }

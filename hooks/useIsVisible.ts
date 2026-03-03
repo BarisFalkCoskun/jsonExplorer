@@ -36,6 +36,7 @@ export const useIsVisible = (
 ): boolean => {
   const [isVisible, setIsVisible] = useState(alwaysVisible);
 
+  /* eslint-disable consistent-return -- early-return is idiomatic for useEffect guards */
   useEffect(() => {
     if (alwaysVisible || !elementRef.current) return;
 
@@ -61,6 +62,7 @@ export const useIsVisible = (
       }
     };
   }, [alwaysVisible, elementRef, parentSelector]);
+  /* eslint-enable consistent-return */
 
   return isVisible;
 };

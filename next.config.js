@@ -26,9 +26,6 @@ const nextConfig = {
     },
   },
   devIndicators: false,
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   headers: async () => [
     {
       source: "/:path*",

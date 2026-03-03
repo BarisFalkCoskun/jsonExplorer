@@ -1,12 +1,10 @@
 import { basename, dirname, isAbsolute, join } from "path";
 import { useCallback, useEffect, useRef, useState } from "react";
-// eslint-disable-next-line import/no-unresolved
 import {
   type BFSCallback,
   type FileSystem,
-} from "browserfs/dist/node/core/file_system";
-// eslint-disable-next-line import/no-unresolved
-import { type FSModule } from "browserfs/dist/node/core/FS";
+} from "browserfs/dist/node/core/file_system"; // eslint-disable-line import/no-unresolved
+import { type FSModule } from "browserfs/dist/node/core/FS"; // eslint-disable-line import/no-unresolved
 import type IZipFS from "browserfs/dist/node/backend/ZipFS";
 import type IIsoFS from "browserfs/dist/node/backend/IsoFS";
 import type * as IBrowserFS from "browserfs";
@@ -274,7 +272,7 @@ const useFileSystemContextState = (): FileSystemContextState => {
 
           Emscripten?.Create({ FS }, (error, newFs) => {
             const emscriptenFS =
-              newFs as unknown as ExtendedEmscriptenFileSystem;
+              newFs as ExtendedEmscriptenFileSystem;
 
             if (error || !newFs || !emscriptenFS._FS?.DB_NAME) {
               reject(new Error("Error while mounting Emscripten FS."));
@@ -458,9 +456,11 @@ const useFileSystemContextState = (): FileSystemContextState => {
           } = ExtraFS as typeof IBrowserFS;
 
           if (isIso) {
-            IsoFS?.Create({ data: fileData }, createFs);
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any -- BrowserFS Create() has loose callback typing
+            IsoFS?.Create({ data: fileData }, createFs as any);
           } else {
-            ZipFS?.Create({ zipData: fileData }, createFs);
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any -- BrowserFS Create() has loose callback typing
+            ZipFS?.Create({ zipData: fileData }, createFs as any);
           }
         });
       });
@@ -708,7 +708,6 @@ const useFileSystemContextState = (): FileSystemContextState => {
         if (mappedOntoDesktop) updateFolder(DESKTOP_PATH);
       };
 
-      // eslint-disable-next-line no-console
       restoreFsHandles().catch(console.error);
     }
   }, [exists, mapFs, rootFs, updateFolder]);
@@ -800,7 +799,6 @@ const useFileSystemContextState = (): FileSystemContextState => {
         }
       };
 
-      // eslint-disable-next-line no-console
       restoreMongoConnections().catch(console.error);
     }
   }, [rootFs, updateFolder]);

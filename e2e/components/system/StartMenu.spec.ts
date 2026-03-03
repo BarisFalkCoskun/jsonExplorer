@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument -- e2e test constants are loosely typed */
 import { expect, test } from "@playwright/test";
 import {
   START_MENU_APPS,

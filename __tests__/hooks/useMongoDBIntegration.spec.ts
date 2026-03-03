@@ -16,11 +16,11 @@ describe("MongoDB connection restore", () => {
     let restoredCurrent = false;
     const restoreCalls: string[] = [];
 
-    const attemptRestore = (connections: { alias: string }[]): void => {
+    const attemptRestore = (conns: { alias: string }[]): void => {
       if (restoredCurrent) return;
       restoredCurrent = true;
 
-      for (const { alias } of connections) {
+      for (const { alias } of conns) {
         restoreCalls.push(alias);
       }
     };

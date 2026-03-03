@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument -- e2e test constants are loosely typed */
 import { dirname, extname } from "path";
 import { expect, test } from "@playwright/test";
 import {

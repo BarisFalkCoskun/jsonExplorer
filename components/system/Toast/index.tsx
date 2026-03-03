@@ -6,6 +6,7 @@ import { ToastContext } from "components/system/Toast/useToast";
 const ToastRenderer: FC = () => {
   const { toasts, dismissToast } = useContext(ToastContext);
 
+  // eslint-disable-next-line unicorn/no-null -- React component must return null not undefined
   if (toasts.length === 0) return null;
 
   return createPortal(

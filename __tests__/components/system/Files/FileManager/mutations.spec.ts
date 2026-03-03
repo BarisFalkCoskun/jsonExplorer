@@ -15,7 +15,7 @@ describe("patchDocument error handling", () => {
 
     const failures = results.filter((r) => r.status === "rejected");
     expect(failures).toHaveLength(1);
-    expect((failures[0]).reason.message).toBe("Network error");
+    expect((failures[0] as { reason: Error; status: string }).reason.message).toBe("Network error");
 
     const successes = results.filter((r) => r.status === "fulfilled");
     expect(successes).toHaveLength(2);

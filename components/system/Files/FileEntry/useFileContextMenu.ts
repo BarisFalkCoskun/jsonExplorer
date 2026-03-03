@@ -213,7 +213,7 @@ const useFileContextMenu = (
                           (c) => c !== null && c.toLowerCase() === first.toLowerCase()
                         );
                       const defaultValue = allSame ? first : "";
-                      const raw = window.prompt("Enter category (comma-separated for multiple):", defaultValue);
+                      const raw = window.prompt("Enter category (comma-separated for multiple):", defaultValue); // eslint-disable-line no-alert -- user-facing category input
                       if (raw) {
                         const newLabels = raw.toLowerCase().split(",").map((l) => l.trim()).filter(Boolean);
                         const { succeeded, failed } = await runMongoPatchBatch(
@@ -258,6 +258,7 @@ const useFileContextMenu = (
                             `${mountUrl}/`,
                             ""
                           );
+                          // eslint-disable-next-line unicorn/no-null -- MongoDB $unset requires null
                           return mongoFs.patchDocument(relativePath, { category: null });
                         })
                       );
@@ -330,6 +331,7 @@ const useFileContextMenu = (
                                 `${mountUrl}/`,
                                 ""
                               );
+                              // eslint-disable-next-line unicorn/no-null -- MongoDB $unset requires null
                               return mongoFs.patchDocument(relativePath, { dismissed: null });
                             })
                           );

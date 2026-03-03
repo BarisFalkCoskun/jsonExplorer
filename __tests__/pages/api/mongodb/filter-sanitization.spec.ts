@@ -29,6 +29,7 @@ describe("sanitizeFilter", () => {
   });
 
   it("handles null and primitives gracefully", () => {
+    // eslint-disable-next-line unicorn/no-null -- testing null input handling
     expect(() => sanitizeFilter(null)).not.toThrow();
     expect(() => sanitizeFilter("string")).not.toThrow();
     expect(() => sanitizeFilter(42)).not.toThrow();

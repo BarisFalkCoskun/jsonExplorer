@@ -1,5 +1,5 @@
 import { join } from "path";
-import { type FSModule } from "browserfs/dist/node/core/FS";
+import { type FSModule } from "browserfs/dist/node/core/FS"; // eslint-disable-line import/no-unresolved
 import type Stats from "browserfs/dist/node/core/node_fs_stats";
 import {
   getCachedIconUrl,

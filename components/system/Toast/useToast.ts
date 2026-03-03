@@ -17,8 +17,8 @@ type ToastContextValue = {
 let nextId = 0;
 
 export const ToastContext = createContext<ToastContextValue>({
-  dismissToast: () => {},
-  showToast: () => {},
+  dismissToast: () => { /* noop */ },
+  showToast: () => { /* noop */ },
   toasts: [],
 });
 

@@ -140,7 +140,7 @@ const focusingMap = new Map<string, string[]>();
 const getFocusing = (id?: string): string[] => {
   const key = id ?? NO_MANAGER_ID;
   if (!focusingMap.has(key)) focusingMap.set(key, []);
-  return focusingMap.get(key)!;
+  return focusingMap.get(key) as string[];
 };
 
 const FileEntry: FC<FileEntryProps> = ({
@@ -466,7 +466,7 @@ const FileEntry: FC<FileEntryProps> = ({
                       width,
                     });
                   } catch (error) {
-                    console.warn(`Failed to capture canvas for icon: ${path}`, error);
+                    console.warn(`Failed to capture canvas for icon: ${path}`, error); // eslint-disable-line no-console
                   }
 
                   if (

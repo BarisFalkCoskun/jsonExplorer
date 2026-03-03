@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-argument -- e2e test constants are loosely typed */
 import { expect, test } from "@playwright/test";
 import { TEST_SEARCH, TEST_SEARCH_RESULT_TITLE } from "e2e/constants";
 import {

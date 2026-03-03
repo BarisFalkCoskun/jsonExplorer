@@ -113,7 +113,7 @@ const ImageNavigation: React.FC<ImageNavigationProps> = ({
   onMouseEnter,
   onMouseLeave,
 }) => {
-  const handlePrevious = (e: React.MouseEvent) => {
+  const handlePrevious = (e: React.MouseEvent): void => {
     e.stopPropagation();
     e.preventDefault();
     if (canGoToPrevious) {
@@ -121,7 +121,7 @@ const ImageNavigation: React.FC<ImageNavigationProps> = ({
     }
   };
 
-  const handleNext = (e: React.MouseEvent) => {
+  const handleNext = (e: React.MouseEvent): void => {
     e.stopPropagation();
     e.preventDefault();
     if (canGoToNext) {
@@ -130,6 +130,7 @@ const ImageNavigation: React.FC<ImageNavigationProps> = ({
   };
 
   if (totalImages <= 1) {
+    // eslint-disable-next-line unicorn/no-null -- React components must return null not undefined
     return null;
   }
 

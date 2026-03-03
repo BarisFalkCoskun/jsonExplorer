@@ -9,6 +9,7 @@ type ErrorBoundaryState = {
   hasError: boolean;
 };
 
+// eslint-disable-next-line react/require-optimization -- ErrorBoundary must always re-render on error
 export class ErrorBoundary extends Component<
   React.PropsWithChildren<ErrorBoundaryProps>,
   ErrorBoundaryState

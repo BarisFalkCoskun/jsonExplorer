@@ -10,7 +10,6 @@ interface MongoDBConnection {
 
 interface MongoDBIntegrationState {
   connections: MongoDBConnection[];
-  // eslint-disable-next-line unicorn/no-null -- null represents "no error" state
   error: string | null;
   isLoading: boolean;
 }
