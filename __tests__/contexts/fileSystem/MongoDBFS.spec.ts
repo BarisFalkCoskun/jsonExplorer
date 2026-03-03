@@ -9,6 +9,7 @@ interface MongoDocument {
 type MongoDBFSTestable = {
   collectionEntriesCache: Map<string, { cachedAt: number; entries: Set<string> }>;
   documentsListCache: Map<string, { cachedAt: number; documentIndex: Map<string, MongoDocument>; documents: MongoDocument[] }>;
+  getCachedCollectionEntries: (database: string, collection: string) => Set<string> | null;
   getCachedDismissedNames: (database: string, collection: string) => Set<string> | null;
   getCachedDocumentCategory: (docName: string, database: string, collection: string) => string | null;
   getCachedDocumentNames: (database: string, collection: string) => Set<string> | null;
@@ -16,8 +17,10 @@ type MongoDBFSTestable = {
   getDocumentIdentifier: (doc: MongoDocument) => string;
   isCachedDismissed: (docName: string, database: string, collection: string) => boolean;
   parsePath: (path: string) => { collection?: string; database?: string; document?: string };
+  patchDocument: (path: string, updates: Record<string, unknown>) => Promise<void>;
   readdirPaged: (path: string, cursor?: { afterId: string; afterName: string }, limit?: number) => Promise<{ entries: string[]; hasMore: boolean; nextCursor?: { afterId: string; afterName: string } }>;
   setCachedCollectionEntries: (database: string, collection: string, entries: string[]) => void;
+  setCachedDocumentsList: (database: string, collection: string, documents: MongoDocument[]) => void;
   stat: (path: string, isLstat: boolean | ((error: unknown, stats?: unknown) => void), callback?: (error: unknown, stats?: unknown) => void) => Promise<void>;
   unlink: (path: string, callback: (error: { code: string; message: string } | undefined) => void) => Promise<void>;
 };
@@ -460,5 +463,34 @@ describe("stat cache key encoding", () => {
 
     expect(statResult.error).toBeNull();
     expect(statResult.stats).toBeDefined();
+  });
+});
+
+describe("PATCH cache invalidation", () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it("preserves entry cache after patchDocument", async () => {
+    const fs = createFS();
+
+    // Seed both caches
+    fs.setCachedCollectionEntries("testdb", "products", ["doc1"]);
+    fs.setCachedDocumentsList("testdb", "products", [
+      { _id: "doc1", category: "old", name: "doc1" } as MongoDocument,
+    ]);
+
+    // Mock the fetch call that patchDocument makes
+    global.fetch = jest.fn().mockResolvedValue({
+      json: () => Promise.resolve({ matchedCount: 1, modifiedCount: 1 }),
+      ok: true,
+    });
+
+    await fs.patchDocument("testdb/products/doc1", { category: "fruit" });
+
+    // Entry cache should still exist (not invalidated)
+    const entries = fs.getCachedCollectionEntries("testdb", "products");
+    expect(entries).not.toBeNull();
+    expect(entries?.has("doc1")).toBe(true);
   });
 });

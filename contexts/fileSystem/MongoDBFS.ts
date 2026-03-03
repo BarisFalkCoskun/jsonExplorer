@@ -608,9 +608,6 @@ export class MongoDBFileSystem implements FileSystem {
         }
       }
     }
-
-    // Invalidate the entries cache so readdir refreshes
-    this.collectionEntriesCache.delete(cacheKey);
   }
 
   public isMongoDBDocument(checkPath: string): boolean {
