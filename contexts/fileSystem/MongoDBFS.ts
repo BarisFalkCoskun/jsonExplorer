@@ -1,12 +1,15 @@
 // MongoDB client imports are handled dynamically to avoid SSR issues
 // Note: MongoDB client only used in API routes, not in browser code
+// eslint-disable-next-line import/no-unresolved
 import { type FileSystem } from "browserfs/dist/node/core/file_system";
+// eslint-disable-next-line import/no-unresolved
 import { type ApiError } from "browserfs/dist/node/core/api_error";
 import type Stats from "browserfs/dist/node/core/node_fs_stats";
 
 interface MongoDocument {
-  [key: string]: any;
-  _id?: any;
+  [key: string]: unknown;
+  _id?: string;
+  dismissed?: boolean;
   imageCount?: number;
   images?: string[];
   name?: string;
@@ -15,10 +18,10 @@ interface MongoDocument {
 }
 
 interface MongoFSEntry {
-  type: "database" | "collection" | "document";
-  path: string;
-  name: string;
   data?: MongoDocument;
+  name: string;
+  path: string;
+  type: "collection" | "database" | "document";
 }
 
 const UNKNOWN_DOCUMENT_SIZE = -1;
@@ -36,38 +39,65 @@ type CachedDocumentsList = {
   documents: MongoDocument[];
 };
 
+interface MongoCollection {
+  deleteOne: (filter: Record<string, unknown>) => Promise<{ deletedCount: number }>;
+  drop: () => Promise<{ ok: number }>;
+  find: () => { toArray: () => Promise<MongoDocument[]> };
+  findOne: (filter: Record<string, unknown>) => Promise<MongoDocument | undefined>;
+  getImages: (documentId: string) => Promise<string[]>;
+  insertOne: (doc: Record<string, unknown>) => Promise<{ acknowledged: boolean }>;
+  replaceOne: (filter: Record<string, unknown>, doc: Record<string, unknown>, options: Record<string, unknown>) => Promise<{ acknowledged: boolean }>;
+}
+
+interface MongoDb {
+  admin: () => { listDatabases: () => Promise<{ databases: { name: string }[] }> };
+  collection: (name: string) => MongoCollection;
+  dropDatabase: () => Promise<{ ok: number }>;
+  listCollections: () => Promise<{ name: string }[]> | { toArray: () => Promise<{ name: string }[]> };
+}
+
+interface MongoAPIClient {
+  close: () => Promise<void>;
+  connect: () => Promise<void>;
+  db: (dbName?: string) => MongoDb;
+}
+
 export class MongoDBFileSystem implements FileSystem {
-  private client: any = null;
+  private client: MongoAPIClient | undefined;
+
   private connected = false;
+
   private readonly connectionString: string;
+
   private readonly collectionEntriesCache = new Map<string, CachedCollectionEntries>();
+
   private readonly documentsListCache = new Map<string, CachedDocumentsList>();
 
-  constructor(connectionString = "mongodb://localhost:27017") {
+  public constructor(connectionString = "mongodb://localhost:27017") {
     this.connectionString = connectionString;
   }
 
-  getName(): string {
+  public getName(): string {
     return "MongoDBFS";
   }
 
-  isReadOnly(): boolean {
+  public isReadOnly(): boolean {
     return false;
   }
 
-  supportsProps(): boolean {
+  public supportsProps(): boolean {
     return true;
   }
 
-  supportsLinks(): boolean {
+  public supportsLinks(): boolean {
     return false;
   }
 
-  supportsSynch(): boolean {
+  public supportsSynch(): boolean {
     return false;
   }
 
-  private async connect(): Promise<void> {
+  private connect(): void {
     if (this.connected && this.client) return;
 
     // Always use API proxy in this implementation
@@ -75,10 +105,53 @@ export class MongoDBFileSystem implements FileSystem {
     this.connected = true;
   }
 
-  private createAPIClient() {
+  private static extractFilterId(filter: Record<string, unknown>): string {
+    const rawId = filter._id ?? filter.name ?? "";
+    return typeof rawId === "string" ? rawId : JSON.stringify(rawId);
+  }
+
+  private async makeDeleteOneRequest(
+    dbName: string,
+    collectionName: string,
+    filter: Record<string, unknown>
+  ): Promise<{ deletedCount: number }> {
+    const documentId = MongoDBFileSystem.extractFilterId(filter);
+    const response = await fetch(`/api/mongodb/document/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}/${encodeURIComponent(documentId)}`, {
+      headers: {
+        'x-mongodb-connection': this.connectionString,
+      },
+      method: 'DELETE',
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    const result = await response.json() as { deletedCount: number };
+    return { deletedCount: result.deletedCount };
+  }
+
+  private async makeFindOneRequest(
+    dbName: string,
+    collectionName: string,
+    filter: Record<string, unknown>
+  ): Promise<MongoDocument | undefined> {
+    const documentId = MongoDBFileSystem.extractFilterId(filter);
+    const response = await fetch(`/api/mongodb/document/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}/${encodeURIComponent(documentId)}`, {
+      headers: {
+        'x-mongodb-connection': this.connectionString,
+      },
+    });
+    if (!response.ok) {
+      return undefined;
+    }
+    return await response.json() as MongoDocument;
+  }
+
+  private createAPIClient(): MongoAPIClient {
     // API client that proxies requests to Next.js API route
     return {
-      db: (dbName?: string) => ({
+      close: () => Promise.resolve(),
+      connect: () => Promise.resolve(),
+      db: (dbName?: string): MongoDb => ({
         admin: () => ({
           listDatabases: async () => {
             const response = await fetch('/api/mongodb/databases', {
@@ -89,24 +162,29 @@ export class MongoDBFileSystem implements FileSystem {
             if (!response.ok) {
               throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
-            const databases = await response.json();
-            return { databases: databases.map((name: string) => ({ name })) };
+            const databases = await response.json() as string[];
+            return { databases: databases.map((dbItemName: string) => ({ name: dbItemName })) };
           }
         }),
-        listCollections: async () => {
-          if (!dbName) return [];
-          const response = await fetch(`/api/mongodb/collections/${encodeURIComponent(dbName)}`, {
-            headers: {
-              'x-mongodb-connection': this.connectionString,
-            },
-          });
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-          }
-          const collections = await response.json();
-          return collections.map((name: string) => ({ name }));
-        },
-        collection: (collectionName: string) => ({
+        collection: (collectionName: string): MongoCollection => ({
+          deleteOne: (filter: Record<string, unknown>) => {
+            if (!dbName) throw new Error("No database name");
+            return this.makeDeleteOneRequest(dbName, collectionName, filter);
+          },
+          drop: async () => {
+            if (!dbName) throw new Error("No database name");
+            const response = await fetch(
+              `/api/mongodb/drop-collection/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}`,
+              {
+                headers: { 'x-mongodb-connection': this.connectionString },
+                method: 'DELETE',
+              }
+            );
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return { ok: 1 };
+          },
           find: () => ({
             toArray: async () => {
               if (!dbName) return [];
@@ -118,21 +196,12 @@ export class MongoDBFileSystem implements FileSystem {
               if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
               }
-              return await response.json();
+              return await response.json() as MongoDocument[];
             }
           }),
-          findOne: async (filter: any) => {
-            if (!dbName) return null;
-            const documentId = filter._id || filter.name;
-            const response = await fetch(`/api/mongodb/document/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}/${encodeURIComponent(documentId)}`, {
-              headers: {
-                'x-mongodb-connection': this.connectionString,
-              },
-            });
-            if (!response.ok) {
-              return null;
-            }
-            return await response.json();
+          findOne: (filter: Record<string, unknown>): Promise<MongoDocument | undefined> => {
+            if (!dbName) return Promise.resolve(undefined); // eslint-disable-line unicorn/no-useless-undefined
+            return this.makeFindOneRequest(dbName, collectionName, filter);
           },
           getImages: async (documentId: string) => {
             if (!dbName) return [];
@@ -144,75 +213,56 @@ export class MongoDBFileSystem implements FileSystem {
             if (!response.ok) {
               return [];
             }
-            const result = await response.json();
-            return result.images || [];
+            const result = await response.json() as { images?: string[] };
+            return result.images ?? [];
           },
-          insertOne: async (doc: any) => {
+          insertOne: (doc: Record<string, unknown>) =>
             // For inserts, we'll use the upsert functionality of replaceOne
-            return this.replaceDocument(dbName!, collectionName, doc);
-          },
-          replaceOne: async (filter: any, doc: any, options: any) => {
-            return this.replaceDocument(dbName!, collectionName, doc);
-          },
-          deleteOne: async (filter: any) => {
-            if (!dbName) throw new Error("No database name");
-            const documentId = String(filter._id || filter.name || "");
-            const response = await fetch(`/api/mongodb/document/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}/${encodeURIComponent(documentId)}`, {
-              method: 'DELETE',
-              headers: {
-                'x-mongodb-connection': this.connectionString,
-              },
-            });
-            if (!response.ok) {
-              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            const result = await response.json();
-            return { deletedCount: result.deletedCount };
-          },
-          drop: async () => {
-            if (!dbName) throw new Error("No database name");
-            const response = await fetch(
-              `/api/mongodb/drop-collection/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}`,
-              {
-                method: 'DELETE',
-                headers: { 'x-mongodb-connection': this.connectionString },
-              }
-            );
-            if (!response.ok) {
-              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            return { ok: 1 };
-          }
+            this.replaceDocument(dbName ?? "", collectionName, doc),
+          replaceOne: (_filter: Record<string, unknown>, doc: Record<string, unknown>, _options: Record<string, unknown>) =>
+            this.replaceDocument(dbName ?? "", collectionName, doc)
         }),
         dropDatabase: async () => {
           if (!dbName) throw new Error("No database name");
           const response = await fetch(
             `/api/mongodb/drop-database/${encodeURIComponent(dbName)}`,
             {
-              method: 'DELETE',
               headers: { 'x-mongodb-connection': this.connectionString },
+              method: 'DELETE',
             }
           );
           if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
           }
           return { ok: 1 };
+        },
+        listCollections: async () => {
+          if (!dbName) return [];
+          const response = await fetch(`/api/mongodb/collections/${encodeURIComponent(dbName)}`, {
+            headers: {
+              'x-mongodb-connection': this.connectionString,
+            },
+          });
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          const collections = await response.json() as string[];
+          return collections.map((colName: string) => ({ name: colName }));
         }
-      }),
-      close: async () => {},
-      connect: async () => {}
+      })
     };
   }
 
-  private async replaceDocument(dbName: string, collectionName: string, doc: any) {
-    const documentId = doc._id || doc.name || new Date().getTime().toString();
+  private async replaceDocument(dbName: string, collectionName: string, doc: Record<string, unknown>): Promise<{ acknowledged: boolean }> {
+    const rawDocId = doc._id ?? doc.name ?? Date.now().toString();
+    const documentId = typeof rawDocId === "string" ? rawDocId : JSON.stringify(rawDocId);
     const response = await fetch(`/api/mongodb/document/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}/${encodeURIComponent(documentId)}`, {
-      method: 'PUT',
+      body: JSON.stringify(doc),
       headers: {
         'Content-Type': 'application/json',
         'x-mongodb-connection': this.connectionString,
       },
-      body: JSON.stringify(doc),
+      method: 'PUT',
     });
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -220,103 +270,109 @@ export class MongoDBFileSystem implements FileSystem {
     return { acknowledged: true };
   }
 
-  private createMockClient() {
+  private createMockClient(): MongoAPIClient {
     // Mock MongoDB client for demonstration in browser
     const mockData: Record<string, Record<string, MongoDocument[]>> = {
-      "sampleDB": {
-        "users": [
-          { _id: "1", name: "john_doe", email: "john@example.com", age: 30 },
-          { _id: "2", name: "jane_smith", email: "jane@example.com", age: 25 },
-          { _id: "3", name: "admin_user", email: "admin@example.com", role: "admin" }
+      "blogDB": {
+        "comments": [
+          { _id: "comment1", author: "user123", name: "comment_001", postId: "post1", text: "Great post!" },
+          { _id: "comment2", author: "user456", name: "comment_002", postId: "post1", text: "Very helpful, thanks!" }
         ],
-        "products": [
-          { _id: "prod1", name: "laptop", price: 999.99, category: "electronics" },
-          { _id: "prod2", name: "book", price: 19.99, category: "books" },
-          { _id: "prod3", name: "headphones", price: 79.99, category: "electronics" }
-        ],
-        "orders": [
-          { _id: "order1", name: "order_001", userId: "1", productId: "prod1", quantity: 1, total: 999.99 },
-          { _id: "order2", name: "order_002", userId: "2", productId: "prod2", quantity: 2, total: 39.98 }
+        "posts": [
+          { _id: "post1", author: "john_doe", content: "MongoDB is a NoSQL database...", name: "first_post", title: "Getting Started with MongoDB" },
+          { _id: "post2", author: "jane_smith", content: "Learn advanced querying techniques...", name: "second_post", title: "Advanced MongoDB Queries" }
         ]
       },
-      "blogDB": {
-        "posts": [
-          { _id: "post1", name: "first_post", title: "Getting Started with MongoDB", content: "MongoDB is a NoSQL database...", author: "john_doe" },
-          { _id: "post2", name: "second_post", title: "Advanced MongoDB Queries", content: "Learn advanced querying techniques...", author: "jane_smith" }
+      "sampleDB": {
+        "orders": [
+          { _id: "order1", name: "order_001", productId: "prod1", quantity: 1, total: 999.99, userId: "1" },
+          { _id: "order2", name: "order_002", productId: "prod2", quantity: 2, total: 39.98, userId: "2" }
         ],
-        "comments": [
-          { _id: "comment1", name: "comment_001", postId: "post1", author: "user123", text: "Great post!" },
-          { _id: "comment2", name: "comment_002", postId: "post1", author: "user456", text: "Very helpful, thanks!" }
+        "products": [
+          { _id: "prod1", category: "electronics", name: "laptop", price: 999.99 },
+          { _id: "prod2", category: "books", name: "book", price: 19.99 },
+          { _id: "prod3", category: "electronics", name: "headphones", price: 79.99 }
+        ],
+        "users": [
+          { _id: "1", age: 30, email: "john@example.com", name: "john_doe" },
+          { _id: "2", age: 25, email: "jane@example.com", name: "jane_smith" },
+          { _id: "3", email: "admin@example.com", name: "admin_user", role: "admin" }
         ]
       }
     };
 
     return {
-      db: (dbName?: string) => ({
+      close: () => Promise.resolve(),
+      connect: () => Promise.resolve(),
+      db: (dbName?: string): MongoDb => ({
         admin: () => ({
-          listDatabases: async () => ({
-            databases: Object.keys(mockData).map(name => ({ name }))
+          listDatabases: () => Promise.resolve({
+            databases: Object.keys(mockData).map(mockDbName => ({ name: mockDbName }))
           })
         }),
-        listCollections: async () => {
-          if (!dbName || !mockData[dbName]) return [];
-          return Object.keys(mockData[dbName]).map(name => ({ name }));
-        },
-        collection: (collectionName: string) => ({
+        collection: (collectionName: string): MongoCollection => ({
+          deleteOne: (_filter: Record<string, unknown>) => Promise.resolve({ acknowledged: true, deletedCount: 1 }),
+          drop: () => Promise.resolve({ ok: 1 }),
           find: () => ({
-            toArray: async () => {
-              if (!dbName || !mockData[dbName] || !mockData[dbName][collectionName]) return [];
-              return mockData[dbName][collectionName];
+            toArray: () => {
+              if (!dbName || !mockData[dbName]?.[collectionName]) return Promise.resolve([]);
+              return Promise.resolve(mockData[dbName][collectionName]);
             }
           }),
-          insertOne: async (doc: any) => ({ acknowledged: true, insertedId: doc._id || new Date().getTime().toString() }),
-          replaceOne: async (filter: any, doc: any, options: any) => ({ acknowledged: true, modifiedCount: 1 }),
-          deleteOne: async (filter: any) => ({ acknowledged: true, deletedCount: 1 }),
-          drop: async () => ({ ok: 1 })
-        })
-      }),
-      close: async () => {},
-      connect: async () => {}
+          findOne: (_filter: Record<string, unknown>): Promise<MongoDocument | undefined> => Promise.resolve(undefined), // eslint-disable-line unicorn/no-useless-undefined
+          getImages: (_documentId: string) => Promise.resolve([] as string[]),
+          insertOne: (doc: Record<string, unknown>) => {
+            const mockId = doc._id ?? Date.now().toString();
+            return Promise.resolve({ acknowledged: true, insertedId: typeof mockId === "string" ? mockId : JSON.stringify(mockId) });
+          },
+          replaceOne: (_filter: Record<string, unknown>, _doc: Record<string, unknown>, _options: Record<string, unknown>) => Promise.resolve({ acknowledged: true, modifiedCount: 1 })
+        }),
+        dropDatabase: () => Promise.resolve({ ok: 1 }),
+        listCollections: () => {
+          if (!dbName || !mockData[dbName]) return Promise.resolve([]);
+          return Promise.resolve(Object.keys(mockData[dbName]).map(mockColName => ({ name: mockColName })));
+        }
+      })
     };
   }
 
   private async getDatabases(): Promise<string[]> {
-    await this.connect();
+    this.connect();
     if (!this.client) throw new Error("No MongoDB connection");
 
     const adminDb = this.client.db().admin();
     const { databases } = await adminDb.listDatabases();
-    return databases.map((db: any) => db.name);
+    return databases.map((dbItem: { name: string }) => dbItem.name);
   }
 
   private async getCollections(dbName: string): Promise<string[]> {
-    await this.connect();
+    this.connect();
     if (!this.client) throw new Error("No MongoDB connection");
 
-    const db = this.client.db(dbName);
+    const database = this.client.db(dbName);
 
     // API-backed listCollections may return either an array-like result
     // or a cursor-like object with toArray(), depending on client impl.
-    const listCollectionsResult = await db.listCollections();
+    const listCollectionsResult = await database.listCollections();
     const collections = Array.isArray(listCollectionsResult)
       ? listCollectionsResult
-      : await listCollectionsResult.toArray();
+      : await (listCollectionsResult as { toArray: () => Promise<{ name: string }[]> }).toArray();
 
-    return collections.map((col: any) => col.name);
+    return collections.map((col: { name: string }) => col.name);
   }
 
   private getCachedDocumentsList(
     database: string,
     collection: string
-  ): MongoDocument[] | null {
+  ): MongoDocument[] | undefined {
     const key = this.getCollectionCacheKey(database, collection);
     const cached = this.documentsListCache.get(key);
 
-    if (!cached) return null;
+    if (!cached) return undefined;
 
     if (Date.now() - cached.cachedAt > DOCUMENTS_CACHE_TTL_MS) {
       this.documentsListCache.delete(key);
-      return null;
+      return undefined;
     }
 
     return cached.documents;
@@ -367,33 +423,34 @@ export class MongoDBFileSystem implements FileSystem {
     return documents;
   }
 
-  public async getDocumentImages(path: string): Promise<string[]> {
-    const { database, collection, document } = this.parsePath(path);
+  public async getDocumentImages(imagePath: string): Promise<string[]> {
+    const { collection, database, document: documentName } = this.parsePath(imagePath);
 
-    if (!database || !collection || !document) {
+    if (!database || !collection || !documentName) {
       return [];
     }
 
     try {
-      await this.connect();
+      this.connect();
       if (!this.client) return [];
 
       const db = this.client.db(database);
       const col = db.collection(collection);
-      const images = await col.getImages(document);
+      const images = await col.getImages(documentName);
       return images;
     } catch (error) {
-      console.warn(`Failed to get images for ${path}:`, error);
+      // eslint-disable-next-line no-console
+      console.warn(`Failed to get images for ${imagePath}:`, error);
       return [];
     }
   }
 
   public getDocumentThumbnail(
-    path: string
+    thumbnailPath: string
   ): { imageCount: number; thumbnail: string | undefined } {
-    const { database, collection, document } = this.parsePath(path);
+    const { collection, database, document: documentName } = this.parsePath(thumbnailPath);
 
-    if (!database || !collection || !document) {
+    if (!database || !collection || !documentName) {
       return { imageCount: 0, thumbnail: undefined };
     }
 
@@ -404,15 +461,15 @@ export class MongoDBFileSystem implements FileSystem {
       return { imageCount: 0, thumbnail: undefined };
     }
 
-    const doc = cached.documentIndex.get(document);
+    const doc = cached.documentIndex.get(documentName);
 
     if (!doc) {
       return { imageCount: 0, thumbnail: undefined };
     }
 
     return {
-      imageCount: doc.imageCount ?? 0,
-      thumbnail: doc.thumbnail ?? undefined,
+      imageCount: (doc.imageCount as number) ?? 0,
+      thumbnail: (doc.thumbnail as string) ?? undefined,
     };
   }
 
@@ -424,7 +481,7 @@ export class MongoDBFileSystem implements FileSystem {
   public getCachedDocumentNames(database: string, collection: string): Set<string> | null {
     const key = this.getCollectionCacheKey(database, collection);
     const cached = this.documentsListCache.get(key);
-    if (!cached) return null;
+    if (!cached) return null; // eslint-disable-line unicorn/no-null
 
     const categorized = new Set<string>();
     for (const doc of cached.documents) {
@@ -442,7 +499,7 @@ export class MongoDBFileSystem implements FileSystem {
   public getCachedDismissedNames(database: string, collection: string): Set<string> | null {
     const key = this.getCollectionCacheKey(database, collection);
     const cached = this.documentsListCache.get(key);
-    if (!cached) return null;
+    if (!cached) return null; // eslint-disable-line unicorn/no-null
 
     const dismissed = new Set<string>();
     for (const doc of cached.documents) {
@@ -469,33 +526,33 @@ export class MongoDBFileSystem implements FileSystem {
   public getCachedDocumentCategory(docName: string, database: string, collection: string): string | null {
     const key = this.getCollectionCacheKey(database, collection);
     const cached = this.documentsListCache.get(key);
-    if (!cached) return null;
+    if (!cached) return null; // eslint-disable-line unicorn/no-null
 
     const doc = cached.documentIndex.get(
       MongoDBFileSystem.decodeDocumentIdentifier(docName)
     );
-    return doc && "category" in doc ? doc.category : null;
+    return doc && "category" in doc ? (doc.category as string) : null; // eslint-disable-line unicorn/no-null
   }
 
   public async patchDocument(
-    path: string,
-    updates: Record<string, any>
+    patchPath: string,
+    updates: Record<string, unknown>
   ): Promise<void> {
-    const { database, collection, document } = this.parsePath(path);
+    const { collection, database, document: documentName } = this.parsePath(patchPath);
 
-    if (!database || !collection || !document) {
+    if (!database || !collection || !documentName) {
       throw new Error("Invalid document path");
     }
 
     const response = await fetch(
-      `/api/mongodb/document/${encodeURIComponent(database)}/${encodeURIComponent(collection)}/${encodeURIComponent(document)}`,
+      `/api/mongodb/document/${encodeURIComponent(database)}/${encodeURIComponent(collection)}/${encodeURIComponent(documentName)}`,
       {
-        method: "PATCH",
+        body: JSON.stringify(updates),
         headers: {
           "Content-Type": "application/json",
           "x-mongodb-connection": this.connectionString,
         },
-        body: JSON.stringify(updates),
+        method: "PATCH",
       }
     );
 
@@ -514,14 +571,15 @@ export class MongoDBFileSystem implements FileSystem {
     const cached = this.documentsListCache.get(cacheKey);
 
     if (cached) {
-      const doc = cached.documentIndex.get(document);
+      const doc = cached.documentIndex.get(documentName);
 
       if (doc) {
         for (const [k, v] of Object.entries(updates)) {
-          if (v === null) {
-            delete doc[k];
+          if (v === undefined) {
+            const mutableDoc = doc as Record<string, unknown>;
+            delete mutableDoc[k];
           } else {
-            doc[k] = v;
+            (doc as Record<string, unknown>)[k] = v;
           }
         }
       }
@@ -531,16 +589,16 @@ export class MongoDBFileSystem implements FileSystem {
     this.collectionEntriesCache.delete(cacheKey);
   }
 
-  public isMongoDBDocument(path: string): boolean {
-    const { database, collection, document } = this.parsePath(path);
-    return !!(database && collection && document && path.endsWith('.json'));
+  public isMongoDBDocument(checkPath: string): boolean {
+    const { collection, database, document: documentName } = this.parsePath(checkPath);
+    return !!(database && collection && documentName && checkPath.endsWith('.json'));
   }
 
-  private parsePath(path: string): { database?: string; collection?: string; document?: string } {
-    const parts = path.split("/").filter(Boolean);
+  private parsePath(filePath: string): { collection?: string; database?: string; document?: string } {
+    const parts = filePath.split("/").filter(Boolean);
     return {
-      database: parts[0],
       collection: parts[1],
+      database: parts[0],
       document: parts[2]
         ? MongoDBFileSystem.decodeDocumentIdentifier(parts[2].replace(/\.json$/, ""))
         : undefined,
@@ -556,12 +614,12 @@ export class MongoDBFileSystem implements FileSystem {
     const cached = this.collectionEntriesCache.get(key);
 
     if (!cached) {
-      return null;
+      return null; // eslint-disable-line unicorn/no-null
     }
 
     if (Date.now() - cached.cachedAt > COLLECTION_CACHE_TTL_MS) {
       this.collectionEntriesCache.delete(key);
-      return null;
+      return null; // eslint-disable-line unicorn/no-null
     }
 
     return cached.entries;
@@ -589,15 +647,15 @@ export class MongoDBFileSystem implements FileSystem {
     if (database) {
       const databasePrefix = `${database}/`;
 
-      for (const key of this.collectionEntriesCache.keys()) {
-        if (key.startsWith(databasePrefix)) {
-          this.collectionEntriesCache.delete(key);
+      for (const cacheKey of this.collectionEntriesCache.keys()) {
+        if (cacheKey.startsWith(databasePrefix)) {
+          this.collectionEntriesCache.delete(cacheKey);
         }
       }
 
-      for (const key of this.documentsListCache.keys()) {
-        if (key.startsWith(databasePrefix)) {
-          this.documentsListCache.delete(key);
+      for (const cacheKey of this.documentsListCache.keys()) {
+        if (cacheKey.startsWith(databasePrefix)) {
+          this.documentsListCache.delete(cacheKey);
         }
       }
 
@@ -608,8 +666,8 @@ export class MongoDBFileSystem implements FileSystem {
     this.documentsListCache.clear();
   }
 
-  private getDocumentIdentifier(document: MongoDocument): string {
-    const raw = String(document._id || document.name || "");
+  private getDocumentIdentifier(mongoDocument: MongoDocument): string {
+    const raw = mongoDocument._id ?? mongoDocument.name ?? "";
     if (!raw) return "unnamed";
     return encodeURIComponent(raw);
   }
@@ -622,137 +680,139 @@ export class MongoDBFileSystem implements FileSystem {
     dbName: string,
     collectionName: string,
     documentId: string
-  ): Promise<MongoDocument | null> {
-    await this.connect();
+  ): Promise<MongoDocument | undefined> {
+    this.connect();
     if (!this.client) throw new Error("No MongoDB connection");
 
     const db = this.client.db(dbName);
-    const collection = db.collection(collectionName);
+    const col = db.collection(collectionName);
 
     // _id-first: matches getDocumentIdentifier priority
-    const byId = (await collection.findOne({
+    const byId = await col.findOne({
       _id: documentId,
-    })) as MongoDocument | null;
+    });
 
     if (byId) {
       return byId;
     }
 
-    return (await collection.findOne({ name: documentId })) as MongoDocument | null;
+    return await col.findOne({ name: documentId });
   }
 
-  private async getEntry(path: string): Promise<MongoFSEntry | null> {
-    const { database, collection, document } = this.parsePath(path);
+  private async getEntry(entryPath: string): Promise<MongoFSEntry | undefined> {
+    const { collection, database, document: documentName } = this.parsePath(entryPath);
 
     if (!database) {
       // Root path - represents the MongoDB connection itself
       return {
-        type: "database",
-        path,
         name: "",
+        path: entryPath,
+        type: "database",
       };
     }
 
     if (!collection) {
       // This is a database folder
       return {
-        type: "database",
-        path,
         name: database,
+        path: entryPath,
+        type: "database",
       };
     }
 
-    if (!document) {
+    if (!documentName) {
       // This is a collection folder
       return {
-        type: "collection",
-        path,
         name: collection,
+        path: entryPath,
+        type: "collection",
       };
     }
 
     // This is a document file
-    const doc = await this.getDocument(database, collection, document);
+    const doc = await this.getDocument(database, collection, documentName);
 
-    if (!doc) return null;
+    if (!doc) return undefined;
 
     return {
-      type: "document",
-      path,
-      name: document,
       data: doc,
+      name: documentName,
+      path: entryPath,
+      type: "document",
     };
   }
 
-  private createStats(isDirectory: boolean, size = 0): Stats {
+  private createStats(isDir: boolean, size = 0): Stats {
     return {
-      size,
-      mode: isDirectory ? 16877 : 33188, // Directory or file mode
-      isFile: () => !isDirectory,
-      isDirectory: () => isDirectory,
+      atime: new Date(),
+      birthtime: new Date(),
+      ctime: new Date(),
       isBlockDevice: () => false,
       isCharacterDevice: () => false,
-      isSymbolicLink: () => false,
+      isDirectory: () => isDir,
       isFIFO: () => false,
+      // Directory or file mode
+      isFile: () => !isDir,
       isSocket: () => false,
+      isSymbolicLink: () => false,
+      mode: isDir ? 16877 : 33188,
       mtime: new Date(),
-      atime: new Date(),
-      ctime: new Date(),
-      birthtime: new Date(),
+      size,
     } as Stats;
   }
 
-  async stat(path: string, isLstat: boolean | ((error: ApiError | null, stats?: Stats) => void), callback?: (error: ApiError | null, stats?: Stats) => void): Promise<void> {
+  public async stat(statPath: string, isLstat: boolean | ((error: ApiError | null, stats?: Stats) => void), callback?: (error: ApiError | null, stats?: Stats) => void): Promise<void> {
     // BrowserFS calls stat(path, isLstat, callback) with 3 args
-    const cb = typeof isLstat === 'function' ? isLstat : callback!;
+    const cb = typeof isLstat === 'function' ? isLstat : callback;
+    if (!cb) return;
     try {
-      const { database, collection, document } = this.parsePath(path);
+      const { collection, database, document: documentName } = this.parsePath(statPath);
 
       if (!database) {
-        cb(null, this.createStats(true, 0));
+        cb(null, this.createStats(true, 0)); // eslint-disable-line unicorn/no-null
         return;
       }
 
-      if (database && collection && document) {
+      if (database && collection && documentName) {
         const cachedEntries = this.getCachedCollectionEntries(database, collection);
 
-        if (cachedEntries?.has(document)) {
-          cb(null, this.createStats(false, UNKNOWN_DOCUMENT_SIZE));
+        if (cachedEntries?.has(documentName)) {
+          cb(null, this.createStats(false, UNKNOWN_DOCUMENT_SIZE)); // eslint-disable-line unicorn/no-null
           return;
         }
       }
 
-      const entry = await this.getEntry(path);
+      const entry = await this.getEntry(statPath);
 
       if (!entry) {
-        const error = new Error("ENOENT: no such file or directory") as ApiError;
-        error.code = "ENOENT";
-        cb(error);
+        const statError = new Error("ENOENT: no such file or directory") as ApiError;
+        statError.code = "ENOENT";
+        cb(statError);
         return;
       }
 
-      const isDirectory = entry.type === "database" || entry.type === "collection";
-      const size = entry.type === "document" && entry.data
-        ? Buffer.byteLength(JSON.stringify(entry.data, null, 2))
+      const isDir = entry.type === "database" || entry.type === "collection";
+      const entrySize = entry.type === "document" && entry.data
+        ? Buffer.byteLength(JSON.stringify(entry.data, null, 2)) // eslint-disable-line unicorn/no-null
         : UNKNOWN_DOCUMENT_SIZE;
 
-      cb(null, this.createStats(isDirectory, size));
-    } catch (error) {
-      const apiError = new Error(String(error)) as ApiError;
+      cb(null, this.createStats(isDir, entrySize)); // eslint-disable-line unicorn/no-null
+    } catch (caughtError) {
+      const apiError = new Error(String(caughtError)) as ApiError;
       apiError.code = "EIO";
       cb(apiError);
     }
   }
 
-  async readdir(path: string, callback: (error: ApiError | null, files?: string[]) => void): Promise<void> {
+  public async readdir(readdirPath: string, callback: (error: ApiError | null, files?: string[]) => void): Promise<void> {
     try {
-      const { database, collection } = this.parsePath(path);
+      const { collection, database } = this.parsePath(readdirPath);
 
       if (!database) {
         // Root path - list databases
         const databases = await this.getDatabases();
         if (typeof callback === 'function') {
-          callback(null, databases);
+          callback(null, databases); // eslint-disable-line unicorn/no-null
         }
         return;
       }
@@ -761,7 +821,7 @@ export class MongoDBFileSystem implements FileSystem {
         // Database path - list collections
         const collections = await this.getCollections(database);
         if (typeof callback === 'function') {
-          callback(null, collections);
+          callback(null, collections); // eslint-disable-line unicorn/no-null
         }
         return;
       }
@@ -771,14 +831,12 @@ export class MongoDBFileSystem implements FileSystem {
       const entries = documents.map((doc) => this.getDocumentIdentifier(doc));
       this.setCachedCollectionEntries(database, collection, entries);
 
-      const filenames = documents.map((doc) => {
-        return `${this.getDocumentIdentifier(doc)}.json`;
-      });
+      const filenames = documents.map((doc) => `${this.getDocumentIdentifier(doc)}.json`);
       if (typeof callback === 'function') {
-        callback(null, filenames);
+        callback(null, filenames); // eslint-disable-line unicorn/no-null
       }
-    } catch (error) {
-      const apiError = new Error(String(error)) as ApiError;
+    } catch (caughtError) {
+      const apiError = new Error(String(caughtError)) as ApiError;
       apiError.code = "EIO";
       if (typeof callback === 'function') {
         callback(apiError);
@@ -791,17 +849,17 @@ export class MongoDBFileSystem implements FileSystem {
    * BrowserFS readdir stays unchanged for non-paged callers.
    */
   public async readdirPaged(
-    path: string,
+    pagedPath: string,
     cursor?: { afterId: string; afterName: string },
     limit = 500
   ): Promise<{ entries: string[]; hasMore: boolean; nextCursor?: { afterId: string; afterName: string } }> {
-    const { database, collection } = this.parsePath(path);
+    const { collection, database } = this.parsePath(pagedPath);
 
     if (!database || !collection) {
       // Non-collection paths: delegate to regular readdir
       return new Promise((resolve, reject) => {
-        this.readdir(path, (error, files) => {
-          if (error) { reject(error); return; }
+        this.readdir(pagedPath, (readdirError, files) => {
+          if (readdirError) { reject(readdirError); return; }
           resolve({ entries: files ?? [], hasMore: false });
         });
       });
@@ -828,55 +886,55 @@ export class MongoDBFileSystem implements FileSystem {
       nextCursor?: { afterId: string; afterName: string };
     };
 
-    const entries = result.documents.map((doc) => `${this.getDocumentIdentifier(doc)}.json`);
+    const pagedEntries = result.documents.map((doc) => `${this.getDocumentIdentifier(doc)}.json`);
 
     return {
-      entries,
+      entries: pagedEntries,
       hasMore: result.hasMore,
-      nextCursor: result.nextCursor ?? undefined,
+      nextCursor: result.nextCursor,
     };
   }
 
-  async readFile(
-    path: string,
+  public async readFile(
+    readPath: string,
     encoding: string | null,
-    flag: string,
+    _flag: string,
     callback: (error: ApiError | null, data?: Buffer | string) => void
   ): Promise<void> {
     try {
-      const { database, collection, document } = this.parsePath(path);
+      const { collection, database, document: documentName } = this.parsePath(readPath);
 
-      if (!database || !collection || !document) {
-        const error = new Error("ENOENT: no such file or directory") as ApiError;
-        error.code = "ENOENT";
+      if (!database || !collection || !documentName) {
+        const readError = new Error("ENOENT: no such file or directory") as ApiError;
+        readError.code = "ENOENT";
         if (typeof callback === 'function') {
-          callback(error);
+          callback(readError);
         }
         return;
       }
 
-      const doc = await this.getDocument(database, collection, document);
+      const doc = await this.getDocument(database, collection, documentName);
 
       if (!doc) {
-        const error = new Error("ENOENT: no such file or directory") as ApiError;
-        error.code = "ENOENT";
+        const readError = new Error("ENOENT: no such file or directory") as ApiError;
+        readError.code = "ENOENT";
         if (typeof callback === 'function') {
-          callback(error);
+          callback(readError);
         }
         return;
       }
 
-      const jsonContent = JSON.stringify(doc, null, 2);
+      const jsonContent = JSON.stringify(doc, null, 2); // eslint-disable-line unicorn/no-null
       const buffer = Buffer.from(jsonContent);
 
       if (typeof callback === 'function') {
         callback(
-          null,
+          null, // eslint-disable-line unicorn/no-null
           encoding ? buffer.toString(encoding as BufferEncoding) : buffer
         );
       }
-    } catch (error) {
-      const apiError = new Error(String(error)) as ApiError;
+    } catch (caughtError) {
+      const apiError = new Error(String(caughtError)) as ApiError;
       apiError.code = "EIO";
       if (typeof callback === 'function') {
         callback(apiError);
@@ -884,41 +942,41 @@ export class MongoDBFileSystem implements FileSystem {
     }
   }
 
-  async writeFile(
-    path: string,
+  public async writeFile(
+    writePath: string,
     data: Buffer | string,
-    encoding: string | null,
-    flag: string,
-    mode: number,
+    _encoding: string | null,
+    _flag: string,
+    _mode: number,
     callback: (error: ApiError | null) => void
   ): Promise<void> {
     try {
-      const { database, collection, document } = this.parsePath(path);
+      const { collection, database, document: documentName } = this.parsePath(writePath);
 
-      if (!database || !collection || !document) {
-        const error = new Error("EINVAL: invalid argument") as ApiError;
-        error.code = "EINVAL";
-        callback(error);
+      if (!database || !collection || !documentName) {
+        const writeError = new Error("EINVAL: invalid argument") as ApiError;
+        writeError.code = "EINVAL";
+        callback(writeError);
         return;
       }
 
-      await this.connect();
+      this.connect();
       if (!this.client) throw new Error("No MongoDB connection");
 
       const db = this.client.db(database);
       const col = db.collection(collection);
 
       const content = typeof data === "string" ? data : data.toString();
-      const jsonData = JSON.parse(content);
+      const jsonData = JSON.parse(content) as Record<string, unknown>;
 
       // Use the document name as identifier, or _id if provided
-      const filter = jsonData._id ? { _id: jsonData._id } : { name: document };
+      const filter = jsonData._id ? { _id: jsonData._id } : { name: documentName };
 
-      await col.replaceOne(filter, jsonData, { upsert: true });
+      await col.replaceOne(filter as Record<string, unknown>, jsonData, { upsert: true });
       this.invalidateCollectionCache(database, collection);
-      callback(null);
-    } catch (error) {
-      const apiError = new Error(String(error)) as ApiError;
+      callback(null); // eslint-disable-line unicorn/no-null
+    } catch (caughtError) {
+      const apiError = new Error(String(caughtError)) as ApiError;
       apiError.code = "EIO";
       callback(apiError);
     }
@@ -926,49 +984,49 @@ export class MongoDBFileSystem implements FileSystem {
 
   private static readonly INVALID_MONGO_NAME_CHARS = /[\s/\\."$*<>:|?]/;
 
-  private validateMongoName(name: string): string | null {
-    if (MongoDBFileSystem.INVALID_MONGO_NAME_CHARS.test(name)) {
-      return "Name cannot contain spaces or special characters: /\\. \"$*<>:|?";
+  private validateMongoName(validateName: string): string | null {
+    if (MongoDBFileSystem.INVALID_MONGO_NAME_CHARS.test(validateName)) {
+      return String.raw`Name cannot contain spaces or special characters: /\. "$*<>:|?`;
     }
-    if (name.length === 0 || name.length > 64) {
+    if (validateName.length === 0 || validateName.length > 64) {
       return "Name must be between 1 and 64 characters";
     }
-    return null;
+    return null; // eslint-disable-line unicorn/no-null
   }
 
-  async mkdir(path: string, mode: number, callback: (error: ApiError | null) => void): Promise<void> {
+  public async mkdir(mkdirPath: string, _mode: number, callback: (error: ApiError | null) => void): Promise<void> {
     try {
-      const { database, collection, document } = this.parsePath(path);
+      const { collection, database, document: documentName } = this.parsePath(mkdirPath);
 
       if (!database) {
-        const error = new Error("EINVAL: invalid argument") as ApiError;
-        error.code = "EINVAL";
-        callback(error);
+        const mkdirError = new Error("EINVAL: invalid argument") as ApiError;
+        mkdirError.code = "EINVAL";
+        callback(mkdirError);
         return;
       }
 
       // Cannot create folders inside a collection (depth 3+)
-      if (document) {
-        const error = new Error("Cannot create a folder inside a collection") as ApiError;
-        error.code = "EINVAL";
-        callback(error);
+      if (documentName) {
+        const mkdirError = new Error("Cannot create a folder inside a collection") as ApiError;
+        mkdirError.code = "EINVAL";
+        callback(mkdirError);
         return;
       }
 
       const dbError = this.validateMongoName(database);
       if (dbError) {
-        const error = new Error(dbError) as ApiError;
-        error.code = "EINVAL";
-        callback(error);
+        const mkdirError = new Error(dbError) as ApiError;
+        mkdirError.code = "EINVAL";
+        callback(mkdirError);
         return;
       }
 
       if (collection) {
         const collError = this.validateMongoName(collection);
         if (collError) {
-          const error = new Error(collError) as ApiError;
-          error.code = "EINVAL";
-          callback(error);
+          const mkdirError = new Error(collError) as ApiError;
+          mkdirError.code = "EINVAL";
+          callback(mkdirError);
           return;
         }
       }
@@ -985,47 +1043,47 @@ export class MongoDBFileSystem implements FileSystem {
       });
 
       if (!response.ok) {
-        const result = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(result.error || `HTTP ${response.status}`);
+        const fetchResult = await response.json().catch(() => ({ error: 'Unknown error' })) as { error?: string };
+        throw new Error(fetchResult.error ?? `HTTP ${response.status}`);
       }
 
       this.invalidateCollectionCache(database, collection);
-      callback(null);
-    } catch (error) {
-      const apiError = new Error(String(error)) as ApiError;
+      callback(null); // eslint-disable-line unicorn/no-null
+    } catch (caughtError) {
+      const apiError = new Error(String(caughtError)) as ApiError;
       apiError.code = "EIO";
       callback(apiError);
     }
   }
 
-  async unlink(path: string, callback: (error: ApiError | null) => void): Promise<void> {
+  public async unlink(unlinkPath: string, callback: (error: ApiError | null) => void): Promise<void> {
     try {
-      const { database, collection, document } = this.parsePath(path);
+      const { collection, database, document: documentName } = this.parsePath(unlinkPath);
 
       if (!database) {
-        const error = new Error("EINVAL: invalid argument") as ApiError;
-        error.code = "EINVAL";
-        callback(error);
+        const unlinkError = new Error("EINVAL: invalid argument") as ApiError;
+        unlinkError.code = "EINVAL";
+        callback(unlinkError);
         return;
       }
 
-      if (!document) {
-        const error = new Error("EISDIR: is a directory") as ApiError;
-        error.code = "EISDIR";
-        callback(error);
+      if (!documentName) {
+        const unlinkError = new Error("EISDIR: is a directory") as ApiError;
+        unlinkError.code = "EISDIR";
+        callback(unlinkError);
         return;
       }
 
-      await this.connect();
+      this.connect();
       if (!this.client) throw new Error("No MongoDB connection");
 
       const db = this.client.db(database);
       const col = db.collection(collection);
 
       // _id-first: matches getDocumentIdentifier priority
-      const result = await col.deleteOne({ _id: document });
-      if (result.deletedCount === 0) {
-        const fallback = await col.deleteOne({ name: document });
+      const deleteResult = await col.deleteOne({ _id: documentName });
+      if (deleteResult.deletedCount === 0) {
+        const fallback = await col.deleteOne({ name: documentName });
         if (fallback.deletedCount === 0) {
           const enoent = new Error("ENOENT: no such file or directory") as ApiError;
           enoent.code = "ENOENT";
@@ -1035,20 +1093,19 @@ export class MongoDBFileSystem implements FileSystem {
       }
 
       this.invalidateCollectionCache(database, collection);
-      callback(null);
-    } catch (error) {
-      const apiError = new Error(String(error)) as ApiError;
+      callback(null); // eslint-disable-line unicorn/no-null
+    } catch (caughtError) {
+      const apiError = new Error(String(caughtError)) as ApiError;
       apiError.code = "EIO";
       callback(apiError);
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async rmdir(path: string, callback: (error: ApiError | null) => void): Promise<void> {
+  public async rmdir(rmdirPath: string, callback: (error: ApiError | null) => void): Promise<void> {
     try {
-      const { database, collection } = this.parsePath(path);
+      const { collection, database } = this.parsePath(rmdirPath);
 
-      await this.connect();
+      this.connect();
       if (!this.client) throw new Error("No MongoDB connection");
 
       if (collection) {
@@ -1062,195 +1119,201 @@ export class MongoDBFileSystem implements FileSystem {
         this.invalidateCollectionCache(database);
       }
 
-      callback(null);
-    } catch (error) {
-      const apiError = new Error(String(error)) as ApiError;
+      callback(null); // eslint-disable-line unicorn/no-null
+    } catch (caughtError) {
+      const apiError = new Error(String(caughtError)) as ApiError;
       apiError.code = "EIO";
       callback(apiError);
     }
   }
 
   // Synchronous methods that throw errors (not supported)
-  statSync(): never {
+  public statSync(): never {
     throw new Error("MongoDBFS does not support synchronous operations");
   }
 
-  readdirSync(): never {
+  public readdirSync(): never {
     throw new Error("MongoDBFS does not support synchronous operations");
   }
 
-  readFileSync(): never {
+  public readFileSync(): never {
     throw new Error("MongoDBFS does not support synchronous operations");
   }
 
-  writeFileSync(): never {
+  public writeFileSync(): never {
     throw new Error("MongoDBFS does not support synchronous operations");
   }
 
-  mkdirSync(): never {
+  public mkdirSync(): never {
     throw new Error("MongoDBFS does not support synchronous operations");
   }
 
-  unlinkSync(): never {
+  public unlinkSync(): never {
     throw new Error("MongoDBFS does not support synchronous operations");
   }
 
-  rmdirSync(): never {
+  public rmdirSync(): never {
     throw new Error("MongoDBFS does not support synchronous operations");
   }
 
   // Other required methods with basic implementations
-  async truncate(
-    path: string,
-    len: number,
+  public truncate(
+    _path: string,
+    _len: number,
     callback: (error: ApiError | null) => void
-  ): Promise<void> {
-    const error = new Error("ENOSYS: function not implemented") as ApiError;
-    error.code = "ENOSYS";
-    callback(error);
+  ): void {
+    const truncateError = new Error("ENOSYS: function not implemented") as ApiError;
+    truncateError.code = "ENOSYS";
+    callback(truncateError);
   }
 
-  async open(
-    path: string,
-    flag: string,
-    mode: number,
+  public open(
+    _path: string,
+    _flag: string,
+    _mode: number,
     callback: (error: ApiError | null, fd?: number) => void
-  ): Promise<void> {
+  ): void {
     // Simple implementation - we don't really use file descriptors
-    callback(null, Math.floor(Math.random() * 1000));
+    callback(null, Math.floor(Math.random() * 1000)); // eslint-disable-line unicorn/no-null
   }
 
-  async close(fd: number, callback: (error: ApiError | null) => void): Promise<void> {
-    callback(null);
+  public close(
+    _fd: number,
+    callback: (error: ApiError | null) => void
+  ): void {
+    callback(null); // eslint-disable-line unicorn/no-null
   }
 
-  async read(
-    fd: number,
-    buffer: Buffer,
-    offset: number,
-    length: number,
-    position: number | null,
+  public read(
+    _fd: number,
+    _buffer: Buffer,
+    _offset: number,
+    _length: number,
+    _position: number | null,
     callback: (error: ApiError | null, bytesRead?: number, buffer?: Buffer) => void
-  ): Promise<void> {
-    const error = new Error("ENOSYS: function not implemented") as ApiError;
-    error.code = "ENOSYS";
-    callback(error);
+  ): void {
+    const readError = new Error("ENOSYS: function not implemented") as ApiError;
+    readError.code = "ENOSYS";
+    callback(readError);
   }
 
-  async write(
-    fd: number,
-    buffer: Buffer,
-    offset: number,
-    length: number,
-    position: number | null,
+  public write(
+    _fd: number,
+    _buffer: Buffer,
+    _offset: number,
+    _length: number,
+    _position: number | null,
     callback: (error: ApiError | null, bytesWritten?: number, buffer?: Buffer) => void
-  ): Promise<void> {
-    const error = new Error("ENOSYS: function not implemented") as ApiError;
-    error.code = "ENOSYS";
-    callback(error);
+  ): void {
+    const writeError = new Error("ENOSYS: function not implemented") as ApiError;
+    writeError.code = "ENOSYS";
+    callback(writeError);
   }
 
-  async sync(fd: number, callback: (error: ApiError | null) => void): Promise<void> {
-    callback(null);
-  }
-
-  async chown(
-    path: string,
-    uid: number,
-    gid: number,
+  public sync(
+    _fd: number,
     callback: (error: ApiError | null) => void
-  ): Promise<void> {
-    callback(null);
+  ): void {
+    callback(null); // eslint-disable-line unicorn/no-null
   }
 
-  async chmod(
-    path: string,
-    mode: number,
+  public chown(
+    _path: string,
+    _uid: number,
+    _gid: number,
     callback: (error: ApiError | null) => void
-  ): Promise<void> {
-    callback(null);
+  ): void {
+    callback(null); // eslint-disable-line unicorn/no-null
   }
 
-  async utimes(
-    path: string,
-    atime: Date,
-    mtime: Date,
+  public chmod(
+    _path: string,
+    _mode: number,
     callback: (error: ApiError | null) => void
-  ): Promise<void> {
-    callback(null);
+  ): void {
+    callback(null); // eslint-disable-line unicorn/no-null
   }
 
-  async rename(
-    oldPath: string,
-    newPath: string,
+  public utimes(
+    _path: string,
+    _atime: Date,
+    _mtime: Date,
     callback: (error: ApiError | null) => void
-  ): Promise<void> {
-    const error = new Error("ENOSYS: function not implemented") as ApiError;
-    error.code = "ENOSYS";
-    callback(error);
+  ): void {
+    callback(null); // eslint-disable-line unicorn/no-null
   }
 
-  async link(
-    srcpath: string,
-    dstpath: string,
+  public rename(
+    _oldPath: string,
+    _newPath: string,
     callback: (error: ApiError | null) => void
-  ): Promise<void> {
-    const error = new Error("ENOSYS: function not implemented") as ApiError;
-    error.code = "ENOSYS";
-    callback(error);
+  ): void {
+    const renameError = new Error("ENOSYS: function not implemented") as ApiError;
+    renameError.code = "ENOSYS";
+    callback(renameError);
   }
 
-  async symlink(
-    srcpath: string,
-    dstpath: string,
-    type: string,
+  public link(
+    _srcpath: string,
+    _dstpath: string,
     callback: (error: ApiError | null) => void
-  ): Promise<void> {
-    const error = new Error("ENOSYS: function not implemented") as ApiError;
-    error.code = "ENOSYS";
-    callback(error);
+  ): void {
+    const linkError = new Error("ENOSYS: function not implemented") as ApiError;
+    linkError.code = "ENOSYS";
+    callback(linkError);
   }
 
-  async readlink(
-    path: string,
+  public symlink(
+    _srcpath: string,
+    _dstpath: string,
+    _type: string,
+    callback: (error: ApiError | null) => void
+  ): void {
+    const symlinkError = new Error("ENOSYS: function not implemented") as ApiError;
+    symlinkError.code = "ENOSYS";
+    callback(symlinkError);
+  }
+
+  public readlink(
+    _path: string,
     callback: (error: ApiError | null, linkString?: string) => void
-  ): Promise<void> {
-    const error = new Error("ENOSYS: function not implemented") as ApiError;
-    error.code = "ENOSYS";
-    callback(error);
+  ): void {
+    const readlinkError = new Error("ENOSYS: function not implemented") as ApiError;
+    readlinkError.code = "ENOSYS";
+    callback(readlinkError);
   }
 
-  async realpath(
-    path: string,
-    cache: { [path: string]: string },
+  public realpath(
+    realpathPath: string,
+    _cache: Record<string, string>,
     callback: (error: ApiError | null, resolvedPath?: string) => void
-  ): Promise<void> {
-    callback(null, path);
+  ): void {
+    callback(null, realpathPath); // eslint-disable-line unicorn/no-null
   }
 
-  async lstat(
-    path: string,
+  public lstat(
+    lstatPath: string,
     isLstat: boolean | ((error: ApiError | null, stats?: Stats) => void),
     callback?: (error: ApiError | null, stats?: Stats) => void
-  ): Promise<void> {
+  ): void {
     // For MongoDB FS, lstat is the same as stat (no symbolic links)
-    return this.stat(path, isLstat, callback);
+    this.stat(lstatPath, isLstat, callback).catch(() => { /* noop: stat handles errors via callback */ });
   }
 
-  async exists(path: string, callback: (exists: boolean) => void): Promise<void> {
+  public async exists(existsPath: string, callback: (exists: boolean) => void): Promise<void> {
     try {
-      const { database, collection, document } = this.parsePath(path);
+      const { collection, database, document: documentName } = this.parsePath(existsPath);
 
-      if (database && collection && document) {
+      if (database && collection && documentName) {
         const cachedEntries = this.getCachedCollectionEntries(database, collection);
 
-        if (cachedEntries?.has(document)) {
+        if (cachedEntries?.has(documentName)) {
           callback(true);
           return;
         }
       }
 
-      const entry = await this.getEntry(path);
+      const entry = await this.getEntry(existsPath);
       callback(!!entry);
     } catch {
       callback(false);
@@ -1258,67 +1321,67 @@ export class MongoDBFileSystem implements FileSystem {
   }
 
   // Sync versions that throw errors
-  truncateSync(): never {
+  public truncateSync(): never {
     throw new Error("MongoDBFS does not support synchronous operations");
   }
 
-  openSync(): never {
+  public openSync(): never {
     throw new Error("MongoDBFS does not support synchronous operations");
   }
 
-  closeSync(): never {
+  public closeSync(): never {
     throw new Error("MongoDBFS does not support synchronous operations");
   }
 
-  readSync(): never {
+  public readSync(): never {
     throw new Error("MongoDBFS does not support synchronous operations");
   }
 
-  writeSync(): never {
+  public writeSync(): never {
     throw new Error("MongoDBFS does not support synchronous operations");
   }
 
-  syncSync(): never {
+  public syncSync(): never {
     throw new Error("MongoDBFS does not support synchronous operations");
   }
 
-  chownSync(): never {
+  public chownSync(): never {
     throw new Error("MongoDBFS does not support synchronous operations");
   }
 
-  chmodSync(): never {
+  public chmodSync(): never {
     throw new Error("MongoDBFS does not support synchronous operations");
   }
 
-  utimesSync(): never {
+  public utimesSync(): never {
     throw new Error("MongoDBFS does not support synchronous operations");
   }
 
-  renameSync(): never {
+  public renameSync(): never {
     throw new Error("MongoDBFS does not support synchronous operations");
   }
 
-  linkSync(): never {
+  public linkSync(): never {
     throw new Error("MongoDBFS does not support synchronous operations");
   }
 
-  symlinkSync(): never {
+  public symlinkSync(): never {
     throw new Error("MongoDBFS does not support synchronous operations");
   }
 
-  readlinkSync(): never {
+  public readlinkSync(): never {
     throw new Error("MongoDBFS does not support synchronous operations");
   }
 
-  realpathSync(): never {
+  public realpathSync(): never {
     throw new Error("MongoDBFS does not support synchronous operations");
   }
 
-  lstatSync(): never {
+  public lstatSync(): never {
     throw new Error("MongoDBFS does not support synchronous operations");
   }
 
-  existsSync(): never {
+  public existsSync(): never {
     throw new Error("MongoDBFS does not support synchronous operations");
   }
 }
@@ -1326,12 +1389,12 @@ export class MongoDBFileSystem implements FileSystem {
 // Factory function for BrowserFS integration
 export function Create(
   options: { connectionString?: string },
-  callback: (error: any, fs?: MongoDBFileSystem) => void
+  callback: (error: Error | undefined, fs?: MongoDBFileSystem) => void
 ): void {
   try {
     const mongoFS = new MongoDBFileSystem(options.connectionString);
-    callback(null, mongoFS);
+    callback(undefined, mongoFS);
   } catch (error) {
-    callback(error);
+    callback(error instanceof Error ? error : new Error(String(error)));
   }
 }
