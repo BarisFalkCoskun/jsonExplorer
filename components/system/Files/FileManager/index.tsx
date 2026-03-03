@@ -583,11 +583,18 @@ const FileManager: FC<FileManagerProps> = ({
     setFiles((currentFiles) => {
       if (!currentFiles) return currentFiles;
 
-      // Sync unfiltered snapshot with new entries from readdir (same collection only)
+      // Sync unfiltered snapshot with current state (same collection only)
       if (allFilesRef.current?.key === url) {
+        // Add new entries loaded since snapshot was taken
         for (const [name, stat] of Object.entries(currentFiles)) {
           if (!(name in allFilesRef.current.files)) {
             allFilesRef.current.files[name] = stat;
+          }
+        }
+        // Remove entries deleted while filter was active
+        for (const name of Object.keys(allFilesRef.current.files)) {
+          if (!(name in currentFiles)) {
+            delete allFilesRef.current.files[name];
           }
         }
       }
