@@ -342,16 +342,13 @@ export class MongoDBFileSystem implements FileSystem {
 
   private async getDocuments(
     dbName: string,
-    collectionName: string,
-    metaOnly = false
+    collectionName: string
   ): Promise<MongoDocument[]> {
-    if (metaOnly) {
-      const cached = this.getCachedDocumentsList(dbName, collectionName);
+    const cached = this.getCachedDocumentsList(dbName, collectionName);
 
-      if (cached) return cached;
-    }
+    if (cached) return cached;
 
-    const url = `/api/mongodb/documents/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}${metaOnly ? "?meta=1" : ""}`;
+    const url = `/api/mongodb/documents/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}?meta=1`;
 
     const response = await fetch(url, {
       headers: {
@@ -365,9 +362,7 @@ export class MongoDBFileSystem implements FileSystem {
 
     const documents = (await response.json()) as MongoDocument[];
 
-    if (metaOnly) {
-      this.setCachedDocumentsList(dbName, collectionName, documents);
-    }
+    this.setCachedDocumentsList(dbName, collectionName, documents);
 
     return documents;
   }
@@ -772,7 +767,7 @@ export class MongoDBFileSystem implements FileSystem {
       }
 
       // Collection path - list documents as JSON files
-      const documents = await this.getDocuments(database, collection, true);
+      const documents = await this.getDocuments(database, collection);
       const entries = documents.map((doc) => this.getDocumentIdentifier(doc));
       this.setCachedCollectionEntries(database, collection, entries);
 
