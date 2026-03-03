@@ -39,13 +39,13 @@ describe("MongoDBFileSystem cache scoping", () => {
         { _id: "3", name: "order1", category: "processed" },
     ]));
 
-    // Should return only categorized docs from db1/products
+    // Should return only categorized docs from db1/products (identified by _id)
     const result = fs.getCachedDocumentNames("db1", "products");
-    expect(result).toEqual(new Set(["apple"]));
+    expect(result).toEqual(new Set(["1"]));
 
-    // Should return only categorized docs from db1/orders
+    // Should return only categorized docs from db1/orders (identified by _id)
     const result2 = fs.getCachedDocumentNames("db1", "orders");
-    expect(result2).toEqual(new Set(["order1"]));
+    expect(result2).toEqual(new Set(["3"]));
   });
 
   it("getCachedDismissedNames scoped to a specific collection", () => {
@@ -58,7 +58,7 @@ describe("MongoDBFileSystem cache scoping", () => {
     ]));
 
     const result = fs.getCachedDismissedNames("db1", "products");
-    expect(result).toEqual(new Set(["apple"]));
+    expect(result).toEqual(new Set(["1"]));
   });
 
   it("isCachedDismissed scoped to a specific collection", () => {
@@ -73,8 +73,8 @@ describe("MongoDBFileSystem cache scoping", () => {
       { _id: "2", name: "docA" },
     ]));
 
-    expect(fs.isCachedDismissed("docA", "db1", "col1")).toBe(true);
-    expect(fs.isCachedDismissed("docA", "db1", "col2")).toBe(false);
+    expect(fs.isCachedDismissed("1", "db1", "col1")).toBe(true);
+    expect(fs.isCachedDismissed("2", "db1", "col2")).toBe(false);
   });
 
   it("getCachedDocumentCategory scoped to a specific collection", () => {
@@ -86,8 +86,8 @@ describe("MongoDBFileSystem cache scoping", () => {
         { _id: "2", name: "banana" },
     ]));
 
-    expect(fs.getCachedDocumentCategory("apple", "db1", "products")).toBe("fruit");
-    expect(fs.getCachedDocumentCategory("banana", "db1", "products")).toBeNull();
+    expect(fs.getCachedDocumentCategory("1", "db1", "products")).toBe("fruit");
+    expect(fs.getCachedDocumentCategory("2", "db1", "products")).toBeNull();
   });
 
   it("returns null when no cache exists for the requested collection", () => {
@@ -108,7 +108,8 @@ describe("MongoDBFileSystem document identity", () => {
 
     const categorized = fs.getCachedDocumentNames("db1", "products");
     expect(categorized).toBeDefined();
-    expect(categorized!.has("weird%2Fname")).toBe(true);
+    // _id-first: identifier is now "1" (the _id), not the encoded name
+    expect(categorized!.has("1")).toBe(true);
   });
 
   it("does not collide a/b with a_b", () => {
@@ -123,8 +124,9 @@ describe("MongoDBFileSystem document identity", () => {
     const categorized = fs.getCachedDocumentNames("db1", "products");
     expect(categorized).toBeDefined();
     expect(categorized!.size).toBe(2);
-    expect(categorized!.has("a%2Fb")).toBe(true);
-    expect(categorized!.has("a_b")).toBe(true);
+    // _id-first: identifiers are now the _id values
+    expect(categorized!.has("1")).toBe(true);
+    expect(categorized!.has("2")).toBe(true);
   });
 
   it("is reversible via decodeURIComponent", () => {
@@ -137,8 +139,10 @@ describe("MongoDBFileSystem document identity", () => {
 
     const categorized = fs.getCachedDocumentNames("db1", "products");
     expect(categorized).toBeDefined();
+    // _id-first: identifier is now "1" (the _id)
     const encoded = [...categorized!][0];
-    expect(decodeURIComponent(encoded)).toBe("weird/name");
+    expect(encoded).toBe("1");
+    expect(decodeURIComponent(encoded)).toBe("1");
   });
 
   it("decode helper handles invalid sequences gracefully", () => {

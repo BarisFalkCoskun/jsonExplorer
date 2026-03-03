@@ -123,7 +123,7 @@ export class MongoDBFileSystem implements FileSystem {
           }),
           findOne: async (filter: any) => {
             if (!dbName) return null;
-            const documentId = filter.name || filter._id;
+            const documentId = filter._id || filter.name;
             const response = await fetch(`/api/mongodb/document/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}/${encodeURIComponent(documentId)}`, {
               headers: {
                 'x-mongodb-connection': this.connectionString,
@@ -156,7 +156,7 @@ export class MongoDBFileSystem implements FileSystem {
           },
           deleteOne: async (filter: any) => {
             if (!dbName) throw new Error("No database name");
-            const documentId = String(filter.name || filter._id || "");
+            const documentId = String(filter._id || filter.name || "");
             const response = await fetch(`/api/mongodb/document/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}/${encodeURIComponent(documentId)}`, {
               method: 'DELETE',
               headers: {
@@ -205,7 +205,7 @@ export class MongoDBFileSystem implements FileSystem {
   }
 
   private async replaceDocument(dbName: string, collectionName: string, doc: any) {
-    const documentId = doc.name || doc._id || new Date().getTime().toString();
+    const documentId = doc._id || doc.name || new Date().getTime().toString();
     const response = await fetch(`/api/mongodb/document/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}/${encodeURIComponent(documentId)}`, {
       method: 'PUT',
       headers: {
@@ -614,8 +614,8 @@ export class MongoDBFileSystem implements FileSystem {
   }
 
   private getDocumentIdentifier(document: MongoDocument): string {
-    const raw = String(document.name || document._id || "");
-    if (!raw) return String(document._id || "unnamed");
+    const raw = String(document._id || document.name || "");
+    if (!raw) return "unnamed";
     return encodeURIComponent(raw);
   }
 
@@ -634,15 +634,16 @@ export class MongoDBFileSystem implements FileSystem {
     const db = this.client.db(dbName);
     const collection = db.collection(collectionName);
 
-    const byName = (await collection.findOne({
-      name: documentId,
+    // _id-first: matches getDocumentIdentifier priority
+    const byId = (await collection.findOne({
+      _id: documentId,
     })) as MongoDocument | null;
 
-    if (byName) {
-      return byName;
+    if (byId) {
+      return byId;
     }
 
-    return (await collection.findOne({ _id: documentId })) as MongoDocument | null;
+    return (await collection.findOne({ name: documentId })) as MongoDocument | null;
   }
 
   private async getEntry(path: string): Promise<MongoFSEntry | null> {
@@ -975,10 +976,10 @@ export class MongoDBFileSystem implements FileSystem {
       const db = this.client.db(database);
       const col = db.collection(collection);
 
-      // Try to delete by name first, then by _id
-      const result = await col.deleteOne({ name: document });
+      // _id-first: matches getDocumentIdentifier priority
+      const result = await col.deleteOne({ _id: document });
       if (result.deletedCount === 0) {
-        const fallback = await col.deleteOne({ _id: document });
+        const fallback = await col.deleteOne({ name: document });
         if (fallback.deletedCount === 0) {
           const enoent = new Error("ENOENT: no such file or directory") as ApiError;
           enoent.code = "ENOENT";

@@ -69,11 +69,13 @@ export const ALLOWED_METHODS: Record<string, string[]> = {
 };
 
 export const getDocumentFilters = (documentId: string): object[] => {
-  const filters: object[] = [{ name: documentId }, { _id: documentId }];
+  const filters: object[] = [{ _id: documentId }];
 
   if (ObjectId.isValid(documentId)) {
     filters.push({ _id: new ObjectId(documentId) });
   }
+
+  filters.push({ name: documentId });
 
   return filters;
 };
