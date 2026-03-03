@@ -25,7 +25,7 @@ describe("PUT replace-then-insert pattern", () => {
   });
 
   it("inserts without _id when rawId is not a string", () => {
-    const updateDoc = { name: "test" };
+    const updateDoc: Record<string, unknown> = { name: "test" };
     const { _id: rawId, ...docWithoutId } = updateDoc;
 
     const matchedCount = 0;
@@ -39,7 +39,7 @@ describe("PUT replace-then-insert pattern", () => {
   });
 
   it("skips insert when existing doc matched", () => {
-    const matchedCount = 1; // simulate match from replaceOne
+    const matchedCount: number = 1; // simulate match from replaceOne
     const shouldInsert = matchedCount === 0;
 
     expect(shouldInsert).toBe(false);

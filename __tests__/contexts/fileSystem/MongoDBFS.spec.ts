@@ -1,17 +1,20 @@
 import { MongoDBFileSystem } from "contexts/fileSystem/MongoDBFS";
 
-// We need to access private members for testing cache behavior.
-// Use type assertion to bypass TS access modifiers.
-type MongoDBFSTestable = MongoDBFileSystem & {
+// Access private members for testing via double cast (TS private is compile-time only)
+type MongoDBFSTestable = {
   documentsListCache: Map<string, { cachedAt: number; documentIndex: Map<string, any>; documents: any[] }>;
   getCollectionCacheKey(db: string, col: string): string;
   getDocumentIdentifier(doc: any): string;
   parsePath(path: string): { database?: string; collection?: string; document?: string };
   unlink(path: string, callback: (error: any) => void): Promise<void>;
+  getCachedDocumentNames(database: string, collection: string): Set<string> | null;
+  getCachedDismissedNames(database: string, collection: string): Set<string> | null;
+  isCachedDismissed(docName: string, database: string, collection: string): boolean;
+  getCachedDocumentCategory(docName: string, database: string, collection: string): string | null;
 };
 
 const createFS = (): MongoDBFSTestable =>
-  new MongoDBFileSystem("mongodb://localhost:27017") as MongoDBFSTestable;
+  new MongoDBFileSystem("mongodb://localhost:27017") as unknown as MongoDBFSTestable;
 
 /** Build a cache entry with both documents array and documentIndex Map. */
 function buildCacheEntry(fs: MongoDBFSTestable, documents: any[]) {
