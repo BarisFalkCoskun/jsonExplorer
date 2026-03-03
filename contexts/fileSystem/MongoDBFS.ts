@@ -110,13 +110,37 @@ export class MongoDBFileSystem implements FileSystem {
     return typeof rawId === "string" ? rawId : JSON.stringify(rawId);
   }
 
+  private static readonly FETCH_TIMEOUT_MS = 30_000;
+
+  private static async fetchWithTimeout(
+    url: string,
+    options: RequestInit = {}
+  ): Promise<Response> {
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      MongoDBFileSystem.FETCH_TIMEOUT_MS
+    );
+
+    try {
+      return await fetch(url, { ...options, signal: controller.signal });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        throw new Error(`Request timed out after ${MongoDBFileSystem.FETCH_TIMEOUT_MS}ms: ${url}`);
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
   private async makeDeleteOneRequest(
     dbName: string,
     collectionName: string,
     filter: Record<string, unknown>
   ): Promise<{ deletedCount: number }> {
     const documentId = MongoDBFileSystem.extractFilterId(filter);
-    const response = await fetch(`/api/mongodb/document/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}/${encodeURIComponent(documentId)}`, {
+    const response = await MongoDBFileSystem.fetchWithTimeout(`/api/mongodb/document/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}/${encodeURIComponent(documentId)}`, {
       headers: {
         'x-mongodb-connection': this.connectionString,
       },
@@ -135,7 +159,7 @@ export class MongoDBFileSystem implements FileSystem {
     filter: Record<string, unknown>
   ): Promise<MongoDocument | undefined> {
     const documentId = MongoDBFileSystem.extractFilterId(filter);
-    const response = await fetch(`/api/mongodb/document/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}/${encodeURIComponent(documentId)}`, {
+    const response = await MongoDBFileSystem.fetchWithTimeout(`/api/mongodb/document/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}/${encodeURIComponent(documentId)}`, {
       headers: {
         'x-mongodb-connection': this.connectionString,
       },
@@ -154,7 +178,7 @@ export class MongoDBFileSystem implements FileSystem {
       db: (dbName?: string): MongoDb => ({
         admin: () => ({
           listDatabases: async () => {
-            const response = await fetch('/api/mongodb/databases', {
+            const response = await MongoDBFileSystem.fetchWithTimeout('/api/mongodb/databases', {
               headers: {
                 'x-mongodb-connection': this.connectionString,
               },
@@ -173,7 +197,7 @@ export class MongoDBFileSystem implements FileSystem {
           },
           drop: async () => {
             if (!dbName) throw new Error("No database name");
-            const response = await fetch(
+            const response = await MongoDBFileSystem.fetchWithTimeout(
               `/api/mongodb/drop-collection/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}`,
               {
                 headers: { 'x-mongodb-connection': this.connectionString },
@@ -188,7 +212,7 @@ export class MongoDBFileSystem implements FileSystem {
           find: () => ({
             toArray: async () => {
               if (!dbName) return [];
-              const response = await fetch(`/api/mongodb/documents/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}`, {
+              const response = await MongoDBFileSystem.fetchWithTimeout(`/api/mongodb/documents/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}`, {
                 headers: {
                   'x-mongodb-connection': this.connectionString,
                 },
@@ -205,7 +229,7 @@ export class MongoDBFileSystem implements FileSystem {
           },
           getImages: async (documentId: string) => {
             if (!dbName) return [];
-            const response = await fetch(`/api/mongodb/images/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}/${encodeURIComponent(documentId)}`, {
+            const response = await MongoDBFileSystem.fetchWithTimeout(`/api/mongodb/images/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}/${encodeURIComponent(documentId)}`, {
               headers: {
                 'x-mongodb-connection': this.connectionString,
               },
@@ -224,7 +248,7 @@ export class MongoDBFileSystem implements FileSystem {
         }),
         dropDatabase: async () => {
           if (!dbName) throw new Error("No database name");
-          const response = await fetch(
+          const response = await MongoDBFileSystem.fetchWithTimeout(
             `/api/mongodb/drop-database/${encodeURIComponent(dbName)}`,
             {
               headers: { 'x-mongodb-connection': this.connectionString },
@@ -238,7 +262,7 @@ export class MongoDBFileSystem implements FileSystem {
         },
         listCollections: async () => {
           if (!dbName) return [];
-          const response = await fetch(`/api/mongodb/collections/${encodeURIComponent(dbName)}`, {
+          const response = await MongoDBFileSystem.fetchWithTimeout(`/api/mongodb/collections/${encodeURIComponent(dbName)}`, {
             headers: {
               'x-mongodb-connection': this.connectionString,
             },
@@ -256,7 +280,7 @@ export class MongoDBFileSystem implements FileSystem {
   private async replaceDocument(dbName: string, collectionName: string, doc: Record<string, unknown>): Promise<{ acknowledged: boolean }> {
     const rawDocId = doc._id ?? doc.name ?? Date.now().toString();
     const documentId = typeof rawDocId === "string" ? rawDocId : JSON.stringify(rawDocId);
-    const response = await fetch(`/api/mongodb/document/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}/${encodeURIComponent(documentId)}`, {
+    const response = await MongoDBFileSystem.fetchWithTimeout(`/api/mongodb/document/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}/${encodeURIComponent(documentId)}`, {
       body: JSON.stringify(doc),
       headers: {
         'Content-Type': 'application/json',
@@ -406,7 +430,7 @@ export class MongoDBFileSystem implements FileSystem {
 
     const url = `/api/mongodb/documents/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}?meta=1`;
 
-    const response = await fetch(url, {
+    const response = await MongoDBFileSystem.fetchWithTimeout(url, {
       headers: {
         "x-mongodb-connection": this.connectionString,
       },
@@ -544,7 +568,7 @@ export class MongoDBFileSystem implements FileSystem {
       throw new Error("Invalid document path");
     }
 
-    const response = await fetch(
+    const response = await MongoDBFileSystem.fetchWithTimeout(
       `/api/mongodb/document/${encodeURIComponent(database)}/${encodeURIComponent(collection)}/${encodeURIComponent(documentName)}`,
       {
         body: JSON.stringify(updates),
@@ -872,7 +896,7 @@ export class MongoDBFileSystem implements FileSystem {
     }
 
     const url = `/api/mongodb/documents/${encodeURIComponent(database)}/${encodeURIComponent(collection)}?${params}`;
-    const response = await fetch(url, {
+    const response = await MongoDBFileSystem.fetchWithTimeout(url, {
       headers: { "x-mongodb-connection": this.connectionString },
     });
 
@@ -1035,7 +1059,7 @@ export class MongoDBFileSystem implements FileSystem {
         ? `/api/mongodb/mkdir/${encodeURIComponent(database)}/${encodeURIComponent(collection)}`
         : `/api/mongodb/mkdir/${encodeURIComponent(database)}`;
 
-      const response = await fetch(url, {
+      const response = await MongoDBFileSystem.fetchWithTimeout(url, {
         headers: {
           'x-mongodb-connection': this.connectionString,
         },
