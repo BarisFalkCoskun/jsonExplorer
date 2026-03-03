@@ -39,3 +39,4 @@ public/Users/Public/**
 tsconfig.tsbuildinfo
 package-lock.json
 yarn.lock
+tsconfig.test.tsbuildinfo
