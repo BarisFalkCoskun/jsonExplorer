@@ -1,24 +1,4 @@
-// Import or redefine the sanitizeFilter function for testing
-const SAFE_FILTER_OPERATORS = new Set([
-  '$all', '$and', '$elemMatch', '$eq', '$exists',
-  '$gt', '$gte', '$in', '$lt', '$lte',
-  '$ne', '$nin', '$nor', '$not', '$options',
-  '$or', '$regex', '$size', '$type',
-]);
-
-const sanitizeFilter = (obj: unknown): void => {
-  if (!obj || typeof obj !== 'object') return;
-  for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
-    if (key.startsWith('$') && !SAFE_FILTER_OPERATORS.has(key)) {
-      throw new Error(`Disallowed filter operator: ${key}`);
-    }
-    if (Array.isArray(value)) {
-      for (const item of value) sanitizeFilter(item);
-    } else if (value && typeof value === 'object') {
-      sanitizeFilter(value);
-    }
-  }
-};
+import { sanitizeFilter } from "utils/mongoApi";
 
 describe("sanitizeFilter", () => {
   it("allows safe operators", () => {

@@ -1,14 +1,4 @@
-const ALLOWED_METHODS: Record<string, string[]> = {
-  'collections': ['GET'],
-  'databases': ['GET'],
-  'document': ['DELETE', 'GET', 'PATCH', 'PUT'],
-  'documents': ['GET'],
-  'drop-collection': ['DELETE'],
-  'drop-database': ['DELETE'],
-  'images': ['GET'],
-  'mkdir': ['POST'],
-  'test': ['GET'],
-};
+import { ALLOWED_METHODS } from "utils/mongoApi";
 
 const isMethodAllowed = (operation: string, method: string): boolean => {
   const allowed = ALLOWED_METHODS[operation];

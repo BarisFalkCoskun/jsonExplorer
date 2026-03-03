@@ -1,39 +1,4 @@
-type MongoImage = {
-  large?: string;
-  medium?: string;
-  small?: string;
-};
-
-const normalizeImageUrl = (img: unknown): string => {
-  if (typeof img === "string" && img.trim().length > 0) {
-    return img.trim();
-  }
-
-  if (img && typeof img === "object") {
-    const imgObj = img as MongoImage;
-    return imgObj.medium || imgObj.small || imgObj.large || "";
-  }
-
-  return "";
-};
-
-const addThumbnailFields = (
-  doc: Record<string, unknown>
-): Record<string, unknown> => {
-  const images = Array.isArray(doc.images) ? doc.images : [];
-  const oldImages = Array.isArray(doc.oldImages) ? doc.oldImages : [];
-  const allImages = [...images, ...oldImages];
-
-  const firstUrl = allImages.length > 0 ? normalizeImageUrl(allImages[0]) : "";
-
-  const result = { ...doc };
-  result.thumbnail = firstUrl || undefined;
-  result.imageCount = allImages.length;
-  delete result.images;
-  delete result.oldImages;
-
-  return result;
-};
+import { addThumbnailFields } from "utils/mongoApi";
 
 describe("meta thumbnail post-processing", () => {
   it("extracts thumbnail from string image URL", () => {
