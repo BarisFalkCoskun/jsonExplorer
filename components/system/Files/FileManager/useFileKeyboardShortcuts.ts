@@ -55,9 +55,9 @@ const useFileKeyboardShortcuts = (
         ((!foregroundId && isDesktop) || foregroundId === id)
       ) {
         event.stopImmediatePropagation?.();
-        createFileReaders(event.clipboardData.files, url, newPath).then(
-          openTransferDialog
-        );
+        createFileReaders(event.clipboardData.files, url, newPath)
+          .then(openTransferDialog)
+          .catch(console.error);
       }
     };
 
@@ -105,7 +105,7 @@ const useFileKeyboardShortcuts = (
           return;
         }
 
-        const onDelete = (): void => {
+        const onDelete = async (): Promise<void> => {
           if (focusedEntries.length > 0) {
             haltEvent(event);
 
@@ -113,11 +113,20 @@ const useFileKeyboardShortcuts = (
               saveUnpositionedDesktopIcons(setIconPositions);
             }
 
-            focusedEntries.forEach(async (entry) => {
-              const path = join(url, entry);
+            const results = await Promise.allSettled(
+              focusedEntries.map(async (entry) => {
+                const path = join(url, entry);
 
-              if (await deletePath(path)) updateFiles(undefined, path);
-            });
+                if (await deletePath(path)) updateFiles(undefined, path);
+              })
+            );
+
+            for (const result of results) {
+              if (result.status === "rejected") {
+                console.error("Delete failed:", result.reason);
+              }
+            }
+
             blurEntry();
           }
         };
