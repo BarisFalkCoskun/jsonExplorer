@@ -25,7 +25,7 @@ interface MongoFSEntry {
 }
 
 const UNKNOWN_DOCUMENT_SIZE = -1;
-const COLLECTION_CACHE_TTL_MS = 5000;
+const COLLECTION_CACHE_TTL_MS = 30_000;
 const DOCUMENTS_CACHE_TTL_MS = 30_000;
 
 type CachedCollectionEntries = {

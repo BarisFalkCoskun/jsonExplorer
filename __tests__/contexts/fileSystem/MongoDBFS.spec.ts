@@ -466,6 +466,22 @@ describe("stat cache key encoding", () => {
   });
 });
 
+describe("cache TTL alignment", () => {
+  it("entry cache survives 10 seconds (old 5s TTL would expire)", () => {
+    const fs = createFS();
+
+    fs.setCachedCollectionEntries("testdb", "products", ["doc1"]);
+
+    // Simulate 10 seconds passing
+    const cached = fs.collectionEntriesCache.get("testdb/products");
+    if (cached) cached.cachedAt = Date.now() - 10_000;
+
+    const entries = fs.getCachedCollectionEntries("testdb", "products");
+    expect(entries).not.toBeNull();
+    expect(entries?.has("doc1")).toBe(true);
+  });
+});
+
 describe("PATCH cache invalidation", () => {
   afterEach(() => {
     jest.restoreAllMocks();
