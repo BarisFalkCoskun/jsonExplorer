@@ -35,6 +35,15 @@ export const addThumbnailFields = (doc: Record<string, unknown>): Record<string,
   return result;
 };
 
+export const LISTING_PROJECTION = {
+  _id: 1,
+  category: 1,
+  dismissed: 1,
+  images: { $slice: 1 },
+  name: 1,
+  oldImages: { $slice: 1 },
+};
+
 export const SAFE_FILTER_OPERATORS = new Set([
   '$all', '$and', '$elemMatch', '$eq', '$exists',
   '$gt', '$gte', '$in', '$lt', '$lte',

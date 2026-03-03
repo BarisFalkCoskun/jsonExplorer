@@ -1,6 +1,6 @@
 import { type NextApiRequest, type NextApiResponse } from 'next';
 import { MongoClient } from 'mongodb';
-import { addThumbnailFields, ALLOWED_METHODS, getDocumentFilters, normalizeImageUrl, sanitizeFilter } from "utils/mongoApi";
+import { addThumbnailFields, ALLOWED_METHODS, getDocumentFilters, LISTING_PROJECTION, normalizeImageUrl, sanitizeFilter } from "utils/mongoApi";
 
 type MongoClientCacheEntry = {
   client?: MongoClient;
@@ -224,9 +224,7 @@ const handleDocuments = async (
   }
 
   /* eslint-disable unicorn/no-array-callback-reference, unicorn/no-array-method-this-argument -- MongoDB Collection.find, not Array.find */
-  const cursor = metaOnly
-    ? collection.find(filter, { projection: { _id: 1, category: 1, dismissed: 1, images: { $slice: 1 }, name: 1, oldImages: { $slice: 1 } } })
-    : collection.find(filter);
+  const cursor = collection.find(filter, { projection: LISTING_PROJECTION });
   /* eslint-enable unicorn/no-array-callback-reference, unicorn/no-array-method-this-argument */
 
   // eslint-disable-next-line sort-keys-fix/sort-keys-fix -- MongoDB sort order: name first, _id tiebreaker
@@ -249,7 +247,11 @@ const handleDocuments = async (
     // eslint-disable-next-line unicorn/no-null -- JSON response needs explicit null, not undefined (which is dropped)
     : null;
 
-  res.json({ documents, hasMore, nextCursor });
+  res.json({
+    documents: documents.map((doc) => addThumbnailFields(doc as Record<string, unknown>)),
+    hasMore,
+    nextCursor,
+  });
 };
 
 const handleDocument = async (
