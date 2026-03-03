@@ -31,24 +31,16 @@ const findMongoDBFileSystem = (
   mountPoint: string;
   relativePath: string;
 } | null => {
-  if (!rootFs) return null;
+  if (!rootFs?.mntMap) return null;
 
-  const pathParts = path.split("/");
-  let currentPath = "/";
-
-  for (let i = 1; i < pathParts.length; i++) {
-    currentPath = `${currentPath}${pathParts[i]}/`.replace(/\/+/g, "/");
-    const mountPoint = currentPath.slice(0, -1);
-
-    if (rootFs.mntMap && rootFs.mntMap[mountPoint]) {
-      const fs = rootFs.mntMap[mountPoint];
-      if (fs instanceof MongoDBFileSystem) {
-        return {
-          mongoFS: fs,
-          mountPoint,
-          relativePath: path.replace(mountPoint, ""),
-        };
-      }
+  // Fast path: check if path starts with any known MongoDB mount point
+  for (const [mountPoint, fs] of Object.entries(rootFs.mntMap)) {
+    if (fs instanceof MongoDBFileSystem && path.startsWith(mountPoint)) {
+      return {
+        mongoFS: fs,
+        mountPoint,
+        relativePath: path.slice(mountPoint.length),
+      };
     }
   }
 
