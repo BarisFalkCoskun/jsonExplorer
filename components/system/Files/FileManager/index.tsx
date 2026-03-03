@@ -141,7 +141,9 @@ const FileManager: FC<FileManagerProps> = ({
         setFiles((currentFiles) => {
           if (!currentFiles) return currentFiles;
 
-          allFilesRef.current = currentFiles;
+          if (!allFilesRef.current) {
+            allFilesRef.current = currentFiles;
+          }
 
           const filtered: typeof currentFiles = {};
 
@@ -159,12 +161,39 @@ const FileManager: FC<FileManagerProps> = ({
         updateFiles();
       }
     } else if (allFilesRef.current) {
-      setFiles(allFilesRef.current);
-      allFilesRef.current = undefined;
+      if (hideDismissed) {
+        const dismissedNames = mongoFs.getCachedDismissedNames(mongoCollection.database, mongoCollection.collection);
+
+        if (dismissedNames) {
+          setFiles(() => {
+            const source = allFilesRef.current;
+
+            if (!source) return {};
+
+            const filtered: typeof source = {};
+
+            for (const [name, stat] of Object.entries(source)) {
+              const docName = name.replace(/\.json$/, "");
+
+              if (!dismissedNames.has(docName)) {
+                filtered[name] = stat;
+              }
+            }
+
+            return filtered;
+          });
+        } else {
+          allFilesRef.current = undefined;
+          updateFiles();
+        }
+      } else {
+        setFiles(allFilesRef.current);
+        allFilesRef.current = undefined;
+      }
     } else {
       updateFiles();
     }
-  }, [hideCategorized, mongoCollection, mongoFs, setFiles, setHideCategorized, updateFiles]);
+  }, [hideCategorized, hideDismissed, mongoCollection, mongoFs, setFiles, setHideCategorized, updateFiles]);
   const handleToggleHideDismissed = useCallback(() => {
     if (!mongoFs) return;
 
@@ -178,7 +207,9 @@ const FileManager: FC<FileManagerProps> = ({
         setFiles((currentFiles) => {
           if (!currentFiles) return currentFiles;
 
-          allFilesRef.current = currentFiles;
+          if (!allFilesRef.current) {
+            allFilesRef.current = currentFiles;
+          }
 
           const filtered: typeof currentFiles = {};
 
@@ -196,12 +227,39 @@ const FileManager: FC<FileManagerProps> = ({
         updateFiles();
       }
     } else if (allFilesRef.current) {
-      setFiles(allFilesRef.current);
-      allFilesRef.current = undefined;
+      if (hideCategorized) {
+        const categorizedNames = mongoFs.getCachedDocumentNames(mongoCollection.database, mongoCollection.collection);
+
+        if (categorizedNames) {
+          setFiles(() => {
+            const source = allFilesRef.current;
+
+            if (!source) return {};
+
+            const filtered: typeof source = {};
+
+            for (const [name, stat] of Object.entries(source)) {
+              const docName = name.replace(/\.json$/, "");
+
+              if (!categorizedNames.has(docName)) {
+                filtered[name] = stat;
+              }
+            }
+
+            return filtered;
+          });
+        } else {
+          allFilesRef.current = undefined;
+          updateFiles();
+        }
+      } else {
+        setFiles(allFilesRef.current);
+        allFilesRef.current = undefined;
+      }
     } else {
       updateFiles();
     }
-  }, [hideDismissed, mongoCollection, mongoFs, setFiles, setHideDismissed, updateFiles]);
+  }, [hideCategorized, hideDismissed, mongoCollection, mongoFs, setFiles, setHideDismissed, updateFiles]);
   const handleDismiss = useCallback(
     async (entries: string[]) => {
       if (!mongoFs || !mountUrl) return;
@@ -518,6 +576,15 @@ const FileManager: FC<FileManagerProps> = ({
 
     setFiles((currentFiles) => {
       if (!currentFiles) return currentFiles;
+
+      // Sync unfiltered snapshot with new entries from readdir
+      if (allFilesRef.current) {
+        for (const [name, stat] of Object.entries(currentFiles)) {
+          if (!(name in allFilesRef.current)) {
+            allFilesRef.current[name] = stat;
+          }
+        }
+      }
 
       const filtered: typeof currentFiles = {};
       let changed = false;
