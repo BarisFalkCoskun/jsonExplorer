@@ -294,10 +294,6 @@ const useFolder = (
         };
 
         try {
-          const dirContents = (await readdir(directory)).filter(
-            filterSystemFiles(directory)
-          );
-
           // Detect if this directory is on a MongoDB filesystem
           const mountedFs = rootFs?.mntMap
             ? Object.entries(rootFs.mntMap).find(
@@ -308,6 +304,43 @@ const useFolder = (
           mongoFsRef.current = mountedFs instanceof MongoDBFileSystem ? mountedFs : null;
           // eslint-disable-next-line unicorn/no-null -- refs use null as "no value" sentinel
           mongoCursorRef.current = null;
+
+          // MongoDB collection paths: use paged first load (no full meta=1 fetch)
+          if (mongoFsRef.current) {
+            const mongoFs = mongoFsRef.current;
+            const result = await mongoFs.readdirPaged(directory, undefined, BATCH_SIZE);
+
+            if (result.entries.length === 0) {
+              setFiles({});
+              setIsLoading(false);
+              return;
+            }
+
+            const fileStatsResults = await Promise.all(
+              result.entries
+                .filter(filterSystemFiles(directory))
+                .map((file) => statFile(file))
+            );
+
+            const sortedFiles = sortContents(
+              buildFilesObject(fileStatsResults),
+              effectiveSortOrder,
+              sortFn,
+              sortAscending
+            );
+
+            setFiles(sortedFiles);
+            updateSortOrder(sortedFiles);
+            mongoCursorRef.current = result.nextCursor ?? null; // eslint-disable-line unicorn/no-null
+            setHasMore(result.hasMore);
+            setIsLoading(false);
+            return;
+          }
+
+          // Non-MongoDB path: existing readdir flow
+          const dirContents = (await readdir(directory)).filter(
+            filterSystemFiles(directory)
+          );
 
           if (dirContents.length === 0) {
             setFiles({});
@@ -392,7 +425,7 @@ const useFolder = (
         const result = await mongoFs.readdirPaged(
           directory,
           mongoCursorRef.current ?? undefined,
-          200
+          BATCH_SIZE
         );
 
         if (result.entries.length === 0) {

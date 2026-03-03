@@ -402,3 +402,23 @@ describe("readdirPaged cache hydration", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+describe("paged initial load contract", () => {
+  it("readdirPaged first page request is limit-bounded, not meta=1", async () => {
+    const fs = createFS();
+
+    global.fetch = jest.fn().mockResolvedValue({
+      json: () => Promise.resolve({
+        documents: [{ _id: "doc1", name: "doc1" }],
+        hasMore: false,
+      }),
+      ok: true,
+    });
+
+    await fs.readdirPaged("testdb/products", undefined, 200);
+
+    const fetchUrl = (global.fetch as jest.Mock).mock.calls[0][0] as string;
+    expect(fetchUrl).toContain("limit=200");
+    expect(fetchUrl).not.toContain("meta=1");
+  });
+});
