@@ -288,6 +288,15 @@ const handleDocument = async (
       return;
     }
 
+    const ILLEGAL_FIELD_PATTERN = /^\$|\./;
+
+    for (const field of Object.keys(updates)) {
+      if (ILLEGAL_FIELD_PATTERN.test(field)) {
+        res.status(400).json({ error: `Invalid field name: "${field}"` });
+        return;
+      }
+    }
+
     const setFields: Record<string, unknown> = {};
     const unsetFields: Record<string, string> = {};
 
@@ -303,6 +312,11 @@ const handleDocument = async (
 
     if (Object.keys(setFields).length > 0) updateOps.$set = setFields;
     if (Object.keys(unsetFields).length > 0) updateOps.$unset = unsetFields;
+
+    if (Object.keys(updateOps).length === 0) {
+      res.status(400).json({ error: "No update fields provided" });
+      return;
+    }
 
     const result = await collection.updateOne(
       { $or: getDocumentFilters(documentId) },

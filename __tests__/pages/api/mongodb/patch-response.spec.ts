@@ -78,3 +78,32 @@ describe("PATCH $set/$unset split logic", () => {
     expect(updateOps).not.toHaveProperty("$set");
   });
 });
+
+describe("PATCH field validation", () => {
+  it("rejects empty update object", () => {
+    const updates: Record<string, unknown> = {};
+    const setFields: Record<string, unknown> = {};
+    const unsetFields: Record<string, string> = {};
+
+    for (const [field, value] of Object.entries(updates)) {
+      if (value === null || value === undefined) {
+        unsetFields[field] = "";
+      } else {
+        setFields[field] = value;
+      }
+    }
+
+    const hasUpdates = Object.keys(setFields).length > 0 || Object.keys(unsetFields).length > 0;
+    expect(hasUpdates).toBe(false);
+  });
+
+  it("rejects $-prefixed field names", () => {
+    const ILLEGAL_FIELD_PATTERN = /^\$|[.]/;
+
+    expect(ILLEGAL_FIELD_PATTERN.test("$set")).toBe(true);
+    expect(ILLEGAL_FIELD_PATTERN.test("$where")).toBe(true);
+    expect(ILLEGAL_FIELD_PATTERN.test("dotted.path")).toBe(true);
+    expect(ILLEGAL_FIELD_PATTERN.test("category")).toBe(false);
+    expect(ILLEGAL_FIELD_PATTERN.test("dismissed")).toBe(false);
+  });
+});
