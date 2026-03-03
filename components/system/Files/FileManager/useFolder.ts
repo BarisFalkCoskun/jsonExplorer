@@ -745,12 +745,14 @@ const useFolder = (
   );
   const pasteToFolder = useCallback(
     (event?: CaptureTriggerEvent): void => {
-      [directory, ...getParentDirectories(directory)].forEach(
-        (parentDirectory) =>
-          pasteList[parentDirectory] && delete pasteList[parentDirectory]
+      const parentDirs = new Set([directory, ...getParentDirectories(directory)]);
+      const cleanedPasteList = Object.fromEntries(
+        Object.entries(pasteList).filter(([key]) => !parentDirs.has(key))
       );
 
-      const pasteEntries = Object.entries(pasteList);
+      setPasteList(cleanedPasteList);
+
+      const pasteEntries = Object.entries(cleanedPasteList);
       const moving = pasteEntries.some(([, operation]) => operation === "move");
       const copyFiles = async (entry: string, basePath = ""): Promise<void> => {
         const newBasePath = join(basePath, basename(entry));
