@@ -83,7 +83,10 @@ export const useMongoDBIcon = (path: string, visible = false) => {
       mongoData.relativePath
     );
 
-    hasLoadedRef.current = true;
+    // Only mark as loaded if cache had data; otherwise allow retry
+    if (thumbnail || imageCount > 0) {
+      hasLoadedRef.current = true;
+    }
 
     setState((prev) => ({
       ...prev,
