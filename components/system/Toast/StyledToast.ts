@@ -1,4 +1,5 @@
 import styled, { keyframes } from "styled-components";
+import { TASKBAR_HEIGHT } from "utils/constants";
 
 const slideIn = keyframes`
   from {
@@ -22,7 +23,7 @@ const fadeOut = keyframes`
 
 export const StyledToastContainer = styled.div`
   position: fixed;
-  bottom: 52px;
+  bottom: ${TASKBAR_HEIGHT + 8}px;
   right: 8px;
   z-index: 100000;
   display: flex;
@@ -53,6 +54,6 @@ export const StyledToastItem = styled.div<StyledToastItemProps>`
   pointer-events: auto;
   animation:
     ${slideIn} 0.25s ease-out,
-    ${fadeOut} 0.3s ease-in 3.7s forwards;
+    ${fadeOut} 0.3s ease-in 3.5s forwards;
   cursor: pointer;
 `;
