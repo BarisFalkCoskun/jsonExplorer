@@ -91,6 +91,17 @@ npm run dev    # starts Next.js dev server on localhost:3000
 
 MongoDB connection is configured in the app. The API routes at `/api/mongodb/` proxy all database operations.
 
+## Security Notes
+
+### Credential Handling
+
+Connection strings (which may include passwords) are stored in `localStorage` and sent via `x-mongodb-connection` header per request. This is acceptable for local development (localhost:3000) but **not safe for public deployment**. If deploying beyond localhost:
+
+- Move connection strings to server-side session storage
+- Issue short-lived tokens on successful `test` connection
+- Send tokens instead of raw connection strings in headers
+- Never expose connection strings to the browser after initial setup
+
 ## Current State
 
 Core labeling workflow is fully implemented:
