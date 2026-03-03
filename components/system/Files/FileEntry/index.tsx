@@ -36,7 +36,6 @@ import { type FileActions, type Files } from "components/system/Files/FileManage
 import { ICON_ZOOM_LEVELS } from "components/system/Files/FileManager/constants";
 import {
   type FileManagerViewNames,
-  FileEntryIconSize,
   getFileEntryIconSize,
 } from "components/system/Files/Views";
 import { useFileSystem } from "contexts/fileSystem";
@@ -253,9 +252,9 @@ const FileEntry: FC<FileEntryProps> = ({
   const truncatedName = useMemo(() => {
     const maxWidth = listView
       ? sizes.fileEntry.maxListTextDisplayWidth
-      : iconZoomLevel !== undefined
-        ? ICON_ZOOM_LEVELS[iconZoomLevel].labelWidth
-        : sizes.fileEntry.maxIconTextDisplayWidth;
+      : iconZoomLevel === undefined
+        ? sizes.fileEntry.maxIconTextDisplayWidth
+        : ICON_ZOOM_LEVELS[iconZoomLevel].labelWidth;
 
     return truncateName(
       name,
@@ -626,8 +625,8 @@ const FileEntry: FC<FileEntryProps> = ({
       <Button
         ref={buttonRef}
         aria-label={name}
-        onMouseOverCapture={onMouseOverButton}
         onMouseLeave={onMouseLeaveButton}
+        onMouseOverCapture={onMouseOverButton}
         title={tooltip}
         {...(listView && { ...LIST_VIEW_ANIMATION, as: motion.button })}
         {...useDoubleClick(doubleClickHandler, listView)}
@@ -671,13 +670,13 @@ const FileEntry: FC<FileEntryProps> = ({
             />
             {isMongoDocument && hasNavigationArrows && (
               <ImageNavigation
-                show={showImageNavigation}
-                canGoToPrevious={canGoToPrevious}
                 canGoToNext={canGoToNext}
+                canGoToPrevious={canGoToPrevious}
                 currentIndex={currentImageIndex}
-                totalImages={images.length}
-                onPrevious={goToPreviousImage}
                 onNext={goToNextImage}
+                onPrevious={goToPreviousImage}
+                show={showImageNavigation}
+                totalImages={images.length}
               />
             )}
           </div>

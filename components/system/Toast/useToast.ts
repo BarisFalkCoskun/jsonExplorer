@@ -9,17 +9,17 @@ export type Toast = {
 };
 
 type ToastContextValue = {
-  toasts: Toast[];
-  showToast: (message: string, severity?: ToastSeverity) => void;
   dismissToast: (id: number) => void;
+  showToast: (message: string, severity?: ToastSeverity) => void;
+  toasts: Toast[];
 };
 
 let nextId = 0;
 
 export const ToastContext = createContext<ToastContextValue>({
-  toasts: [],
-  showToast: () => {},
   dismissToast: () => {},
+  showToast: () => {},
+  toasts: [],
 });
 
 export const useToastProvider = (): ToastContextValue => {
@@ -38,7 +38,7 @@ export const useToastProvider = (): ToastContextValue => {
     [dismissToast]
   );
 
-  return { toasts, showToast, dismissToast };
+  return { dismissToast, showToast, toasts };
 };
 
 export const useToast = (): Pick<ToastContextValue, "showToast"> =>

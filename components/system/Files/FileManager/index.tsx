@@ -123,10 +123,10 @@ const FileManager: FC<FileManagerProps> = ({
     };
   }, [rootFs?.mntMap, url]);
   const mongoCollection = useMemo(() => {
-    if (!isMongoFS || !mountUrl) return { database: "", collection: "" };
-    const relativePath = url.replace(`${mountUrl}/`, "").replace(`${mountUrl}`, "");
+    if (!isMongoFS || !mountUrl) return { collection: "", database: "" };
+    const relativePath = url.replace(`${mountUrl}/`, "").replace(mountUrl, "");
     const parts = relativePath.split("/").filter(Boolean);
-    return { database: parts[0] || "", collection: parts[1] || "" };
+    return { collection: parts[1] || "", database: parts[0] || "" };
   }, [isMongoFS, mountUrl, url]);
   const handleToggleHideCategorized = useCallback(() => {
     if (!mongoFs) return;
@@ -142,7 +142,7 @@ const FileManager: FC<FileManagerProps> = ({
           if (!currentFiles) return currentFiles;
 
           if (!allFilesRef.current) {
-            allFilesRef.current = { key: url, files: { ...currentFiles } };
+            allFilesRef.current = { files: { ...currentFiles }, key: url };
           }
 
           const filtered: typeof currentFiles = {};
@@ -160,7 +160,7 @@ const FileManager: FC<FileManagerProps> = ({
       } else {
         updateFiles();
       }
-    } else if (allFilesRef.current && allFilesRef.current.key === url) {
+    } else if (allFilesRef.current?.key === url) {
       if (hideDismissed) {
         const dismissedNames = mongoFs.getCachedDismissedNames(mongoCollection.database, mongoCollection.collection);
 
@@ -209,7 +209,7 @@ const FileManager: FC<FileManagerProps> = ({
           if (!currentFiles) return currentFiles;
 
           if (!allFilesRef.current) {
-            allFilesRef.current = { key: url, files: { ...currentFiles } };
+            allFilesRef.current = { files: { ...currentFiles }, key: url };
           }
 
           const filtered: typeof currentFiles = {};
@@ -227,7 +227,7 @@ const FileManager: FC<FileManagerProps> = ({
       } else {
         updateFiles();
       }
-    } else if (allFilesRef.current && allFilesRef.current.key === url) {
+    } else if (allFilesRef.current?.key === url) {
       if (hideCategorized) {
         const categorizedNames = mongoFs.getCachedDocumentNames(mongoCollection.database, mongoCollection.collection);
 
@@ -476,14 +476,15 @@ const FileManager: FC<FileManagerProps> = ({
 
   useEffect(() => {
     if (!mounted && MOUNTABLE_EXTENSIONS.has(getExtension(url))) {
-      const mountUrl = async (): Promise<void> => {
+      const doMountUrl = async (): Promise<void> => {
         if (!(await lstat(url)).isDirectory()) {
           setMounted((currentlyMounted) => {
             if (!currentlyMounted) {
               mountFs(url)
                 .then(() => setTimeout(updateFiles, 100))
-                .catch((error: Error) => {
-                  console.warn(`Failed to mount filesystem at ${url}:`, error);
+                .catch((mountError: Error) => {
+                  // eslint-disable-next-line no-console
+                  console.warn(`Failed to mount filesystem at ${url}:`, mountError);
                 });
             }
             return true;
@@ -491,7 +492,7 @@ const FileManager: FC<FileManagerProps> = ({
         }
       };
 
-      mountUrl();
+      doMountUrl();
     }
   }, [lstat, mountFs, mounted, updateFiles, url]);
 
@@ -581,7 +582,7 @@ const FileManager: FC<FileManagerProps> = ({
       if (!currentFiles) return currentFiles;
 
       // Sync unfiltered snapshot with new entries from readdir (same collection only)
-      if (allFilesRef.current && allFilesRef.current.key === url) {
+      if (allFilesRef.current?.key === url) {
         for (const [name, stat] of Object.entries(currentFiles)) {
           if (!(name in allFilesRef.current.files)) {
             allFilesRef.current.files[name] = stat;

@@ -1,6 +1,7 @@
 import { basename, dirname, extname, join, relative } from "path";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type AsyncZipOptions, type AsyncZippable } from "fflate";
+// eslint-disable-next-line import/no-unresolved -- BrowserFS path not resolvable by eslint
 import { type ApiError } from "browserfs/dist/node/core/api_error";
 import type Stats from "browserfs/dist/node/core/node_fs_stats";
 import useTransferDialog, {
@@ -88,6 +89,8 @@ type ZipFile = [string, Buffer];
 
 export type Files = Record<string, FileStat>;
 
+const NO_FILES = undefined;
+
 type Folder = {
   fileActions: FileActions;
   files: Files;
@@ -107,15 +110,13 @@ type FolderFlags = {
   skipSorting?: boolean;
 };
 
-const NO_FILES = undefined;
-
 const useFolder = (
   directory: string,
   setRenaming: React.Dispatch<React.SetStateAction<string>>,
   { blurEntry, focusEntry }: FocusEntryFunctions,
   {
     hideFolders,
-    hideLoading,
+    hideLoading: _hideLoading,
     isDesktop,
     skipFsWatcher,
     skipSorting,
@@ -178,6 +179,14 @@ const useFolder = (
     () => skipSorting || !sortBy || sortBy === "name" || sortBy === "type",
     [skipSorting, sortBy]
   );
+  const [hasMore, setHasMore] = useState(false);
+  const updatingFiles = useRef(false);
+  const progressiveLoadRef = useRef<AbortController | null>(null);
+  const allEntriesRef = useRef<string[]>([]);
+  const loadedCountRef = useRef(0);
+  const isLoadingMoreRef = useRef(false);
+  const mongoCursorRef = useRef<{ afterId: string; afterName: string } | null>(null);
+  const mongoFsRef = useRef<MongoDBFileSystem | null>(null);
   const updateFiles = useCallback(
     async (newFile?: string, oldFile?: string) => {
       if (oldFile) {
@@ -219,6 +228,7 @@ const useFolder = (
         }));
       } else {
         progressiveLoadRef.current?.abort();
+        // eslint-disable-next-line unicorn/no-null -- ref sentinel for "no controller"
         progressiveLoadRef.current = null;
         allEntriesRef.current = [];
         loadedCountRef.current = 0;
@@ -236,7 +246,7 @@ const useFolder = (
 
         const statFile = async (
           file: string
-        ): Promise<{ file: string; stats: FileStat } | null> => {
+        ): Promise<{ file: string; stats: FileStat } | undefined> => {
           try {
             const filePath = join(directory, file);
             const fileStats = isSimpleSort
@@ -245,18 +255,18 @@ const useFolder = (
             const hideEntry = hideFolders && fileStats.isDirectory();
 
             if (hideEntry) {
-              return null;
+              return undefined;
             }
 
             const statsWithInfo = await statsWithShortcutInfo(file, fileStats);
             return { file, stats: statsWithInfo };
           } catch {
-            return null;
+            return undefined;
           }
         };
 
         const buildFilesObject = (
-          results: ({ file: string; stats: FileStat } | null)[]
+          results: ({ file: string; stats: FileStat } | undefined)[]
         ): Files => {
           const filesObject: Files = {};
           for (const result of results) {
@@ -308,7 +318,7 @@ const useFolder = (
           if (dirContents.length <= BATCH_SIZE) {
             // Small folder: single-pass (existing behavior)
             const fileStatsResults = await Promise.all(
-              dirContents.map(statFile)
+              dirContents.map((file) => statFile(file))
             );
             const sortedFiles = sortContents(
               buildFilesObject(fileStatsResults),
@@ -327,7 +337,7 @@ const useFolder = (
           allEntriesRef.current = dirContents;
 
           const firstBatch = dirContents.slice(0, BATCH_SIZE);
-          const firstResults = await Promise.all(firstBatch.map(statFile));
+          const firstResults = await Promise.all(firstBatch.map((file) => statFile(file)));
 
           const firstFiles = sortContents(
             buildFilesObject(firstResults),
@@ -358,7 +368,6 @@ const useFolder = (
       directory,
       exists,
       hideFolders,
-      hideLoading,
       isSimpleSort,
       lstat,
       readdir,
@@ -476,11 +485,13 @@ const useFolder = (
               ? await lstat(filePath)
               : await stat(filePath);
 
+            // eslint-disable-next-line unicorn/no-null -- filter sentinel
             if (hideFolders && fileStats.isDirectory()) return null;
 
             const statsWithInfo = await statsWithShortcutInfo(file, fileStats);
             return { file, stats: statsWithInfo };
           } catch {
+            // eslint-disable-next-line unicorn/no-null -- filter sentinel
             return null;
           }
         })
@@ -957,18 +968,10 @@ const useFolder = (
     }),
     [addFile, directory, newPath, pasteToFolder, sortByOrder]
   );
-  const [hasMore, setHasMore] = useState(false);
-  const updatingFiles = useRef(false);
-  const progressiveLoadRef = useRef<AbortController | null>(null);
-  const allEntriesRef = useRef<string[]>([]);
-  const loadedCountRef = useRef(0);
-  const isLoadingMoreRef = useRef(false);
-  const mongoCursorRef = useRef<{ afterId: string; afterName: string } | null>(null);
-  const mongoFsRef = useRef<MongoDBFileSystem | null>(null);
-
   useEffect(() => {
     if (directory !== currentDirectory) {
       progressiveLoadRef.current?.abort();
+      // eslint-disable-next-line unicorn/no-null -- ref sentinel for "no controller"
       progressiveLoadRef.current = null;
       allEntriesRef.current = [];
       loadedCountRef.current = 0;

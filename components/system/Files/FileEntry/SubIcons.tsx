@@ -1,7 +1,6 @@
 import { memo, useMemo } from "react";
 import {
   type FileManagerViewNames,
-  FileEntryIconSize,
   getFileEntryIconSize,
 } from "components/system/Files/Views";
 import Icon from "styles/common/Icon";

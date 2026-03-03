@@ -1,9 +1,9 @@
 describe("patchDocument error handling", () => {
   it("collects errors from failed patch operations via Promise.allSettled", async () => {
     const mockPatch = jest.fn()
-      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce()
       .mockRejectedValueOnce(new Error("Network error"))
-      .mockResolvedValueOnce(undefined);
+      .mockResolvedValueOnce();
 
     const entries = ["a.json", "b.json", "c.json"];
 
@@ -15,14 +15,14 @@ describe("patchDocument error handling", () => {
 
     const failures = results.filter((r) => r.status === "rejected");
     expect(failures).toHaveLength(1);
-    expect((failures[0] as PromiseRejectedResult).reason.message).toBe("Network error");
+    expect((failures[0]).reason.message).toBe("Network error");
 
     const successes = results.filter((r) => r.status === "fulfilled");
     expect(successes).toHaveLength(2);
   });
 
   it("all succeed when no errors", async () => {
-    const mockPatch = jest.fn().mockResolvedValue(undefined);
+    const mockPatch = jest.fn().mockResolvedValue();
 
     const entries = ["a.json", "b.json"];
 

@@ -3,8 +3,8 @@ import { DEFAULT_INTERSECTION_OPTIONS } from "utils/constants";
 
 // Shared observer per root element - prevents creating 100s of observers
 type ObserverData = {
-  observer: IntersectionObserver;
   callbacks: Map<Element, (isVisible: boolean) => void>;
+  observer: IntersectionObserver;
 };
 
 const observerMap = new Map<Element | null, ObserverData>();
@@ -24,7 +24,7 @@ const getOrCreateObserver = (root: Element | null): ObserverData => {
     { root, ...DEFAULT_INTERSECTION_OPTIONS }
   );
 
-  const data = { observer, callbacks };
+  const data = { callbacks, observer };
   observerMap.set(root, data);
   return data;
 };

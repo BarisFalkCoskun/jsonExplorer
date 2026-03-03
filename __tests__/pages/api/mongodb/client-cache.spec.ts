@@ -3,10 +3,10 @@ const CLIENT_TTL_MS = 30 * 60 * 1000;
 
 describe("client cache eviction logic", () => {
   it("evictStaleClients removes entries older than TTL", () => {
-    const cache = new Map<string, { lastUsed: number; client: object }>();
+    const cache = new Map<string, { client: object, lastUsed: number; }>();
 
-    cache.set("fresh", { lastUsed: Date.now(), client: {} });
-    cache.set("stale", { lastUsed: Date.now() - CLIENT_TTL_MS - 1, client: {} });
+    cache.set("fresh", { client: {}, lastUsed: Date.now() });
+    cache.set("stale", { client: {}, lastUsed: Date.now() - CLIENT_TTL_MS - 1 });
 
     const now = Date.now();
     for (const [key, entry] of cache) {

@@ -3,23 +3,25 @@ import { useFileSystem } from "contexts/fileSystem";
 import { DESKTOP_PATH } from "utils/constants";
 
 interface MongoDBConnection {
-  connectionString: string;
   alias: string;
+  connectionString: string;
   isConnected: boolean;
 }
 
 interface MongoDBIntegrationState {
   connections: MongoDBConnection[];
-  isLoading: boolean;
+  // eslint-disable-next-line unicorn/no-null -- null represents "no error" state
   error: string | null;
+  isLoading: boolean;
 }
 
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type, @typescript-eslint/explicit-module-boundary-types
 export const useMongoDBIntegration = () => {
   const { rootFs, updateFolder } = useFileSystem();
   const [state, setState] = useState<MongoDBIntegrationState>({
     connections: [],
+    error: null, // eslint-disable-line unicorn/no-null
     isLoading: false,
-    error: null,
   });
 
   // Save connections to localStorage
@@ -42,7 +44,8 @@ export const useMongoDBIntegration = () => {
   }, []);
 
   const addConnection = useCallback(async (connectionString: string, alias: string) => {
-    setState(prev => ({ ...prev, isLoading: true, error: null }));
+    // eslint-disable-next-line unicorn/no-null
+    setState(prev => ({ ...prev, error: null, isLoading: true }));
 
     try {
       // Test the connection first
@@ -50,8 +53,8 @@ export const useMongoDBIntegration = () => {
       if (!isValid) {
         setState(prev => ({
           ...prev,
-          isLoading: false,
           error: "Failed to connect to MongoDB. Please check your connection string.",
+          isLoading: false,
         }));
         return;
       }
@@ -59,15 +62,16 @@ export const useMongoDBIntegration = () => {
       // Import the MongoDB filesystem dynamically to avoid SSR issues
       const { Create } = await import("contexts/fileSystem/MongoDBFS");
 
+      // eslint-disable-next-line @typescript-eslint/return-await, consistent-return
       return new Promise<void>((resolve, reject) => {
         Create({ connectionString }, (error, mongoFS) => {
           if (error || !mongoFS) {
             setState(prev => ({
               ...prev,
-              isLoading: false,
               error: `Failed to create MongoDB filesystem: ${error?.message || "Unknown error"}`,
+              isLoading: false,
             }));
-            reject(error);
+            reject(error instanceof Error ? error : new Error("Failed to create MongoDB filesystem"));
             return;
           }
 
@@ -82,7 +86,7 @@ export const useMongoDBIntegration = () => {
             // Check if mount point already exists and unmount if necessary
             try {
               rootFs?.umount?.(localFolderPath);
-            } catch (unmountError) {
+            } catch {
               // Ignore unmount errors (mount point may not exist)
             }
 
@@ -92,8 +96,8 @@ export const useMongoDBIntegration = () => {
             rootFs.mount(localFolderPath, mongoFS);
 
             const newConnection: MongoDBConnection = {
-              connectionString,
               alias,
+              connectionString,
               isConnected: true,
             };
 
@@ -108,8 +112,8 @@ export const useMongoDBIntegration = () => {
               return {
                 ...prev,
                 connections: updatedConnections,
+                error: null, // eslint-disable-line unicorn/no-null
                 isLoading: false,
-                error: null,
               };
             });
 
@@ -119,18 +123,18 @@ export const useMongoDBIntegration = () => {
           } catch (mountError) {
             setState(prev => ({
               ...prev,
+              error: `Failed to mount MongoDB filesystem: ${mountError instanceof Error ? mountError.message : String(mountError)}`,
               isLoading: false,
-              error: `Failed to mount MongoDB filesystem: ${mountError}`,
             }));
-            reject(mountError);
+            reject(mountError instanceof Error ? mountError : new Error(String(mountError)));
           }
         });
       });
     } catch (error) {
       setState(prev => ({
         ...prev,
+        error: `Failed to load MongoDB filesystem: ${error instanceof Error ? error.message : String(error)}`,
         isLoading: false,
-        error: `Failed to load MongoDB filesystem: ${error}`,
       }));
       throw error;
     }
@@ -156,7 +160,7 @@ export const useMongoDBIntegration = () => {
     } catch (error) {
       setState(prev => ({
         ...prev,
-        error: `Failed to remove connection: ${error}`,
+        error: `Failed to remove connection: ${error instanceof Error ? error.message : String(error)}`,
       }));
     }
   }, [rootFs, saveConnections, updateFolder]);

@@ -91,15 +91,15 @@ const StyledImageNavigation = styled.div`
 `;
 
 interface ImageNavigationProps {
-  show: boolean;
-  canGoToPrevious: boolean;
   canGoToNext: boolean;
+  canGoToPrevious: boolean;
   currentIndex: number;
-  totalImages: number;
-  onPrevious: () => void;
-  onNext: () => void;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
+  onNext: () => void;
+  onPrevious: () => void;
+  show: boolean;
+  totalImages: number;
 }
 
 const ImageNavigation: React.FC<ImageNavigationProps> = ({
@@ -141,16 +141,16 @@ const ImageNavigation: React.FC<ImageNavigationProps> = ({
     >
       <button
         className="nav-arrow prev"
-        onClick={handlePrevious}
         disabled={!canGoToPrevious}
+        onClick={handlePrevious}
         title="Previous image"
         type="button"
       />
 
       <button
         className="nav-arrow next"
-        onClick={handleNext}
         disabled={!canGoToNext}
+        onClick={handleNext}
         title="Next image"
         type="button"
       />

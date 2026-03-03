@@ -2,7 +2,7 @@ import { addThumbnailFields } from "utils/mongoApi";
 
 describe("meta thumbnail post-processing", () => {
   it("extracts thumbnail from string image URL", () => {
-    const doc = { _id: "1", name: "test", images: ["https://img.com/a.jpg"] };
+    const doc = { _id: "1", images: ["https://img.com/a.jpg"], name: "test" };
     const result = addThumbnailFields(doc);
 
     expect(result.thumbnail).toBe("https://img.com/a.jpg");
@@ -14,8 +14,8 @@ describe("meta thumbnail post-processing", () => {
   it("extracts thumbnail from MongoImage object preferring medium", () => {
     const doc = {
       _id: "2",
-      name: "test",
       images: [{ large: "lg.jpg", medium: "md.jpg", small: "sm.jpg" }],
+      name: "test",
     };
     const result = addThumbnailFields(doc);
 
@@ -24,7 +24,7 @@ describe("meta thumbnail post-processing", () => {
   });
 
   it("falls back to small then large", () => {
-    const doc = { _id: "3", name: "test", images: [{ large: "lg.jpg" }] };
+    const doc = { _id: "3", images: [{ large: "lg.jpg" }], name: "test" };
     const result = addThumbnailFields(doc);
 
     expect(result.thumbnail).toBe("lg.jpg");
@@ -41,8 +41,8 @@ describe("meta thumbnail post-processing", () => {
   it("counts images + oldImages combined", () => {
     const doc = {
       _id: "5",
-      name: "test",
       images: ["a.jpg", "b.jpg"],
+      name: "test",
       oldImages: ["c.jpg"],
     };
     const result = addThumbnailFields(doc);

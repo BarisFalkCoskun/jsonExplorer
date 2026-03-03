@@ -1,7 +1,7 @@
 import { useContext } from "react";
 import { createPortal } from "react-dom";
-import { StyledToastContainer, StyledToastItem } from "./StyledToast";
-import { ToastContext } from "./useToast";
+import { StyledToastContainer, StyledToastItem } from "components/system/Toast/StyledToast";
+import { ToastContext } from "components/system/Toast/useToast";
 
 const ToastRenderer: FC = () => {
   const { toasts, dismissToast } = useContext(ToastContext);

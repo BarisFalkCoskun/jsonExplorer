@@ -84,7 +84,7 @@ export const getFileEntryIconSize = (
     const level = zoomLevel ?? DEFAULT_ICON_ZOOM_LEVEL;
     const { iconSize } = ICON_ZOOM_LEVELS[level];
 
-    return { imgSize: iconSize as IconProps["imgSize"] };
+    return { imgSize: iconSize };
   }
 
   if (view === "sub" && zoomLevel !== undefined) {

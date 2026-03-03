@@ -1,10 +1,9 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback , type FC } from "react";
 import styled from "styled-components";
 import Button from "styles/common/Button";
 import { useMongoDBIntegration } from "hooks/useMongoDBIntegration";
 import { type ComponentProcessProps } from "components/system/Apps/RenderComponent";
 import { useProcesses } from "contexts/process";
-import { type FC } from "react";
 import { maskConnectionString } from "utils/functions";
 
 const StyledMongoDBDialog = styled.div`
@@ -131,8 +130,8 @@ const MongoDBDialog: FC<ComponentProcessProps> = ({ id }) => {
   } = useMongoDBIntegration();
 
   const [formData, setFormData] = useState({
-    connectionString: "mongodb://localhost:27017",
     alias: "",
+    connectionString: "mongodb://localhost:27017",
   });
 
   const [testingConnection, setTestingConnection] = useState(false);
@@ -153,7 +152,7 @@ const MongoDBDialog: FC<ComponentProcessProps> = ({ id }) => {
     try {
       const success = await testConnection(formData.connectionString);
       setTestResult({ success, tested: true });
-    } catch (error) {
+    } catch {
       setTestResult({ success: false, tested: true });
     } finally {
       setTestingConnection(false);
@@ -165,9 +164,9 @@ const MongoDBDialog: FC<ComponentProcessProps> = ({ id }) => {
 
     try {
       await addConnection(formData.connectionString, formData.alias);
-      setFormData({ connectionString: "mongodb://localhost:27017", alias: "" });
+      setFormData({ alias: "", connectionString: "mongodb://localhost:27017" });
       setTestResult({ success: false, tested: false });
-    } catch (error) {
+    } catch {
       // Error handling is done in the hook
     }
   }, [formData, addConnection]);
@@ -182,10 +181,10 @@ const MongoDBDialog: FC<ComponentProcessProps> = ({ id }) => {
         <label htmlFor="connectionString">Connection String:</label>
         <input
           id="connectionString"
-          type="text"
-          value={formData.connectionString}
           onChange={(e) => handleInputChange("connectionString", e.target.value)}
           placeholder="mongodb://localhost:27017"
+          type="text"
+          value={formData.connectionString}
         />
       </div>
 
@@ -193,10 +192,10 @@ const MongoDBDialog: FC<ComponentProcessProps> = ({ id }) => {
         <label htmlFor="alias">Display Name:</label>
         <input
           id="alias"
-          type="text"
-          value={formData.alias}
           onChange={(e) => handleInputChange("alias", e.target.value)}
           placeholder="My MongoDB"
+          type="text"
+          value={formData.alias}
         />
       </div>
 
@@ -208,14 +207,14 @@ const MongoDBDialog: FC<ComponentProcessProps> = ({ id }) => {
 
       <div className="buttons">
         <Button
-          onClick={handleTestConnection}
           disabled={!formData.connectionString.trim() || testingConnection}
+          onClick={handleTestConnection}
         >
           {testingConnection ? "Testing..." : "Test Connection"}
         </Button>
         <Button
-          onClick={handleAddConnection}
           disabled={!isFormValid || isLoading}
+          onClick={handleAddConnection}
         >
           {isLoading ? "Adding..." : "Add Connection"}
         </Button>

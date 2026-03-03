@@ -30,9 +30,9 @@ const StyledFileEntry = styled.li<StyledFileEntryProps>`
         line-height: 1.2;
         margin: 1px 0;
         max-width: ${({ $iconZoomLevel }) =>
-          $iconZoomLevel !== undefined
-            ? `${ICON_ZOOM_LEVELS[$iconZoomLevel].labelWidth}px`
-            : undefined};
+          $iconZoomLevel === undefined
+            ? undefined
+            : `${ICON_ZOOM_LEVELS[$iconZoomLevel].labelWidth}px`};
         overflow-wrap: anywhere;
         padding: 2px 0;
         text-shadow: ${({ $desktop, theme }) =>
@@ -47,20 +47,20 @@ const StyledFileEntry = styled.li<StyledFileEntryProps>`
       textarea {
         position: absolute;
         top: ${({ $iconZoomLevel, theme }) =>
-          $iconZoomLevel !== undefined
-            ? `${ICON_ZOOM_LEVELS[$iconZoomLevel].iconSize}px`
-            : theme.sizes.fileEntry.iconSize};
+          $iconZoomLevel === undefined
+            ? theme.sizes.fileEntry.iconSize
+            : `${ICON_ZOOM_LEVELS[$iconZoomLevel].iconSize}px`};
       }
 
       picture {
         height: ${({ $iconZoomLevel, theme }) =>
-          $iconZoomLevel !== undefined
-            ? `${ICON_ZOOM_LEVELS[$iconZoomLevel].iconSize}px`
-            : theme.sizes.fileEntry.iconSize};
+          $iconZoomLevel === undefined
+            ? theme.sizes.fileEntry.iconSize
+            : `${ICON_ZOOM_LEVELS[$iconZoomLevel].iconSize}px`};
         width: ${({ $iconZoomLevel, theme }) =>
-          $iconZoomLevel !== undefined
-            ? `${ICON_ZOOM_LEVELS[$iconZoomLevel].iconSize}px`
-            : theme.sizes.fileEntry.iconSize};
+          $iconZoomLevel === undefined
+            ? theme.sizes.fileEntry.iconSize
+            : `${ICON_ZOOM_LEVELS[$iconZoomLevel].iconSize}px`};
 
         &:not(:first-of-type) {
           position: absolute;

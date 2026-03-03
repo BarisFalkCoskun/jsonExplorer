@@ -148,20 +148,20 @@ const useFileKeyboardShortcuts = (
                 onDelete();
               }
               break;
-            case "h": {
+            case "h":
               if (onToggleHideCategorized) {
                 haltEvent(event);
                 onToggleHideCategorized();
               }
               break;
-            }
-            case "l": {
+            
+            case "l":
               if (onSetCategory && focusedEntries.length > 0) {
                 haltEvent(event);
                 onSetCategory(focusedEntries);
               }
               break;
-            }
+            
             case "r":
               haltEvent(event);
               updateFiles();

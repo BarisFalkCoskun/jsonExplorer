@@ -4,7 +4,7 @@ describe("sanitizeFilter", () => {
   it("allows safe operators", () => {
     expect(() => sanitizeFilter({ category: { $exists: true } })).not.toThrow();
     expect(() => sanitizeFilter({ $and: [{ a: 1 }, { b: 2 }] })).not.toThrow();
-    expect(() => sanitizeFilter({ name: { $regex: "test", $options: "i" } })).not.toThrow();
+    expect(() => sanitizeFilter({ name: { $options: "i", $regex: "test" } })).not.toThrow();
     expect(() => sanitizeFilter({ count: { $gt: 5, $lt: 100 } })).not.toThrow();
   });
 
@@ -25,7 +25,7 @@ describe("sanitizeFilter", () => {
   });
 
   it("allows plain field filters", () => {
-    expect(() => sanitizeFilter({ name: "test", category: "fruit" })).not.toThrow();
+    expect(() => sanitizeFilter({ category: "fruit", name: "test" })).not.toThrow();
   });
 
   it("handles null and primitives gracefully", () => {

@@ -3,9 +3,9 @@
 import { type ChatCompletionMessageParam } from "@mlc-ai/web-llm";
 
 type MarkedOptions = {
+  [key: string]: unknown;
   headerIds?: boolean;
   mangle?: boolean;
-  [key: string]: unknown;
 };
 
 declare global {

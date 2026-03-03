@@ -1,6 +1,6 @@
 describe("PUT replace-then-insert pattern", () => {
   it("replaces without _id to avoid type mismatch", () => {
-    const updateDoc = { _id: "my-doc-id", name: "test", data: "value" };
+    const updateDoc = { _id: "my-doc-id", data: "value", name: "test" };
     const { _id: rawId, ...docWithoutId } = updateDoc;
 
     // replaceOne receives docWithoutId — no _id, safe for any existing _id type
@@ -39,7 +39,7 @@ describe("PUT replace-then-insert pattern", () => {
   });
 
   it("skips insert when existing doc matched", () => {
-    const matchedCount: number = 1; // simulate match from replaceOne
+    const matchedCount = 1; // simulate match from replaceOne
     const shouldInsert = matchedCount === 0;
 
     expect(shouldInsert).toBe(false);

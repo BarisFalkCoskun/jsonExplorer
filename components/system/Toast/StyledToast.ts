@@ -37,9 +37,9 @@ type StyledToastItemProps = {
 };
 
 const severityColors: Record<string, string> = {
-  success: "#2e7d32",
   error: "#c62828",
   info: "#424242",
+  success: "#2e7d32",
 };
 
 export const StyledToastItem = styled.div<StyledToastItemProps>`

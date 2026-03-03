@@ -1,10 +1,11 @@
 import { basename, dirname, isAbsolute, join } from "path";
 import { useCallback, useEffect, useRef, useState } from "react";
+// eslint-disable-next-line import/no-unresolved
 import {
   type BFSCallback,
   type FileSystem,
 } from "browserfs/dist/node/core/file_system";
-import { type ApiError } from "browserfs/dist/node/core/api_error";
+// eslint-disable-next-line import/no-unresolved
 import { type FSModule } from "browserfs/dist/node/core/FS";
 import type IZipFS from "browserfs/dist/node/backend/ZipFS";
 import type IIsoFS from "browserfs/dist/node/backend/IsoFS";
@@ -170,6 +171,7 @@ const useFileSystemContextState = (): FileSystemContextState => {
           }),
         ]);
       } catch (error) {
+        // eslint-disable-next-line no-console
         console.warn('Failed to copy image to clipboard:', error);
       }
     },
@@ -287,8 +289,9 @@ const useFileSystemContextState = (): FileSystemContextState => {
 
             try {
               rootFs?.mount?.(join("/", dbName), newFs);
-            } catch (error) {
-              console.warn(`Failed to mount database ${dbName}:`, error);
+            } catch (mountError) {
+              // eslint-disable-next-line no-console
+              console.warn(`Failed to mount database ${dbName}:`, mountError);
             }
 
             resolve(dbName);
@@ -349,6 +352,7 @@ const useFileSystemContextState = (): FileSystemContextState => {
       } catch (error) {
         // User cancelled the dialog - this is expected, log only in debug mode
         if (error && (error as Error).name !== 'AbortError') {
+          // eslint-disable-next-line no-console
           console.warn('Failed to open file picker:', error);
         }
       }
@@ -411,8 +415,9 @@ const useFileSystemContextState = (): FileSystemContextState => {
 
                 try {
                   observer.observe(handle, { recursive: true });
-                } catch (error) {
-                  console.warn('Failed to observe directory handle:', error);
+                } catch (observeError) {
+                  // eslint-disable-next-line no-console
+                  console.warn('Failed to observe directory handle:', observeError);
                   observer = undefined;
                 }
               }
@@ -555,6 +560,7 @@ const useFileSystemContextState = (): FileSystemContextState => {
         try {
           created = (await exists(makePath)) || (await mkdir(makePath));
         } catch (error) {
+          // eslint-disable-next-line no-console
           console.warn(`Failed to create directory ${makePath}:`, error);
           created = false;
         }
@@ -689,8 +695,9 @@ const useFileSystemContextState = (): FileSystemContextState => {
                     await mapFs(mapDirectory, handle);
 
                     if (mapDirectory === DESKTOP_PATH) mappedOntoDesktop = true;
-                  } catch (error) {
-                    console.warn(`Failed to map directory ${mapDirectory}:`, error);
+                  } catch (mapError) {
+                    // eslint-disable-next-line no-console
+                    console.warn(`Failed to map directory ${mapDirectory}:`, mapError);
                   }
                 }
               }
@@ -701,6 +708,7 @@ const useFileSystemContextState = (): FileSystemContextState => {
         if (mappedOntoDesktop) updateFolder(DESKTOP_PATH);
       };
 
+      // eslint-disable-next-line no-console
       restoreFsHandles().catch(console.error);
     }
   }, [exists, mapFs, rootFs, updateFolder]);
@@ -712,6 +720,7 @@ const useFileSystemContextState = (): FileSystemContextState => {
       restoredMongoConnections.current = true;
 
       const restoreMongoConnections = async (): Promise<void> => {
+        // eslint-disable-next-line unicorn/no-null -- localStorage.getItem returns null
         let savedConnections: string | null = null;
 
         try {
@@ -721,15 +730,15 @@ const useFileSystemContextState = (): FileSystemContextState => {
         }
 
         const defaultConnection = {
-          connectionString: "mongodb://localhost:27017",
           alias: "Local",
+          connectionString: "mongodb://localhost:27017",
         };
 
-        let connections: { connectionString: string; alias: string }[];
+        let connections: { alias: string, connectionString: string; }[];
 
         if (savedConnections) {
           try {
-            connections = JSON.parse(savedConnections);
+            connections = JSON.parse(savedConnections) as typeof connections;
           } catch {
             connections = [defaultConnection];
           }
@@ -752,17 +761,20 @@ const useFileSystemContextState = (): FileSystemContextState => {
         let mounted = false;
 
         for (const { connectionString, alias } of connections) {
+          // eslint-disable-next-line no-continue
           if (!connectionString || !alias) continue;
 
           const mountPath = `${DESKTOP_PATH}/${alias}`;
 
+          // eslint-disable-next-line no-continue
           if (rootFs.mntMap[mountPath]) continue;
 
           try {
+            // eslint-disable-next-line no-await-in-loop, no-loop-func
             await new Promise<void>((resolve, reject) => {
-              Create({ connectionString }, (error, mongoFS) => {
-                if (error || !mongoFS) {
-                  reject(error || new Error("Failed to create MongoDBFS"));
+              Create({ connectionString }, (createError, mongoFS) => {
+                if (createError || !mongoFS) {
+                  reject(createError || new Error("Failed to create MongoDBFS"));
                   return;
                 }
 
@@ -771,12 +783,13 @@ const useFileSystemContextState = (): FileSystemContextState => {
                   mounted = true;
                   resolve();
                 } catch (mountError) {
-                  reject(mountError);
+                  reject(mountError instanceof Error ? mountError : new Error(String(mountError)));
                 }
               });
             });
-          } catch (error) {
-            console.warn(`Failed to restore MongoDB connection ${alias}:`, error);
+          } catch (connError) {
+            // eslint-disable-next-line no-console
+            console.warn(`Failed to restore MongoDB connection ${alias}:`, connError);
           }
         }
 
@@ -787,6 +800,7 @@ const useFileSystemContextState = (): FileSystemContextState => {
         }
       };
 
+      // eslint-disable-next-line no-console
       restoreMongoConnections().catch(console.error);
     }
   }, [rootFs, updateFolder]);

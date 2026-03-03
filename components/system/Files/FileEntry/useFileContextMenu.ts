@@ -58,7 +58,7 @@ import useTransferDialog, {
   type ObjectReader,
 } from "components/system/Dialogs/Transfer/useTransferDialog";
 import { getMountUrl, isMountedFolder } from "contexts/fileSystem/core";
-import { MongoDBFileSystem } from "contexts/fileSystem/MongoDBFS";
+import { type MongoDBFileSystem } from "contexts/fileSystem/MongoDBFS";
 import { runMongoPatchBatch } from "utils/mongoMutations";
 import { useToast } from "components/system/Toast/useToast";
 

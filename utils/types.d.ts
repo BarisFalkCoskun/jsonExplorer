@@ -7,11 +7,12 @@ type FCWithRef<R = HTMLElement, T = Record<string, unknown>> = (
 ) => React.JSX.Element | null;
 
 type TVMJSGlobalEnv = {
-  logger?: (type: string, message: string) => void;
   [key: string]: unknown;
+  logger?: (type: string, message: string) => void;
 };
 
 declare global {
+  // eslint-disable-next-line vars-on-top, no-var
   var tvmjsGlobalEnv: TVMJSGlobalEnv | undefined;
 
   interface Window {
@@ -30,6 +31,7 @@ declare module "browserfs" {
   }
 
   export type BFSCallback<T = unknown> = (
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     error?: any,
     fs?: T
   ) => void;
@@ -39,7 +41,7 @@ declare module "browserfs" {
     {
       Create: (
         options: Record<string, unknown>,
-        cb: (...args: any[]) => void
+        cb: (...args: unknown[]) => void
       ) => void;
     }
   >;
@@ -64,13 +66,6 @@ declare module "browserfs/dist/node/core/node_fs_stats" {
     dev: number;
     gid: number;
     ino: number;
-    mode: number;
-    mtime: Date;
-    mtimeMs: number;
-    nlink: number;
-    rdev: number;
-    size: number;
-    uid: number;
     isBlockDevice: () => boolean;
     isCharacterDevice: () => boolean;
     isDirectory: () => boolean;
@@ -78,6 +73,13 @@ declare module "browserfs/dist/node/core/node_fs_stats" {
     isFile: () => boolean;
     isSocket: () => boolean;
     isSymbolicLink: () => boolean;
+    mode: number;
+    mtime: Date;
+    mtimeMs: number;
+    nlink: number;
+    rdev: number;
+    size: number;
+    uid: number;
   }
 }
 
@@ -90,12 +92,14 @@ declare module "browserfs/dist/node/core/FS" {
   };
 
   export type FSModule = {
+    [key: string]: unknown;
     exists: (path: string, cb: (exists: boolean) => void) => void;
+    getRootFS?: () => unknown;
     lstat: (
       path: string,
       cb: (
         error: ErrorLike | null | undefined,
-        stats?: import("browserfs/dist/node/core/node_fs_stats").default
+        stats?: import("browserfs/dist/node/core/node_fs_stats").default // eslint-disable-line @typescript-eslint/consistent-type-imports
       ) => void
     ) => void;
     mkdir: (
@@ -130,7 +134,7 @@ declare module "browserfs/dist/node/core/FS" {
       path: string,
       cb: (
         error: ErrorLike | null | undefined,
-        stats?: import("browserfs/dist/node/core/node_fs_stats").default
+        stats?: import("browserfs/dist/node/core/node_fs_stats").default // eslint-disable-line @typescript-eslint/consistent-type-imports
       ) => void
     ) => void;
     unlink: (path: string, cb?: (error?: ErrorLike | null) => void) => void;
@@ -144,8 +148,6 @@ declare module "browserfs/dist/node/core/FS" {
         | ((error?: ErrorLike | null) => void),
       cb?: (error?: ErrorLike | null) => void
     ) => void;
-    getRootFS?: () => unknown;
-    [key: string]: unknown;
   };
 }
 
@@ -158,7 +160,9 @@ declare module "browserfs/dist/node/core/api_error" {
 }
 
 declare module "browserfs/dist/node/core/file_system" {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   export type BFSCallback<T> = (error?: any, data?: T) => void;
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
   export interface FileSystem {}
 }
 
@@ -173,8 +177,8 @@ declare module "browserfs/dist/node/backend/OverlayFS" {
 
 declare module "browserfs/dist/node/backend/IndexedDB" {
   export default interface IndexedDBFileSystem {
+    empty?: (cb: (error?: import("browserfs/dist/node/core/api_error").ApiError | null) => void) => void; // eslint-disable-line @typescript-eslint/consistent-type-imports, sonarjs/no-redundant-optional
     getName: () => string;
-    empty?: ((cb: (error?: import("browserfs/dist/node/core/api_error").ApiError | null) => void) => void) | undefined;
   }
 }
 
@@ -186,23 +190,27 @@ declare module "browserfs/dist/node/backend/HTTPRequest" {
 
 declare module "browserfs/dist/node/backend/InMemory" {
   export default interface InMemoryFileSystem {
+    empty?: (cb: (error?: import("browserfs/dist/node/core/api_error").ApiError | null) => void) => void; // eslint-disable-line @typescript-eslint/consistent-type-imports, sonarjs/no-redundant-optional
     getName: () => string;
-    empty?: ((cb: (error?: import("browserfs/dist/node/core/api_error").ApiError | null) => void) => void) | undefined;
   }
 }
 
 declare module "browserfs/dist/node/backend/Emscripten" {
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
   export default interface EmscriptenFileSystem {}
 }
 
 declare module "browserfs/dist/node/backend/MountableFileSystem" {
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
   export default interface MountableFileSystem {}
 }
 
 declare module "browserfs/dist/node/backend/ZipFS" {
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
   export default interface ZipFS {}
 }
 
 declare module "browserfs/dist/node/backend/IsoFS" {
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
   export default interface IsoFS {}
 }

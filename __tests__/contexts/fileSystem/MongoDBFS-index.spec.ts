@@ -1,14 +1,14 @@
 describe("MongoDBFS document index", () => {
   it("builds index keyed by decoded document identifier", () => {
     const documents = [
-      { _id: "1", name: "apple", category: "fruit", thumbnail: "a.jpg", imageCount: 2 },
-      { _id: "2", name: "banana", thumbnail: "b.jpg", imageCount: 1 },
-      { _id: "3", name: "cherry", dismissed: true },
+      { _id: "1", category: "fruit", imageCount: 2, name: "apple", thumbnail: "a.jpg" },
+      { _id: "2", imageCount: 1, name: "banana", thumbnail: "b.jpg" },
+      { _id: "3", dismissed: true, name: "cherry" },
     ];
 
     const index = new Map<string, (typeof documents)[0]>();
     for (const doc of documents) {
-      const identifier = encodeURIComponent(String(doc._id || doc.name || ""));
+      const identifier = encodeURIComponent(doc._id || doc.name || "");
       const decoded = decodeURIComponent(identifier);
       index.set(decoded, doc);
     }
@@ -22,14 +22,14 @@ describe("MongoDBFS document index", () => {
 
   it("index supports O(1) thumbnail lookup", () => {
     const documents = [
-      { _id: "1", name: "apple", thumbnail: "a.jpg", imageCount: 3 },
-      { _id: "2", name: "banana", thumbnail: "b.jpg", imageCount: 1 },
+      { _id: "1", imageCount: 3, name: "apple", thumbnail: "a.jpg" },
+      { _id: "2", imageCount: 1, name: "banana", thumbnail: "b.jpg" },
     ];
 
     const index = new Map<string, (typeof documents)[0]>();
-    for (const doc of documents) {
-      const decoded = decodeURIComponent(encodeURIComponent(String(doc._id || doc.name)));
-      index.set(decoded, doc);
+    for (const entry of documents) {
+      const decoded = decodeURIComponent(encodeURIComponent(entry._id || entry.name));
+      index.set(decoded, entry);
     }
 
     const doc = index.get("1");
@@ -38,7 +38,7 @@ describe("MongoDBFS document index", () => {
   });
 
   it("index updated in-place by patchDocument pattern", () => {
-    const doc = { _id: "1", name: "apple", thumbnail: "a.jpg", imageCount: 2 };
+    const doc = { _id: "1", imageCount: 2, name: "apple", thumbnail: "a.jpg" };
     const index = new Map<string, typeof doc>();
     index.set("1", doc);
 

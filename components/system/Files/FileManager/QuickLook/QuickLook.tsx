@@ -33,7 +33,7 @@ const QuickLookImage: FC<{ path: string; scale: number }> = ({
     <>
       <div className="ql-content">
         {imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
+           
           <img
             alt={basename(path, ".json")}
             src={imageUrl}
@@ -129,7 +129,7 @@ const QuickLook: FC<QuickLookProps> = ({ files, onClose, path, url }) => {
     >
       <div className="ql-window">
         <div className="ql-titlebar">
-          <button onClick={onClose} type="button" aria-label="Close" />
+          <button aria-label="Close" onClick={onClose} type="button" />
           <span>{displayName}</span>
         </div>
         <QuickLookImage key={currentPath} path={currentPath} scale={scale} />

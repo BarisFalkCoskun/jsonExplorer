@@ -17,6 +17,7 @@ describe("PATCH $set/$unset split logic", () => {
   });
 
   it("puts null values in $unset", () => {
+    // eslint-disable-next-line unicorn/no-null -- testing MongoDB $unset split logic requires null
     const updates: Record<string, unknown> = { category: null, dismissed: null };
     const setFields: Record<string, unknown> = {};
     const unsetFields: Record<string, string> = {};
@@ -34,6 +35,7 @@ describe("PATCH $set/$unset split logic", () => {
   });
 
   it("splits mixed updates correctly", () => {
+    // eslint-disable-next-line unicorn/no-null -- testing MongoDB $unset split logic requires null
     const updates: Record<string, unknown> = { category: "fruit", dismissed: null, name: "apple" };
     const setFields: Record<string, unknown> = {};
     const unsetFields: Record<string, string> = {};

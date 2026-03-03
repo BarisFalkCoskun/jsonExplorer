@@ -4,19 +4,19 @@ import { MongoDBFileSystem } from "contexts/fileSystem/MongoDBFS";
 import { type RootFileSystem } from "contexts/fileSystem/useAsyncFs";
 
 interface MongoDBIconState {
-  images: string[];
   currentImageIndex: number;
-  isLoading: boolean;
   error: string | null;
   hasNavigationArrows: boolean;
+  images: string[];
+  isLoading: boolean;
 }
 
 const INITIAL_STATE: MongoDBIconState = {
-  images: [],
   currentImageIndex: 0,
-  isLoading: false,
   error: null,
   hasNavigationArrows: false,
+  images: [],
+  isLoading: false,
 };
 
 /**
@@ -36,7 +36,7 @@ const findMongoDBFileSystem = (
   // Fast path: check if path starts with any known MongoDB mount point
   for (const [mountPoint, fs] of Object.entries(rootFs.mntMap)) {
     if (fs instanceof MongoDBFileSystem &&
-        (path === mountPoint || path.startsWith(mountPoint + "/"))) {
+        (path === mountPoint || path.startsWith(`${mountPoint  }/`))) {
       return {
         mongoFS: fs,
         mountPoint,
@@ -97,7 +97,7 @@ export const useMongoDBIcon = (path: string, visible = false) => {
     loadingRef.current = abortController;
     isLoadingRef.current = true;
 
-    setState((prev) => ({ ...prev, isLoading: true, error: null }));
+    setState((prev) => ({ ...prev, error: null, isLoading: true }));
 
     try {
       const images = await mongoData.mongoFS.getDocumentImages(
@@ -111,10 +111,10 @@ export const useMongoDBIcon = (path: string, visible = false) => {
 
       setState((prev) => ({
         ...prev,
+        currentImageIndex: 0,
+        hasNavigationArrows: images.length > 1,
         images,
         isLoading: false,
-        hasNavigationArrows: images.length > 1,
-        currentImageIndex: 0,
       }));
     } catch (error) {
       if (abortController.signal.aborted) return;
@@ -122,8 +122,8 @@ export const useMongoDBIcon = (path: string, visible = false) => {
       isLoadingRef.current = false;
       setState((prev) => ({
         ...prev,
-        isLoading: false,
         error: error instanceof Error ? error.message : "Unknown error",
+        isLoading: false,
       }));
     }
   }, [isMongoDocument, mongoData]);
@@ -190,13 +190,11 @@ export const useMongoDBIcon = (path: string, visible = false) => {
   }, [path]);
 
   // Abort on unmount
-  useEffect(() => {
-    return () => {
+  useEffect(() => () => {
       if (loadingRef.current) {
         loadingRef.current.abort();
       }
-    };
-  }, []);
+    }, []);
 
   // Load thumbnail from cache when visible (zero network)
   useEffect(() => {
@@ -207,12 +205,12 @@ export const useMongoDBIcon = (path: string, visible = false) => {
 
   return {
     ...state,
-    isMongoDocument: isMongoDocument(),
-    getCurrentImageUrl,
-    goToPreviousImage,
-    goToNextImage,
-    canGoToPrevious,
     canGoToNext,
+    canGoToPrevious,
+    getCurrentImageUrl,
+    goToNextImage,
+    goToPreviousImage,
+    isMongoDocument: isMongoDocument(),
     loadImages,
   };
 };

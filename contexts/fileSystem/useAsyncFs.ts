@@ -1,4 +1,5 @@
 import { join } from "path";
+// eslint-disable-next-line import/no-unresolved
 import { type FSModule } from "browserfs/dist/node/core/FS";
 import type Stats from "browserfs/dist/node/core/node_fs_stats";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -56,10 +57,10 @@ export type RootFileSystem = {
   _getFs: (path: string) => {
     fs?: unknown;
   };
-  mount?: (path: string, fs: unknown) => void;
-  umount?: (path: string) => void;
   mntMap: Record<string, Mount>;
+  mount?: (path: string, fs: unknown) => void;
   mountList: string[];
+  umount?: (path: string) => void;
 };
 
 type AsyncFSModule = AsyncFS & {
@@ -133,12 +134,14 @@ const useAsyncFs = (): AsyncFSModule => {
       lstat: (path) =>
         new Promise((resolve, reject) => {
           fs?.lstat(path, (error, stats = Object.create(null) as Stats) =>
+            // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- BrowserFS ErrorLike
             error ? reject(error) : resolve(stats)
           );
         }),
       mkdir: (path, overwrite = false) =>
         new Promise((resolve, reject) => {
           fs?.mkdir(path, { flag: overwrite ? "w" : "wx" }, (error) =>
+            // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- BrowserFS ErrorLike
             error ? reject(error) : resolve(true)
           );
         }),
@@ -160,12 +163,14 @@ const useAsyncFs = (): AsyncFSModule => {
               if (mountData) return resolve(mountData);
             }
 
+            // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- BrowserFS ErrorLike
             return reject(error);
           });
         }),
       readdir: (path) =>
         new Promise((resolve, reject) => {
           fs?.readdir(path, (error, data = []) =>
+            // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- BrowserFS ErrorLike
             error ? reject(error) : resolve(data)
           );
         }),
@@ -184,7 +189,8 @@ const useAsyncFs = (): AsyncFSModule => {
                     fs.readFile(oldPath, (readError, data = Buffer.from("")) =>
                       fs.writeFile(newPath, data, (writeError) =>
                         readError || writeError
-                          ? reject(
+                          ? // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- BrowserFS ErrorLike
+                            reject(
                               readError ||
                                 writeError ||
                                 new Error("Failed to rename file.")
@@ -204,12 +210,14 @@ const useAsyncFs = (): AsyncFSModule => {
             ) {
               resolve(false);
             } else {
+              // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- BrowserFS ErrorLike
               reject(renameError);
             }
           });
         }),
       rmdir: (path) =>
         new Promise((resolve, reject) => {
+          // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- BrowserFS ErrorLike
           fs?.rmdir(path, (error) => (error ? reject(error) : resolve(true)));
         }),
       stat: (path) =>
@@ -219,10 +227,12 @@ const useAsyncFs = (): AsyncFSModule => {
               return typeof error.code === "string" &&
                 UNKNOWN_STATE_CODES.has(error.code)
                 ? resolve(createUnknownFileStats())
+                // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- BrowserFS ErrorLike
                 : reject(error);
             }
 
             if (stats.size === -1 && isExistingFile(stats)) {
+              // eslint-disable-next-line no-param-reassign -- BrowserFS stats mutation
               stats.size = get9pSize(path);
             }
 
@@ -236,6 +246,7 @@ const useAsyncFs = (): AsyncFSModule => {
               return typeof error.code === "string" &&
                 UNKNOWN_STATE_CODES.has(error.code)
                 ? resolve(false)
+                // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- BrowserFS ErrorLike
                 : reject(error);
             }
 
@@ -259,6 +270,7 @@ const useAsyncFs = (): AsyncFSModule => {
                   );
                 }
 
+                // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- BrowserFS ErrorLike
                 reject(error);
               } else {
                 resolve(!error);
@@ -293,7 +305,7 @@ const useAsyncFs = (): AsyncFSModule => {
         (...args: unknown[]) => {
           if (fsRef.current) {
             // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type, @typescript-eslint/no-unsafe-call
-            (fsRef.current[name as keyof FSModule] as unknown as Function)(
+            (fsRef.current[name as keyof FSModule] as Function)(
               ...args
             );
           } else mockFsCallQueue.push([name, args]);

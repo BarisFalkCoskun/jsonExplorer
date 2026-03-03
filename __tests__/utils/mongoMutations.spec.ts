@@ -16,7 +16,7 @@ describe("runMongoPatchBatch", () => {
       () => Promise.resolve(),
     ];
     const result = await runMongoPatchBatch(tasks);
-    expect(result).toEqual({ succeeded: 3, failed: 0, errors: [] });
+    expect(result).toEqual({ errors: [], failed: 0, succeeded: 3 });
   });
 
   it("partial failure → collects errors, doesn't stop others", async () => {
@@ -50,7 +50,7 @@ describe("runMongoPatchBatch", () => {
 
     const result = await promise;
     expect(attempts).toBe(3);
-    expect(result).toEqual({ succeeded: 1, failed: 0, errors: [] });
+    expect(result).toEqual({ errors: [], failed: 0, succeeded: 1 });
   });
 
   it("does NOT retry 4xx errors", async () => {
@@ -100,7 +100,7 @@ describe("runMongoPatchBatch", () => {
 
     const result = await promise;
     expect(attempts).toBe(2);
-    expect(result).toEqual({ succeeded: 1, failed: 0, errors: [] });
+    expect(result).toEqual({ errors: [], failed: 0, succeeded: 1 });
   });
 
   it("limits concurrency to at most 10 parallel tasks", async () => {

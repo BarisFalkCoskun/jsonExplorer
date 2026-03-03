@@ -31,7 +31,7 @@ const MonacoEditor: FC<ComponentProcessProps> = ({ id }) => {
 
   useEffect(() => {
     if (!url || !containerRef.current || closing || loadedUrlRef.current === url)
-      return;
+      {return;}
 
     let disposed = false;
 
@@ -46,12 +46,12 @@ const MonacoEditor: FC<ComponentProcessProps> = ({ id }) => {
         editorRef.current.setValue(fileContent.toString());
       } else {
         const editor = monaco.editor.create(containerRef.current!, {
-          value: fileContent.toString(),
-          language: "json",
-          theme: "vs-dark",
           automaticLayout: true,
+          language: "json",
           minimap: { enabled: false },
           scrollBeyondLastLine: false,
+          theme: "vs-dark",
+          value: fileContent.toString(),
         });
 
         editor.onDidChangeModelContent(() => {

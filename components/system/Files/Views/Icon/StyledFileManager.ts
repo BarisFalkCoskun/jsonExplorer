@@ -1,6 +1,6 @@
 import styled from "styled-components";
 import { type StyledFileManagerProps } from "components/system/Files/Views";
-import { ICON_ZOOM_LEVELS, DEFAULT_ICON_ZOOM_LEVEL } from "components/system/Files/FileManager/constants";
+import { ICON_ZOOM_LEVELS } from "components/system/Files/FileManager/constants";
 import ScrollBars from "styles/common/ScrollBars";
 import { TASKBAR_HEIGHT } from "utils/constants";
 

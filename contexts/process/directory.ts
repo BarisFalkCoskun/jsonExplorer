@@ -13,20 +13,6 @@ const directory: Processes = {
     icon: FOLDER_ICON,
     title: "File Explorer",
   },
-  OpenWith: {
-    Component: dynamic(() => import("components/system/Dialogs/OpenWith")),
-    allowResizing: false,
-    backgroundColor: "#FFF",
-    defaultSize: {
-      height: 492,
-      width: 392,
-    },
-    dialogProcess: true,
-    hideTaskbarEntry: true,
-    hideTitlebar: true,
-    icon: "/System/Icons/unknown.webp",
-    title: "Open With",
-  },
   MonacoEditor: {
     Component: dynamic(() => import("components/apps/MonacoEditor")),
     backgroundColor: "#1e1e1e",
@@ -50,6 +36,20 @@ const directory: Processes = {
     hideMinimizeButton: true,
     icon: "/System/Icons/unknown.webp",
     title: "MongoDB Connection",
+  },
+  OpenWith: {
+    Component: dynamic(() => import("components/system/Dialogs/OpenWith")),
+    allowResizing: false,
+    backgroundColor: "#FFF",
+    defaultSize: {
+      height: 492,
+      width: 392,
+    },
+    dialogProcess: true,
+    hideTaskbarEntry: true,
+    hideTitlebar: true,
+    icon: "/System/Icons/unknown.webp",
+    title: "Open With",
   },
   Photos: {
     Component: dynamic(() => import("components/apps/Photos")),
