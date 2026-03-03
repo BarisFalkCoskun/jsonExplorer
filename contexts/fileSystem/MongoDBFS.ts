@@ -345,38 +345,31 @@ export class MongoDBFileSystem implements FileSystem {
     collectionName: string,
     metaOnly = false
   ): Promise<MongoDocument[]> {
-    await this.connect();
-    if (!this.client) throw new Error("No MongoDB connection");
-
     if (metaOnly) {
       const cached = this.getCachedDocumentsList(dbName, collectionName);
 
       if (cached) return cached;
-
-      const response = await fetch(
-        `/api/mongodb/documents/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}?meta=1`,
-        {
-          headers: {
-            "x-mongodb-connection": this.connectionString,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const documents = (await response.json()) as MongoDocument[];
-
-      this.setCachedDocumentsList(dbName, collectionName, documents);
-
-      return documents;
     }
 
-    const db = this.client.db(dbName);
-    const collection = db.collection(collectionName);
-    const documents = await collection.find({}).toArray();
-    return documents as MongoDocument[];
+    const url = `/api/mongodb/documents/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}${metaOnly ? "?meta=1" : ""}`;
+
+    const response = await fetch(url, {
+      headers: {
+        "x-mongodb-connection": this.connectionString,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const documents = (await response.json()) as MongoDocument[];
+
+    if (metaOnly) {
+      this.setCachedDocumentsList(dbName, collectionName, documents);
+    }
+
+    return documents;
   }
 
   public async getDocumentImages(path: string): Promise<string[]> {
