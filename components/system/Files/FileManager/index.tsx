@@ -110,7 +110,7 @@ const FileManager: FC<FileManagerProps> = ({
       skipFsWatcher,
       skipSorting,
     });
-  const allFilesRef = useRef<typeof files>(undefined);
+  const allFilesRef = useRef<{ files: NonNullable<typeof files>; key: string } | undefined>(undefined);
   const { lstat, mountFs, rootFs } = useFileSystem();
   const { mountUrl, isMongoFS, mongoFs } = useMemo(() => {
     const mUrl = rootFs?.mntMap ? getMountUrl(url, rootFs.mntMap) : undefined;
@@ -142,7 +142,7 @@ const FileManager: FC<FileManagerProps> = ({
           if (!currentFiles) return currentFiles;
 
           if (!allFilesRef.current) {
-            allFilesRef.current = currentFiles;
+            allFilesRef.current = { key: url, files: { ...currentFiles } };
           }
 
           const filtered: typeof currentFiles = {};
@@ -160,13 +160,13 @@ const FileManager: FC<FileManagerProps> = ({
       } else {
         updateFiles();
       }
-    } else if (allFilesRef.current) {
+    } else if (allFilesRef.current && allFilesRef.current.key === url) {
       if (hideDismissed) {
         const dismissedNames = mongoFs.getCachedDismissedNames(mongoCollection.database, mongoCollection.collection);
 
         if (dismissedNames) {
           setFiles(() => {
-            const source = allFilesRef.current;
+            const source = allFilesRef.current?.files;
 
             if (!source) return {};
 
@@ -187,13 +187,14 @@ const FileManager: FC<FileManagerProps> = ({
           updateFiles();
         }
       } else {
-        setFiles(allFilesRef.current);
+        setFiles(allFilesRef.current.files);
         allFilesRef.current = undefined;
       }
     } else {
+      allFilesRef.current = undefined;
       updateFiles();
     }
-  }, [hideCategorized, hideDismissed, mongoCollection, mongoFs, setFiles, setHideCategorized, updateFiles]);
+  }, [hideCategorized, hideDismissed, mongoCollection, mongoFs, setFiles, setHideCategorized, updateFiles, url]);
   const handleToggleHideDismissed = useCallback(() => {
     if (!mongoFs) return;
 
@@ -208,7 +209,7 @@ const FileManager: FC<FileManagerProps> = ({
           if (!currentFiles) return currentFiles;
 
           if (!allFilesRef.current) {
-            allFilesRef.current = currentFiles;
+            allFilesRef.current = { key: url, files: { ...currentFiles } };
           }
 
           const filtered: typeof currentFiles = {};
@@ -226,13 +227,13 @@ const FileManager: FC<FileManagerProps> = ({
       } else {
         updateFiles();
       }
-    } else if (allFilesRef.current) {
+    } else if (allFilesRef.current && allFilesRef.current.key === url) {
       if (hideCategorized) {
         const categorizedNames = mongoFs.getCachedDocumentNames(mongoCollection.database, mongoCollection.collection);
 
         if (categorizedNames) {
           setFiles(() => {
-            const source = allFilesRef.current;
+            const source = allFilesRef.current?.files;
 
             if (!source) return {};
 
@@ -253,13 +254,14 @@ const FileManager: FC<FileManagerProps> = ({
           updateFiles();
         }
       } else {
-        setFiles(allFilesRef.current);
+        setFiles(allFilesRef.current.files);
         allFilesRef.current = undefined;
       }
     } else {
+      allFilesRef.current = undefined;
       updateFiles();
     }
-  }, [hideCategorized, hideDismissed, mongoCollection, mongoFs, setFiles, setHideDismissed, updateFiles]);
+  }, [hideCategorized, hideDismissed, mongoCollection, mongoFs, setFiles, setHideDismissed, updateFiles, url]);
   const handleDismiss = useCallback(
     async (entries: string[]) => {
       if (!mongoFs || !mountUrl) return;
@@ -495,6 +497,7 @@ const FileManager: FC<FileManagerProps> = ({
 
   useEffect(() => {
     if (url !== currentUrl) {
+      allFilesRef.current = undefined;
       folderActions.resetFiles();
       setCurrentUrl(url);
       setPermission("denied");
@@ -577,11 +580,11 @@ const FileManager: FC<FileManagerProps> = ({
     setFiles((currentFiles) => {
       if (!currentFiles) return currentFiles;
 
-      // Sync unfiltered snapshot with new entries from readdir
-      if (allFilesRef.current) {
+      // Sync unfiltered snapshot with new entries from readdir (same collection only)
+      if (allFilesRef.current && allFilesRef.current.key === url) {
         for (const [name, stat] of Object.entries(currentFiles)) {
-          if (!(name in allFilesRef.current)) {
-            allFilesRef.current[name] = stat;
+          if (!(name in allFilesRef.current.files)) {
+            allFilesRef.current.files[name] = stat;
           }
         }
       }
