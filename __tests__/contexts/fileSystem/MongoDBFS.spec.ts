@@ -3,8 +3,9 @@ import { MongoDBFileSystem } from "contexts/fileSystem/MongoDBFS";
 // We need to access private members for testing cache behavior.
 // Use type assertion to bypass TS access modifiers.
 type MongoDBFSTestable = MongoDBFileSystem & {
-  documentsListCache: Map<string, { cachedAt: number; documents: any[] }>;
+  documentsListCache: Map<string, { cachedAt: number; documentIndex: Map<string, any>; documents: any[] }>;
   getCollectionCacheKey(db: string, col: string): string;
+  getDocumentIdentifier(doc: any): string;
   parsePath(path: string): { database?: string; collection?: string; document?: string };
   unlink(path: string, callback: (error: any) => void): Promise<void>;
 };
@@ -12,25 +13,31 @@ type MongoDBFSTestable = MongoDBFileSystem & {
 const createFS = (): MongoDBFSTestable =>
   new MongoDBFileSystem("mongodb://localhost:27017") as MongoDBFSTestable;
 
+/** Build a cache entry with both documents array and documentIndex Map. */
+function buildCacheEntry(fs: MongoDBFSTestable, documents: any[]) {
+  const documentIndex = new Map<string, any>();
+  for (const doc of documents) {
+    const key = MongoDBFileSystem.decodeDocumentIdentifier(
+      fs.getDocumentIdentifier(doc)
+    );
+    documentIndex.set(key, doc);
+  }
+  return { cachedAt: Date.now(), documentIndex, documents };
+}
+
 describe("MongoDBFileSystem cache scoping", () => {
   it("getCachedDocumentNames scoped to a specific collection", () => {
     const fs = createFS();
     const key1 = fs.getCollectionCacheKey("db1", "products");
     const key2 = fs.getCollectionCacheKey("db1", "orders");
 
-    fs.documentsListCache.set(key1, {
-      cachedAt: Date.now(),
-      documents: [
+    fs.documentsListCache.set(key1, buildCacheEntry(fs, [
         { _id: "1", name: "apple", category: "fruit" },
         { _id: "2", name: "banana" },
-      ],
-    });
-    fs.documentsListCache.set(key2, {
-      cachedAt: Date.now(),
-      documents: [
+    ]));
+    fs.documentsListCache.set(key2, buildCacheEntry(fs, [
         { _id: "3", name: "order1", category: "processed" },
-      ],
-    });
+    ]));
 
     // Should return only categorized docs from db1/products
     const result = fs.getCachedDocumentNames("db1", "products");
@@ -45,13 +52,10 @@ describe("MongoDBFileSystem cache scoping", () => {
     const fs = createFS();
     const key = fs.getCollectionCacheKey("db1", "products");
 
-    fs.documentsListCache.set(key, {
-      cachedAt: Date.now(),
-      documents: [
+    fs.documentsListCache.set(key, buildCacheEntry(fs, [
         { _id: "1", name: "apple", dismissed: true },
         { _id: "2", name: "banana" },
-      ],
-    });
+    ]));
 
     const result = fs.getCachedDismissedNames("db1", "products");
     expect(result).toEqual(new Set(["apple"]));
@@ -62,14 +66,12 @@ describe("MongoDBFileSystem cache scoping", () => {
     const key1 = fs.getCollectionCacheKey("db1", "col1");
     const key2 = fs.getCollectionCacheKey("db1", "col2");
 
-    fs.documentsListCache.set(key1, {
-      cachedAt: Date.now(),
-      documents: [{ _id: "1", name: "docA", dismissed: true }],
-    });
-    fs.documentsListCache.set(key2, {
-      cachedAt: Date.now(),
-      documents: [{ _id: "2", name: "docA" }],
-    });
+    fs.documentsListCache.set(key1, buildCacheEntry(fs, [
+      { _id: "1", name: "docA", dismissed: true },
+    ]));
+    fs.documentsListCache.set(key2, buildCacheEntry(fs, [
+      { _id: "2", name: "docA" },
+    ]));
 
     expect(fs.isCachedDismissed("docA", "db1", "col1")).toBe(true);
     expect(fs.isCachedDismissed("docA", "db1", "col2")).toBe(false);
@@ -79,13 +81,10 @@ describe("MongoDBFileSystem cache scoping", () => {
     const fs = createFS();
     const key = fs.getCollectionCacheKey("db1", "products");
 
-    fs.documentsListCache.set(key, {
-      cachedAt: Date.now(),
-      documents: [
+    fs.documentsListCache.set(key, buildCacheEntry(fs, [
         { _id: "1", name: "apple", category: "fruit" },
         { _id: "2", name: "banana" },
-      ],
-    });
+    ]));
 
     expect(fs.getCachedDocumentCategory("apple", "db1", "products")).toBe("fruit");
     expect(fs.getCachedDocumentCategory("banana", "db1", "products")).toBeNull();
@@ -103,12 +102,9 @@ describe("MongoDBFileSystem document identity", () => {
     const fs = createFS();
     const key = fs.getCollectionCacheKey("db1", "products");
 
-    fs.documentsListCache.set(key, {
-      cachedAt: Date.now(),
-      documents: [
+    fs.documentsListCache.set(key, buildCacheEntry(fs, [
         { _id: "1", name: "weird/name", category: "fruit" },
-      ],
-    });
+    ]));
 
     const categorized = fs.getCachedDocumentNames("db1", "products");
     expect(categorized).toBeDefined();
@@ -119,13 +115,10 @@ describe("MongoDBFileSystem document identity", () => {
     const fs = createFS();
     const key = fs.getCollectionCacheKey("db1", "products");
 
-    fs.documentsListCache.set(key, {
-      cachedAt: Date.now(),
-      documents: [
+    fs.documentsListCache.set(key, buildCacheEntry(fs, [
         { _id: "1", name: "a/b", category: "x" },
         { _id: "2", name: "a_b", category: "y" },
-      ],
-    });
+    ]));
 
     const categorized = fs.getCachedDocumentNames("db1", "products");
     expect(categorized).toBeDefined();
@@ -138,12 +131,9 @@ describe("MongoDBFileSystem document identity", () => {
     const fs = createFS();
     const key = fs.getCollectionCacheKey("db1", "products");
 
-    fs.documentsListCache.set(key, {
-      cachedAt: Date.now(),
-      documents: [
+    fs.documentsListCache.set(key, buildCacheEntry(fs, [
         { _id: "1", name: "weird/name", category: "fruit" },
-      ],
-    });
+    ]));
 
     const categorized = fs.getCachedDocumentNames("db1", "products");
     expect(categorized).toBeDefined();
@@ -160,12 +150,9 @@ describe("MongoDBFileSystem document identity", () => {
     const fs = createFS();
     const key = fs.getCollectionCacheKey("db1", "products");
 
-    fs.documentsListCache.set(key, {
-      cachedAt: Date.now(),
-      documents: [
+    fs.documentsListCache.set(key, buildCacheEntry(fs, [
         { _id: "abc123", category: "electronics" },
-      ],
-    });
+    ]));
 
     const categorized = fs.getCachedDocumentNames("db1", "products");
     expect(categorized).toEqual(new Set(["abc123"]));
@@ -175,12 +162,9 @@ describe("MongoDBFileSystem document identity", () => {
     const fs = createFS();
     const key = fs.getCollectionCacheKey("db1", "products");
 
-    fs.documentsListCache.set(key, {
-      cachedAt: Date.now(),
-      documents: [
+    fs.documentsListCache.set(key, buildCacheEntry(fs, [
         { _id: "fallback-id", category: "misc" },
-      ],
-    });
+    ]));
 
     const categorized = fs.getCachedDocumentNames("db1", "products");
     expect(categorized).toBeDefined();

@@ -32,6 +32,7 @@ type CachedCollectionEntries = {
 
 type CachedDocumentsList = {
   cachedAt: number;
+  documentIndex: Map<string, MongoDocument>;
   documents: MongoDocument[];
 };
 
@@ -326,9 +327,16 @@ export class MongoDBFileSystem implements FileSystem {
     collection: string,
     documents: MongoDocument[]
   ): void {
+    const documentIndex = new Map<string, MongoDocument>();
+    for (const doc of documents) {
+      const key = MongoDBFileSystem.decodeDocumentIdentifier(
+        this.getDocumentIdentifier(doc)
+      );
+      documentIndex.set(key, doc);
+    }
     this.documentsListCache.set(
       this.getCollectionCacheKey(database, collection),
-      { cachedAt: Date.now(), documents }
+      { cachedAt: Date.now(), documentIndex, documents }
     );
   }
 
@@ -401,26 +409,23 @@ export class MongoDBFileSystem implements FileSystem {
       return { imageCount: 0, thumbnail: undefined };
     }
 
-    const cached = this.getCachedDocumentsList(database, collection);
+    const key = this.getCollectionCacheKey(database, collection);
+    const cached = this.documentsListCache.get(key);
 
     if (!cached) {
       return { imageCount: 0, thumbnail: undefined };
     }
 
-    for (const doc of cached) {
-      if (
-        MongoDBFileSystem.decodeDocumentIdentifier(
-          this.getDocumentIdentifier(doc)
-        ) === document
-      ) {
-        return {
-          imageCount: doc.imageCount ?? 0,
-          thumbnail: doc.thumbnail ?? undefined,
-        };
-      }
+    const doc = cached.documentIndex.get(document);
+
+    if (!doc) {
+      return { imageCount: 0, thumbnail: undefined };
     }
 
-    return { imageCount: 0, thumbnail: undefined };
+    return {
+      imageCount: doc.imageCount ?? 0,
+      thumbnail: doc.thumbnail ?? undefined,
+    };
   }
 
   /**
@@ -460,30 +465,28 @@ export class MongoDBFileSystem implements FileSystem {
     return dismissed;
   }
 
+  // docName is the encoded filesystem entry name (from getDocumentIdentifier)
   public isCachedDismissed(docName: string, database: string, collection: string): boolean {
     const key = this.getCollectionCacheKey(database, collection);
     const cached = this.documentsListCache.get(key);
     if (!cached) return false;
 
-    for (const doc of cached.documents) {
-      if (this.getDocumentIdentifier(doc) === docName) {
-        return !!doc.dismissed;
-      }
-    }
-    return false;
+    const doc = cached.documentIndex.get(
+      MongoDBFileSystem.decodeDocumentIdentifier(docName)
+    );
+    return !!doc?.dismissed;
   }
 
+  // docName is the encoded filesystem entry name (from getDocumentIdentifier)
   public getCachedDocumentCategory(docName: string, database: string, collection: string): string | null {
     const key = this.getCollectionCacheKey(database, collection);
     const cached = this.documentsListCache.get(key);
     if (!cached) return null;
 
-    for (const doc of cached.documents) {
-      if (this.getDocumentIdentifier(doc) === docName && "category" in doc) {
-        return doc.category;
-      }
-    }
-    return null;
+    const doc = cached.documentIndex.get(
+      MongoDBFileSystem.decodeDocumentIdentifier(docName)
+    );
+    return doc && "category" in doc ? doc.category : null;
   }
 
   public async patchDocument(
@@ -523,16 +526,15 @@ export class MongoDBFileSystem implements FileSystem {
     const cached = this.documentsListCache.get(cacheKey);
 
     if (cached) {
-      for (const doc of cached.documents) {
-        if (MongoDBFileSystem.decodeDocumentIdentifier(this.getDocumentIdentifier(doc)) === document) {
-          for (const [k, v] of Object.entries(updates)) {
-            if (v === null) {
-              delete doc[k];
-            } else {
-              doc[k] = v;
-            }
+      const doc = cached.documentIndex.get(document);
+
+      if (doc) {
+        for (const [k, v] of Object.entries(updates)) {
+          if (v === null) {
+            delete doc[k];
+          } else {
+            doc[k] = v;
           }
-          break;
         }
       }
     }
