@@ -75,7 +75,7 @@ test.describe("has folders", () => {
   });
 
   test("has sub menus", async ({ page }) => {
-    for (const [folder, entries] of Object.entries(START_MENU_FOLDERS)) {
+    for (const [folder, entries] of Object.entries(START_MENU_FOLDERS) as [string, string[]][]) {
       // eslint-disable-next-line no-await-in-loop
       await clickStartMenuEntry(folder, { page });
 

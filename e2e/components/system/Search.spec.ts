@@ -1,6 +1,10 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument -- e2e test constants are loosely typed */
 import { expect, test } from "@playwright/test";
-import { TEST_SEARCH, TEST_SEARCH_RESULT_TITLE } from "e2e/constants";
+import { TEST_SEARCH } from "e2e/constants";
+
+// TEST_SEARCH_RESULT_TITLE was removed from e2e/constants.
+// Value inferred from TEST_SEARCH ("CREDITS").
+const TEST_SEARCH_RESULT_TITLE = /^CREDITS$/;
 import {
   captureConsoleLogs,
   clickSearchButton,

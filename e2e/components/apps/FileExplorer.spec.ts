@@ -22,17 +22,20 @@ import {
   TEST_DESKTOP_FILE,
   TEST_IMAGE_NAME,
   TEST_ROOT_ARCHIVE,
-  TEST_ROOT_FILE,
   TEST_ROOT_FILE_2,
-  TEST_ROOT_FILE_ALT_APP,
-  TEST_ROOT_FILE_COPY,
   TEST_ROOT_FILE_DEFAULT_APP,
-  TEST_ROOT_FILE_TEXT,
   TEST_ROOT_FILE_TOOLTIP,
   TEST_SEARCH,
-  TEST_SEARCH_RESULT,
   WINDOW_RESIZE_HANDLE_WIDTH,
 } from "e2e/constants";
+
+// These constants were removed from e2e/constants but are still needed by tests.
+// Values inferred from TEST_ROOT_FILE_DEFAULT_APP ("Marked") and TEST_SEARCH ("CREDITS").
+const TEST_ROOT_FILE = /^CREDITS.md$/;
+const TEST_ROOT_FILE_TEXT = "CREDITS.md";
+const TEST_ROOT_FILE_ALT_APP = "Monaco Editor";
+const TEST_ROOT_FILE_COPY = /^CREDITS \(1\).md$/;
+const TEST_SEARCH_RESULT = /^CREDITS.md$/;
 import {
   appIsOpen,
   captureConsoleLogs,

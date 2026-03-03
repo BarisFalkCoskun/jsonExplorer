@@ -415,6 +415,8 @@ const useFolder = (
     ]
   );
   const loadMore = useCallback(async () => {
+    const BATCH_SIZE = 200;
+
     // MongoDB keyset pagination path
     if (mongoFsRef.current) {
       if (isLoadingMoreRef.current) return;
@@ -486,7 +488,6 @@ const useFolder = (
     }
 
     // Existing non-Mongo loadMore path
-    const BATCH_SIZE = 200;
     const allEntries = allEntriesRef.current;
 
     if (
