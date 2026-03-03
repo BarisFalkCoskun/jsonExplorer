@@ -135,11 +135,13 @@ const truncateName = (
   return nonBreakingName;
 };
 
+const NO_MANAGER_ID = "__no-manager-id__";
 const focusingMap = new Map<string, string[]>();
 
-const getFocusing = (id: string): string[] => {
-  if (!focusingMap.has(id)) focusingMap.set(id, []);
-  return focusingMap.get(id)!;
+const getFocusing = (id?: string): string[] => {
+  const key = id ?? NO_MANAGER_ID;
+  if (!focusingMap.has(key)) focusingMap.set(key, []);
+  return focusingMap.get(key)!;
 };
 
 const FileEntry: FC<FileEntryProps> = ({
