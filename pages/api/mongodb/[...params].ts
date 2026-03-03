@@ -281,7 +281,13 @@ const handleDocument = async (
 
     res.json(doc);
   } else if (req.method === 'PATCH') {
-    const updates = req.body as Record<string, unknown>;
+    const updates = req.body as Record<string, unknown> | undefined;
+
+    if (!updates || typeof updates !== "object") {
+      res.status(400).json({ error: "Request body must be a JSON object" });
+      return;
+    }
+
     const setFields: Record<string, unknown> = {};
     const unsetFields: Record<string, string> = {};
 
@@ -305,7 +311,13 @@ const handleDocument = async (
 
     res.json({ matchedCount: result.matchedCount, modifiedCount: result.modifiedCount });
   } else if (req.method === 'PUT') {
-    const updateDoc = req.body as Record<string, unknown>;
+    const updateDoc = req.body as Record<string, unknown> | undefined;
+
+    if (!updateDoc || typeof updateDoc !== "object") {
+      res.status(400).json({ error: "Request body must be a JSON object" });
+      return;
+    }
+
     const { _id: rawId, ...docWithoutId } = updateDoc;
     const filterDocId = typeof rawId === "string" ? rawId : documentId;
 
