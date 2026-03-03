@@ -161,34 +161,23 @@ export const useMongoDBIntegration = () => {
     }
   }, [rootFs, saveConnections, updateFolder]);
 
-  // Load saved connections from localStorage
+  // Seed connections from localStorage (read-only — useFileSystemContextState owns writes at startup)
   useEffect(() => {
-    const savedConnections = localStorage.getItem("mongodbConnections");
+    try {
+      const raw = localStorage.getItem("mongodbConnections");
+      if (!raw) return;
 
-    if (savedConnections) {
-      try {
-        const connections = (JSON.parse(savedConnections) as MongoDBConnection[]).map(
-          (connection) => ({
-            ...connection,
-            isConnected: false,
-          })
-        );
+      const parsed = JSON.parse(raw) as MongoDBConnection[];
+      if (!Array.isArray(parsed) || parsed.length === 0) return;
 
-        setState(prev => ({ ...prev, connections }));
-      } catch (error) {
-        console.error("Failed to load MongoDB connections:", error);
-      }
-    } else {
-      // Add a default demo connection for first-time users
-      const demoConnection: MongoDBConnection = {
-        connectionString: "mongodb://localhost:27017",
-        alias: "Local",
-        isConnected: false,
-      };
-      setState(prev => ({ ...prev, connections: [demoConnection] }));
-      saveConnections([demoConnection]);
+      setState(prev => ({
+        ...prev,
+        connections: parsed.map((c) => ({ ...c, isConnected: false })),
+      }));
+    } catch {
+      // Ignore parse errors — useFileSystemContextState will normalize
     }
-  }, [saveConnections]);
+  }, []);
 
   // Sync isConnected state with what's actually mounted (global restore may have already mounted)
   useEffect(() => {

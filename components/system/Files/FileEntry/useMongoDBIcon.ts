@@ -35,7 +35,8 @@ const findMongoDBFileSystem = (
 
   // Fast path: check if path starts with any known MongoDB mount point
   for (const [mountPoint, fs] of Object.entries(rootFs.mntMap)) {
-    if (fs instanceof MongoDBFileSystem && path.startsWith(mountPoint)) {
+    if (fs instanceof MongoDBFileSystem &&
+        (path === mountPoint || path.startsWith(mountPoint + "/"))) {
       return {
         mongoFS: fs,
         mountPoint,
