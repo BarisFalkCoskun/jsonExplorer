@@ -184,12 +184,17 @@ export const useMongoDBIcon = (path: string, visible = false) => {
   const canGoToPrevious = state.currentImageIndex > 0;
   const canGoToNext = state.currentImageIndex < state.images.length - 1;
 
-  // Load thumbnail from cache when visible (zero network)
+  // Reset when path changes — MUST be declared before visibility effect
+  // so React runs it first when path changes
   useEffect(() => {
-    if (visible && !hasLoadedRef.current) {
-      loadThumbnail();
+    if (loadingRef.current) {
+      loadingRef.current.abort();
     }
-  }, [visible, loadThumbnail]);
+    hasLoadedRef.current = false;
+    isLoadingRef.current = false;
+    hasFullImagesRef.current = false;
+    setState(INITIAL_STATE);
+  }, [path]);
 
   // Abort on unmount
   useEffect(() => {
@@ -200,16 +205,12 @@ export const useMongoDBIcon = (path: string, visible = false) => {
     };
   }, []);
 
-  // Reset when path changes
+  // Load thumbnail from cache when visible (zero network)
   useEffect(() => {
-    if (loadingRef.current) {
-      loadingRef.current.abort();
+    if (visible && !hasLoadedRef.current) {
+      loadThumbnail();
     }
-    hasLoadedRef.current = false;
-    isLoadingRef.current = false;
-    hasFullImagesRef.current = false;
-    setState(INITIAL_STATE);
-  }, [path]);
+  }, [visible, loadThumbnail]);
 
   return {
     ...state,
