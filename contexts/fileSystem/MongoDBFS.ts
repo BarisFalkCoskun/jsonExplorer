@@ -842,7 +842,7 @@ export class MongoDBFileSystem implements FileSystem {
       if (database && collection && documentName) {
         const cachedEntries = this.getCachedCollectionEntries(database, collection);
 
-        if (cachedEntries?.has(documentName)) {
+        if (cachedEntries?.has(encodeURIComponent(documentName))) {
           cb(null, this.createStats(false, UNKNOWN_DOCUMENT_SIZE)); // eslint-disable-line unicorn/no-null
           return;
         }
@@ -1375,7 +1375,7 @@ export class MongoDBFileSystem implements FileSystem {
       if (database && collection && documentName) {
         const cachedEntries = this.getCachedCollectionEntries(database, collection);
 
-        if (cachedEntries?.has(documentName)) {
+        if (cachedEntries?.has(encodeURIComponent(documentName))) {
           callback(true);
           return;
         }

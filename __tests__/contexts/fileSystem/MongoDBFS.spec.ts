@@ -17,6 +17,7 @@ type MongoDBFSTestable = {
   isCachedDismissed: (docName: string, database: string, collection: string) => boolean;
   parsePath: (path: string) => { collection?: string; database?: string; document?: string };
   readdirPaged: (path: string, cursor?: { afterId: string; afterName: string }, limit?: number) => Promise<{ entries: string[]; hasMore: boolean; nextCursor?: { afterId: string; afterName: string } }>;
+  setCachedCollectionEntries: (database: string, collection: string, entries: string[]) => void;
   stat: (path: string, isLstat: boolean | ((error: unknown, stats?: unknown) => void), callback?: (error: unknown, stats?: unknown) => void) => Promise<void>;
   unlink: (path: string, callback: (error: { code: string; message: string } | undefined) => void) => Promise<void>;
 };
@@ -421,5 +422,43 @@ describe("paged initial load contract", () => {
     const fetchUrl = (global.fetch as jest.Mock).mock.calls[0][0] as string;
     expect(fetchUrl).toContain("limit=200");
     expect(fetchUrl).not.toContain("meta=1");
+  });
+});
+
+describe("stat cache key encoding", () => {
+  it("hits cache for documents with special characters in name", async () => {
+    const fs = createFS();
+
+    // Populate the entries cache with an encoded identifier
+    // getDocumentIdentifier returns encodeURIComponent(raw), so "my document" becomes "my%20document"
+    fs.setCachedCollectionEntries("testdb", "products", ["my%20document"]);
+
+    // stat() receives a path where the filename is encoded (from readdir/readdirPaged)
+    // parsePath decodes it back to "my document"
+    // The fix ensures stat() re-encodes before cache lookup
+    const statResult = await new Promise<{ error: unknown; stats: unknown }>((resolve) => {
+      fs.stat("testdb/products/my%20document.json", false, (error, stats) => {
+        resolve({ error, stats });
+      });
+    });
+
+    // Should hit cache and return stats (not ENOENT from a network call)
+    expect(statResult.error).toBeNull();
+    expect(statResult.stats).toBeDefined();
+  });
+
+  it("hits cache for documents with plain names", async () => {
+    const fs = createFS();
+
+    fs.setCachedCollectionEntries("testdb", "products", ["simple-doc"]);
+
+    const statResult = await new Promise<{ error: unknown; stats: unknown }>((resolve) => {
+      fs.stat("testdb/products/simple-doc.json", false, (error, stats) => {
+        resolve({ error, stats });
+      });
+    });
+
+    expect(statResult.error).toBeNull();
+    expect(statResult.stats).toBeDefined();
   });
 });
