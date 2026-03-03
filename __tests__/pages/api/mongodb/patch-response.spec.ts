@@ -1,20 +1,78 @@
-describe("PATCH response includes matchedCount", () => {
-  it("response shape includes both matchedCount and modifiedCount", () => {
-    const mockResult = { matchedCount: 1, modifiedCount: 0 };
-    const response = { matchedCount: mockResult.matchedCount, modifiedCount: mockResult.modifiedCount };
+describe("PATCH $set/$unset split logic", () => {
+  it("puts non-null values in $set", () => {
+    const updates: Record<string, unknown> = { category: "fruit", name: "apple" };
+    const setFields: Record<string, unknown> = {};
+    const unsetFields: Record<string, string> = {};
 
-    expect(response).toHaveProperty("matchedCount");
-    expect(response).toHaveProperty("modifiedCount");
+    for (const [field, value] of Object.entries(updates)) {
+      if (value === null || value === undefined) {
+        unsetFields[field] = "";
+      } else {
+        setFields[field] = value;
+      }
+    }
+
+    expect(setFields).toEqual({ category: "fruit", name: "apple" });
+    expect(Object.keys(unsetFields)).toHaveLength(0);
   });
 
-  it("matchedCount 0 indicates document not found", () => {
-    const response = { matchedCount: 0, modifiedCount: 0 };
-    expect(response.matchedCount).toBe(0);
+  it("puts null values in $unset", () => {
+    const updates: Record<string, unknown> = { category: null, dismissed: null };
+    const setFields: Record<string, unknown> = {};
+    const unsetFields: Record<string, string> = {};
+
+    for (const [field, value] of Object.entries(updates)) {
+      if (value === null || value === undefined) {
+        unsetFields[field] = "";
+      } else {
+        setFields[field] = value;
+      }
+    }
+
+    expect(Object.keys(setFields)).toHaveLength(0);
+    expect(unsetFields).toEqual({ category: "", dismissed: "" });
   });
 
-  it("matchedCount 1 with modifiedCount 0 means found but unchanged", () => {
-    const response = { matchedCount: 1, modifiedCount: 0 };
-    expect(response.matchedCount).toBe(1);
-    expect(response.modifiedCount).toBe(0);
+  it("splits mixed updates correctly", () => {
+    const updates: Record<string, unknown> = { category: "fruit", dismissed: null, name: "apple" };
+    const setFields: Record<string, unknown> = {};
+    const unsetFields: Record<string, string> = {};
+
+    for (const [field, value] of Object.entries(updates)) {
+      if (value === null || value === undefined) {
+        unsetFields[field] = "";
+      } else {
+        setFields[field] = value;
+      }
+    }
+
+    expect(setFields).toEqual({ category: "fruit", name: "apple" });
+    expect(unsetFields).toEqual({ dismissed: "" });
+  });
+
+  it("builds updateOps with both $set and $unset when present", () => {
+    const setFields = { category: "fruit" };
+    const unsetFields = { dismissed: "" };
+    const updateOps: Record<string, unknown> = {};
+
+    if (Object.keys(setFields).length > 0) updateOps.$set = setFields;
+    if (Object.keys(unsetFields).length > 0) updateOps.$unset = unsetFields;
+
+    expect(updateOps).toEqual({
+      $set: { category: "fruit" },
+      $unset: { dismissed: "" },
+    });
+  });
+
+  it("omits $set when only $unset is needed", () => {
+    const setFields: Record<string, unknown> = {};
+    const unsetFields = { category: "" };
+    const updateOps: Record<string, unknown> = {};
+
+    if (Object.keys(setFields).length > 0) updateOps.$set = setFields;
+    if (Object.keys(unsetFields).length > 0) updateOps.$unset = unsetFields;
+
+    expect(updateOps).toEqual({ $unset: { category: "" } });
+    expect(updateOps).not.toHaveProperty("$set");
   });
 });

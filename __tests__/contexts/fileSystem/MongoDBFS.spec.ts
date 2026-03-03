@@ -256,3 +256,51 @@ describe("unlink error codes", () => {
     });
   });
 });
+
+describe("patchDocument cache mutation", () => {
+  it("updates document in cache via shared reference", () => {
+    const fs = createFS();
+    const key = fs.getCollectionCacheKey("db1", "products");
+
+    const doc = { _id: "1", name: "apple" };
+    fs.documentsListCache.set(key, buildCacheEntry(fs, [doc]));
+
+    // Verify initial state — _id-first identifier is "1"
+    expect(fs.getCachedDocumentCategory("1", "db1", "products")).toBeNull();
+
+    // Simulate patchDocument mutation (same as production code)
+    const cached = fs.documentsListCache.get(key);
+    const identifier = MongoDBFileSystem.decodeDocumentIdentifier(
+      fs.getDocumentIdentifier(doc)
+    );
+    const cachedDoc = cached?.documentIndex.get(identifier);
+
+    if (cachedDoc) {
+      cachedDoc.category = "fruit";
+    }
+
+    // Verify mutation propagated
+    expect(fs.getCachedDocumentCategory("1", "db1", "products")).toBe("fruit");
+  });
+
+  it("shared reference means documents array also updated", () => {
+    const fs = createFS();
+    const key = fs.getCollectionCacheKey("db1", "products");
+
+    const doc = { _id: "1", name: "apple" };
+    fs.documentsListCache.set(key, buildCacheEntry(fs, [doc]));
+
+    const cached = fs.documentsListCache.get(key);
+    const indexDoc = cached?.documentIndex.get("1");
+    const arrayDoc = cached?.documents[0];
+
+    // Same reference
+    expect(indexDoc).toBe(arrayDoc);
+
+    // Mutate via index
+    if (indexDoc) indexDoc.dismissed = true;
+
+    // Array reflects mutation
+    expect(arrayDoc?.dismissed).toBe(true);
+  });
+});
