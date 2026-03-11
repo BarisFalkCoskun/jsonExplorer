@@ -1,6 +1,6 @@
 import { type NextApiRequest, type NextApiResponse } from 'next';
 import { MongoClient } from 'mongodb';
-import { addThumbnailFields, ALLOWED_METHODS, getDocumentFilters, LISTING_PROJECTION, normalizeImageUrl, sanitizeFilter } from "utils/mongoApi";
+import { addThumbnailFields, ALLOWED_METHODS, getDocumentFilters, LISTING_PROJECTION, normalizeImageUrl, normalizeProductImageUrl, sanitizeFilter } from "utils/mongoApi";
 
 type MongoClientCacheEntry = {
   client?: MongoClient;
@@ -390,19 +390,33 @@ const handleImages = async (
     return;
   }
 
-  const images: unknown[] = [];
+  const productImages = Array.isArray(docWithImages.productImages)
+    ? (docWithImages.productImages as unknown[])
+    : undefined;
 
-  if (Array.isArray(docWithImages.images)) {
-    images.push(...(docWithImages.images as unknown[]));
+  let validImages: string[];
+
+  if (productImages === undefined) {
+    // Fallback: use images/oldImages
+    const images: unknown[] = [];
+
+    if (Array.isArray(docWithImages.images)) {
+      images.push(...(docWithImages.images as unknown[]));
+    }
+
+    if (Array.isArray(docWithImages.oldImages)) {
+      images.push(...(docWithImages.oldImages as unknown[]));
+    }
+
+    validImages = images
+      .map((img) => normalizeImageUrl(img))
+      .filter((url): url is string => url.length > 0);
+  } else {
+    // productImages exists: use as primary source (empty array = no images)
+    validImages = productImages
+      .map((path) => normalizeProductImageUrl(path))
+      .filter((url): url is string => url.length > 0);
   }
-
-  if (Array.isArray(docWithImages.oldImages)) {
-    images.push(...(docWithImages.oldImages as unknown[]));
-  }
-
-  const validImages = images
-    .map((img) => normalizeImageUrl(img))
-    .filter((url): url is string => url.length > 0);
 
   res.json({
     document: {

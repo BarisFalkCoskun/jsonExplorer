@@ -6,6 +6,8 @@ export type MongoImage = {
   small?: string;
 };
 
+const PRODUCT_IMAGE_BASE_URL = "http://localhost:8100/imgs/";
+
 export const normalizeImageUrl = (img: unknown): string => {
   if (typeof img === 'string' && img.trim().length > 0) {
     return img.trim();
@@ -19,16 +21,36 @@ export const normalizeImageUrl = (img: unknown): string => {
   return "";
 };
 
-export const addThumbnailFields = (doc: Record<string, unknown>): Record<string, unknown> => {
-  const images = Array.isArray(doc.images) ? (doc.images as unknown[]) : [];
-  const oldImages = Array.isArray(doc.oldImages) ? (doc.oldImages as unknown[]) : [];
-  const allImages = [...images, ...oldImages];
+export const normalizeProductImageUrl = (path: unknown): string => {
+  if (typeof path === 'string' && path.trim().length > 0) {
+    return `${PRODUCT_IMAGE_BASE_URL}${path.trim()}`;
+  }
+  return "";
+};
 
-  const firstUrl = allImages.length > 0 ? normalizeImageUrl(allImages[0]) : "";
+export const addThumbnailFields = (doc: Record<string, unknown>): Record<string, unknown> => {
+  const productImages = Array.isArray(doc.productImages) ? (doc.productImages as unknown[]) : undefined;
+
+  let firstUrl: string;
+  let imageCount: number;
+
+  if (productImages === undefined) {
+    // Fallback: use images/oldImages
+    const images = Array.isArray(doc.images) ? (doc.images as unknown[]) : [];
+    const oldImages = Array.isArray(doc.oldImages) ? (doc.oldImages as unknown[]) : [];
+    const allImages = [...images, ...oldImages];
+    firstUrl = allImages.length > 0 ? normalizeImageUrl(allImages[0]) : "";
+    imageCount = allImages.length;
+  } else {
+    // productImages exists: use it as primary source (empty array = no images)
+    firstUrl = productImages.length > 0 ? normalizeProductImageUrl(productImages[0]) : "";
+    imageCount = productImages.length;
+  }
 
   const result = { ...doc };
   result.thumbnail = firstUrl || undefined;
-  result.imageCount = allImages.length;
+  result.imageCount = imageCount;
+  delete result.productImages;
   delete result.images;
   delete result.oldImages;
 
@@ -42,6 +64,7 @@ export const LISTING_PROJECTION = {
   images: { $slice: 1 },
   name: 1,
   oldImages: { $slice: 1 },
+  productImages: { $slice: 1 },
 };
 
 export const SAFE_FILTER_OPERATORS = new Set([
