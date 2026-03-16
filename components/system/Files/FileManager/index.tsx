@@ -1,6 +1,7 @@
 import { basename, join } from "path";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
+import { useTheme } from "styled-components";
 import StyledLoading from "components/system/Apps/StyledLoading";
 import StatusBar from "components/system/Files/FileManager/StatusBar";
 import {
@@ -16,6 +17,8 @@ import useFileKeyboardShortcuts from "components/system/Files/FileManager/useFil
 import useFocusableEntries from "components/system/Files/FileManager/useFocusableEntries";
 import useFolder from "components/system/Files/FileManager/useFolder";
 import useFolderContextMenu from "components/system/Files/FileManager/useFolderContextMenu";
+import useVirtualGrid from "components/system/Files/FileManager/useVirtualGrid";
+import useVirtualRows from "components/system/Files/FileManager/useVirtualRows";
 import {
   type FileManagerViewNames,
   FileManagerViews,
@@ -33,7 +36,6 @@ import Columns from "components/system/Files/FileManager/Columns";
 import { useSession } from "contexts/session";
 import { getMountUrl } from "contexts/fileSystem/core";
 import { MongoDBFileSystem } from "contexts/fileSystem/MongoDBFS";
-import { runMongoPatchBatch } from "utils/mongoMutations";
 import { useToast } from "components/system/Toast/useToast";
 
 const QuickLook = dynamic(
@@ -63,6 +65,8 @@ type FileManagerProps = {
 };
 
 const DEFAULT_VIEW = "icon";
+const ROW_VIRTUALIZATION_THRESHOLD = 150;
+const ICON_GRID_VIRTUALIZATION_THRESHOLD = 80;
 
 const FileManager: FC<FileManagerProps> = ({
   allowMovingDraggableEntries,
@@ -128,6 +132,13 @@ const FileManager: FC<FileManagerProps> = ({
     const parts = relativePath.split("/").filter(Boolean);
     return { collection: parts[1] || "", database: parts[0] || "" };
   }, [isMongoFS, mountUrl, url]);
+  const mongoIconMount = useMemo(
+    () =>
+      isMongoFS && mongoFs && mountUrl
+        ? { mongoFS: mongoFs, mountPoint: mountUrl }
+        : undefined,
+    [isMongoFS, mongoFs, mountUrl]
+  );
   const handleToggleHideCategorized = useCallback(() => {
     if (!mongoFs) return;
 
@@ -264,17 +275,21 @@ const FileManager: FC<FileManagerProps> = ({
   }, [hideCategorized, hideDismissed, mongoCollection, mongoFs, setFiles, setHideDismissed, updateFiles, url]);
   const handleDismiss = useCallback(
     async (entries: string[]) => {
-      if (!mongoFs || !mountUrl) return;
+      if (!mongoFs) return;
 
-      const { succeeded, failed } = await runMongoPatchBatch(
-        entries.map((entry) => () => {
-          const relativePath = `${url.replace(`${mountUrl}/`, "")}/${entry}`.replace(
-            /\.json$/,
-            ""
-          );
-          return mongoFs.patchDocument(relativePath, { dismissed: true });
-        })
-      );
+      const documentNames = entries.map((entry) => entry.replace(/\.json$/, ""));
+      const { succeeded, failed } = await mongoFs
+        .patchDocuments(
+          mongoCollection.database,
+          mongoCollection.collection,
+          documentNames,
+          { dismissed: true }
+        )
+        .then((result) => ({
+          failed: Math.max(0, entries.length - result.matchedCount),
+          succeeded: result.matchedCount,
+        }))
+        .catch(() => ({ failed: entries.length, succeeded: 0 }));
 
       if (failed > 0) {
         showToast(`${failed} of ${entries.length} items failed to dismiss.`, "error");
@@ -282,7 +297,7 @@ const FileManager: FC<FileManagerProps> = ({
         showToast(`${succeeded} item(s) dismissed.`, "success");
       }
 
-      if (hideDismissed) {
+      if (hideDismissed && failed === 0) {
         setFiles((currentFiles) => {
           if (!currentFiles) return currentFiles;
 
@@ -298,11 +313,11 @@ const FileManager: FC<FileManagerProps> = ({
         });
       }
     },
-    [hideDismissed, mongoFs, mountUrl, setFiles, showToast, url]
+    [hideDismissed, mongoCollection.collection, mongoCollection.database, mongoFs, setFiles, showToast]
   );
   const handleSetCategory = useCallback(
     async (entries: string[]) => {
-      if (!mongoFs || !mountUrl) return;
+      if (!mongoFs) return;
 
       const { database, collection } = mongoCollection;
 
@@ -325,33 +340,61 @@ const FileManager: FC<FileManagerProps> = ({
 
       if (raw) {
         const newLabels = raw.toLowerCase().split(",").map((l) => l.trim()).filter(Boolean);
+        const groupedUpdates = new Map<string, string[]>();
+        let unchangedCount = 0;
 
-        const { succeeded, failed } = await runMongoPatchBatch(
-          entries.map((entry) => () => {
-            const existing = mongoFs.getCachedDocumentCategory(
-              entry.replace(/\.json$/, ""),
-              database,
-              collection
-            );
-            const existingLabels = existing ? existing.split(",").map((l) => l.trim().toLowerCase()) : [];
-            const labelsToAdd = newLabels.filter((l) => !existingLabels.includes(l));
-            if (labelsToAdd.length === 0) return Promise.resolve();
+        for (const entry of entries) {
+          const documentName = entry.replace(/\.json$/, "");
+          const existing = mongoFs.getCachedDocumentCategory(
+            documentName,
+            database,
+            collection
+          );
+          const existingLabels = existing
+            ? existing.split(",").map((l) => l.trim().toLowerCase())
+            : [];
+          const labelsToAdd = newLabels.filter((l) => !existingLabels.includes(l));
 
+          if (labelsToAdd.length === 0) {
+            unchangedCount++;
+          } else {
             const merged = [...existingLabels, ...labelsToAdd].join(", ");
-            const relativePath = `${url.replace(`${mountUrl}/`, "")}/${entry}`.replace(
-              /\.json$/,
-              ""
-            );
-            return mongoFs.patchDocument(relativePath, { category: merged });
-          })
+            groupedUpdates.set(merged, [
+              ...(groupedUpdates.get(merged) || []),
+              documentName,
+            ]);
+          }
+        }
+
+        let succeeded = unchangedCount;
+        let failed = 0;
+        const groupedEntries = [...groupedUpdates.entries()];
+
+        const groupedResults = await Promise.allSettled(
+          groupedEntries.map(([merged, documentNames]) =>
+            mongoFs.patchDocuments(database, collection, documentNames, {
+              category: merged,
+            })
+          )
         );
+
+        groupedResults.forEach((result, index) => {
+          const documentCount = groupedEntries[index]?.[1].length || 0;
+
+          if (result.status === "fulfilled") {
+            succeeded += result.value.matchedCount;
+            failed += Math.max(0, documentCount - result.value.matchedCount);
+          } else {
+            failed += documentCount;
+          }
+        });
 
         if (failed > 0) {
           showToast(`${failed} of ${entries.length} items failed to save.`, "error");
         } else if (succeeded > 0) {
           showToast(`Category set for ${succeeded} item(s).`, "success");
         }
-        if (succeeded > 0 && hideCategorized) {
+        if (succeeded > 0 && failed === 0 && hideCategorized) {
           setFiles((currentFiles) => {
             if (!currentFiles) return currentFiles;
             const updated = { ...currentFiles };
@@ -363,7 +406,7 @@ const FileManager: FC<FileManagerProps> = ({
         }
       }
     },
-    [hideCategorized, mongoCollection, mongoFs, mountUrl, setFiles, showToast, url]
+    [hideCategorized, mongoCollection, mongoFs, setFiles, showToast]
   );
   const [quickLookPath, setQuickLookPath] = useState("");
   const handleQuickLook = useCallback(
@@ -403,6 +446,7 @@ const FileManager: FC<FileManagerProps> = ({
 
     return isLoading || url !== currentUrl;
   }, [currentUrl, hideLoading, isLoading, url]);
+  const { sizes } = useTheme();
   const setView = useCallback(
     (newView: FileManagerViewNames) => {
       setViews((currentViews) => ({ ...currentViews, [url]: newView }));
@@ -438,6 +482,120 @@ const FileManager: FC<FileManagerProps> = ({
     [keyShortcuts, renaming]
   );
   const fileKeys = useMemo(() => Object.keys(files), [files]);
+  const iconGridMetrics = useMemo(() => {
+    const { gridHeight, gridWidth, rowGap } = ICON_ZOOM_LEVELS[iconZoomLevel];
+
+    return { gridHeight, gridWidth, rowGap };
+  }, [iconZoomLevel]);
+  const fileManagerPaddingY = useMemo(() => {
+    const [top = "0", right = top, bottom = top] =
+      sizes.fileManager.padding.split(" ");
+
+    return {
+      bottom: Number.parseFloat(bottom || right || top) || 0,
+      top: Number.parseFloat(top) || 0,
+    };
+  }, [sizes.fileManager.padding]);
+  const fileManagerColumnGap = useMemo(
+    () => Number.parseFloat(sizes.fileManager.columnGap) || 0,
+    [sizes.fileManager.columnGap]
+  );
+  const estimatedVirtualRowHeight = useMemo(
+    () =>
+      view === "details"
+        ? Number.parseFloat(sizes.fileManager.detailsRowHeight)
+        : 37,
+    [sizes.fileManager.detailsRowHeight, view]
+  );
+  const [virtualRowHeight, setVirtualRowHeight] = useState(
+    estimatedVirtualRowHeight
+  );
+  const shouldVirtualizeRows = useMemo(
+    () =>
+      !loading &&
+      !isDesktop &&
+      !isStartMenu &&
+      !isIconView &&
+      renaming === "" &&
+      fileKeys.length > ROW_VIRTUALIZATION_THRESHOLD,
+    [fileKeys.length, isDesktop, isIconView, isStartMenu, loading, renaming]
+  );
+  const shouldVirtualizeIconGrid = useMemo(
+    () =>
+      !loading &&
+      !isDesktop &&
+      !isStartMenu &&
+      isFileExplorerIconView &&
+      renaming === "" &&
+      fileKeys.length > ICON_GRID_VIRTUALIZATION_THRESHOLD,
+    [
+      fileKeys.length,
+      isDesktop,
+      isFileExplorerIconView,
+      isStartMenu,
+      loading,
+      renaming,
+    ]
+  );
+  const {
+    bottomOffset: virtualBottomOffset,
+    endIndex: virtualEndIndex,
+    startIndex: virtualStartIndex,
+    topOffset: virtualTopOffset,
+  } = useVirtualRows(
+    fileManagerRef,
+    fileKeys.length,
+    virtualRowHeight,
+    shouldVirtualizeRows
+  );
+  const {
+    columnCount: virtualIconColumnCount,
+    endIndex: virtualIconEndIndex,
+    startIndex: virtualIconStartIndex,
+    totalHeight: virtualIconTotalHeight,
+  } = useVirtualGrid(
+    fileManagerRef,
+    fileKeys.length,
+    iconGridMetrics.gridWidth,
+    iconGridMetrics.gridHeight,
+    iconGridMetrics.rowGap,
+    fileManagerColumnGap,
+    shouldVirtualizeIconGrid,
+    fileManagerPaddingY.top,
+    fileManagerPaddingY.bottom
+  );
+  const renderedEntries = useMemo(
+    () => {
+      if (shouldVirtualizeRows) {
+        return fileKeys
+          .slice(virtualStartIndex, virtualEndIndex + 1)
+          .map((file, index) => ({
+            file,
+            index: virtualStartIndex + index,
+          }));
+      }
+
+      if (shouldVirtualizeIconGrid) {
+        return fileKeys
+          .slice(virtualIconStartIndex, virtualIconEndIndex + 1)
+          .map((file, index) => ({
+            file,
+            index: virtualIconStartIndex + index,
+          }));
+      }
+
+      return fileKeys.map((file, index) => ({ file, index }));
+    },
+    [
+      fileKeys,
+      shouldVirtualizeIconGrid,
+      shouldVirtualizeRows,
+      virtualEndIndex,
+      virtualIconEndIndex,
+      virtualIconStartIndex,
+      virtualStartIndex,
+    ]
+  );
   const isEmptyFolder = useMemo(
     () => !isDesktop && !isStartMenu && !loading && fileKeys.length === 0,
     [fileKeys.length, isDesktop, isStartMenu, loading]
@@ -515,6 +673,26 @@ const FileManager: FC<FileManagerProps> = ({
   useEffect(() => {
     setColumns(isDetailsView ? DEFAULT_COLUMNS : undefined);
   }, [isDetailsView]);
+
+  useEffect(() => {
+    setVirtualRowHeight(estimatedVirtualRowHeight);
+  }, [estimatedVirtualRowHeight]);
+
+  useLayoutEffect(() => {
+    if (!shouldVirtualizeRows || renderedEntries.length === 0) return;
+
+    const firstRenderedEntry = fileManagerRef.current?.querySelector<HTMLElement>(
+      "li[data-virtual-entry='true']"
+    );
+    const measuredHeight = firstRenderedEntry?.getBoundingClientRect().height;
+
+    if (
+      measuredHeight &&
+      Math.abs(measuredHeight - virtualRowHeight) > 1
+    ) {
+      setVirtualRowHeight(measuredHeight);
+    }
+  }, [renderedEntries.length, shouldVirtualizeRows, virtualRowHeight]);
 
   /* eslint-disable consistent-return -- early-return is idiomatic for useEffect guards */
   useEffect(() => {
@@ -630,6 +808,15 @@ const FileManager: FC<FileManagerProps> = ({
         $isEmptyFolder={isEmptyFolder}
         $scrollable={!hideScrolling}
         onKeyDownCapture={loading ? undefined : onKeyDown}
+        style={
+          shouldVirtualizeIconGrid
+            ? {
+                display: "block",
+                padding: 0,
+                position: "relative",
+              }
+            : undefined
+        }
         {...(loading || readOnly
           ? { onContextMenu: haltEvent }
           : {
@@ -651,13 +838,44 @@ const FileManager: FC<FileManagerProps> = ({
         {!loading && (
           <>
             {isSelecting && <StyledSelection style={selectionStyling} />}
-            {fileKeys.map((file) => (
+            {shouldVirtualizeRows && virtualTopOffset > 0 && (
+              <li
+                role="presentation"
+                style={{ height: virtualTopOffset, pointerEvents: "none" }}
+                aria-hidden
+              />
+            )}
+            {shouldVirtualizeIconGrid && (
+              <li
+                role="presentation"
+                style={{ height: virtualIconTotalHeight, pointerEvents: "none" }}
+                aria-hidden
+              />
+            )}
+            {renderedEntries.map(({ file, index }) => (
               <StyledFileEntry
                 key={file}
                 $desktop={isDesktop}
                 $iconZoomLevel={isIconView && !isDesktop ? iconZoomLevel : undefined}
                 $selecting={isSelecting}
                 $visible={!isLoading}
+                data-virtual-entry="true"
+                style={
+                  shouldVirtualizeIconGrid
+                    ? {
+                        height: iconGridMetrics.gridHeight,
+                        left:
+                          (index % virtualIconColumnCount) *
+                          (iconGridMetrics.gridWidth + fileManagerColumnGap),
+                        position: "absolute",
+                        top:
+                          fileManagerPaddingY.top +
+                          Math.floor(index / virtualIconColumnCount) *
+                            (iconGridMetrics.gridHeight + iconGridMetrics.rowGap),
+                        width: iconGridMetrics.gridWidth,
+                      }
+                    : undefined
+                }
                 {...(!readOnly && draggableEntry(url, file, renaming === file))}
                 {...(renaming === "" && { onKeyDown: keyShortcuts(file) })}
                 {...focusableEntry(file)}
@@ -676,6 +894,7 @@ const FileManager: FC<FileManagerProps> = ({
                   isHeading={isDesktop && files[file].systemShortcut}
                   isLoadingFileManager={isLoading}
                   loadIconImmediately={loadIconsImmediately}
+                  mongoIconMount={mongoIconMount}
                   name={isMongoFS ? MongoDBFileSystem.decodeDocumentIdentifier(basename(file, SHORTCUT_EXTENSION)) : basename(file, SHORTCUT_EXTENSION)}
                   path={join(url, file)}
                   readOnly={readOnly}
@@ -688,6 +907,13 @@ const FileManager: FC<FileManagerProps> = ({
                 />
               </StyledFileEntry>
             ))}
+            {shouldVirtualizeRows && virtualBottomOffset > 0 && (
+              <li
+                role="presentation"
+                style={{ height: virtualBottomOffset, pointerEvents: "none" }}
+                aria-hidden
+              />
+            )}
           </>
         )}
       </StyledFileManager>

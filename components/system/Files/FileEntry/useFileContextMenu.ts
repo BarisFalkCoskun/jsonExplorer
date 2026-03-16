@@ -59,7 +59,6 @@ import useTransferDialog, {
 } from "components/system/Dialogs/Transfer/useTransferDialog";
 import { getMountUrl, isMountedFolder } from "contexts/fileSystem/core";
 import { type MongoDBFileSystem } from "contexts/fileSystem/MongoDBFS";
-import { runMongoPatchBatch } from "utils/mongoMutations";
 import { useToast } from "components/system/Toast/useToast";
 
 const useFileContextMenu = (
@@ -216,26 +215,56 @@ const useFileContextMenu = (
                       const raw = window.prompt("Enter category (comma-separated for multiple):", defaultValue); // eslint-disable-line no-alert -- user-facing category input
                       if (raw) {
                         const newLabels = raw.toLowerCase().split(",").map((l) => l.trim()).filter(Boolean);
-                        const { succeeded, failed } = await runMongoPatchBatch(
-                          entries.map((entry) => () => {
-                            const existing = mongoFs.getCachedDocumentCategory(basename(entry, ".json"), mongoDb, mongoCol);
-                            const existingLabels = existing ? existing.split(",").map((l) => l.trim().toLowerCase()) : [];
-                            const labelsToAdd = newLabels.filter((l) => !existingLabels.includes(l));
-                            if (labelsToAdd.length === 0) return Promise.resolve();
+                        const groupedUpdates = new Map<string, string[]>();
+                        let unchangedCount = 0;
+
+                        for (const entry of entries) {
+                          const documentName = basename(entry, ".json");
+                          const existing = mongoFs.getCachedDocumentCategory(documentName, mongoDb, mongoCol);
+                          const existingLabels = existing
+                            ? existing.split(",").map((l) => l.trim().toLowerCase())
+                            : [];
+                          const labelsToAdd = newLabels.filter((l) => !existingLabels.includes(l));
+
+                          if (labelsToAdd.length === 0) {
+                            unchangedCount++;
+                          } else {
                             const merged = [...existingLabels, ...labelsToAdd].join(", ");
-                            const relativePath = entry.replace(
-                              `${mountUrl}/`,
-                              ""
-                            );
-                            return mongoFs.patchDocument(relativePath, { category: merged });
-                          })
+                            groupedUpdates.set(merged, [
+                              ...(groupedUpdates.get(merged) || []),
+                              documentName,
+                            ]);
+                          }
+                        }
+
+                        let succeeded = unchangedCount;
+                        let failed = 0;
+                        const groupedEntries = [...groupedUpdates.entries()];
+                        const groupedResults = await Promise.allSettled(
+                          groupedEntries.map(([merged, documentNames]) =>
+                            mongoFs.patchDocuments(mongoDb, mongoCol, documentNames, {
+                              category: merged,
+                            })
+                          )
                         );
+
+                        groupedResults.forEach((result, index) => {
+                          const documentCount = groupedEntries[index]?.[1].length || 0;
+
+                          if (result.status === "fulfilled") {
+                            succeeded += result.value.matchedCount;
+                            failed += Math.max(0, documentCount - result.value.matchedCount);
+                          } else {
+                            failed += documentCount;
+                          }
+                        });
+
                         if (failed > 0) {
                           showToast(`${failed} of ${entries.length} items failed to save.`, "error");
                         } else if (succeeded > 0) {
                           showToast(`Category set for ${succeeded} item(s).`, "success");
                         }
-                        if (succeeded > 0 && hideCategorized && setFiles) {
+                        if (succeeded > 0 && failed === 0 && hideCategorized && setFiles) {
                           setFiles((currentFiles) => {
                             if (!currentFiles) return currentFiles;
                             const updated = { ...currentFiles };
@@ -252,16 +281,23 @@ const useFileContextMenu = (
                   {
                     action: async () => {
                       const entries = absoluteEntries();
-                      const { succeeded, failed } = await runMongoPatchBatch(
-                        entries.map((entry) => () => {
-                          const relativePath = entry.replace(
-                            `${mountUrl}/`,
-                            ""
-                          );
-                          // eslint-disable-next-line unicorn/no-null -- MongoDB $unset requires null
-                          return mongoFs.patchDocument(relativePath, { category: null });
-                        })
-                      );
+                      const documentNames = entries.map((entry) => basename(entry, ".json"));
+                      const { succeeded, failed } = await mongoFs
+                        .patchDocuments(
+                          mongoDb,
+                          mongoCol,
+                          documentNames,
+                          {
+                            // eslint-disable-next-line unicorn/no-null -- MongoDB $unset requires null
+                            category: null,
+                          }
+                        )
+                        .then((result) => ({
+                          failed: Math.max(0, entries.length - result.matchedCount),
+                          succeeded: result.matchedCount,
+                        }))
+                        .catch(() => ({ failed: entries.length, succeeded: 0 }));
+
                       if (failed > 0) {
                         showToast(`${failed} of ${entries.length} items failed to update.`, "error");
                       } else if (succeeded > 0) {
@@ -289,21 +325,26 @@ const useFileContextMenu = (
                             (entry) =>
                               !mongoFs.isCachedDismissed(basename(entry, ".json"), mongoDb, mongoCol)
                           );
-                          const { succeeded, failed } = await runMongoPatchBatch(
-                            toDismiss.map((entry) => () => {
-                              const relativePath = entry.replace(
-                                `${mountUrl}/`,
-                                ""
-                              );
-                              return mongoFs.patchDocument(relativePath, { dismissed: true });
-                            })
-                          );
+                          const documentNames = toDismiss.map((entry) => basename(entry, ".json"));
+                          const { succeeded, failed } = await mongoFs
+                            .patchDocuments(
+                              mongoDb,
+                              mongoCol,
+                              documentNames,
+                              { dismissed: true }
+                            )
+                            .then((result) => ({
+                              failed: Math.max(0, toDismiss.length - result.matchedCount),
+                              succeeded: result.matchedCount,
+                            }))
+                            .catch(() => ({ failed: toDismiss.length, succeeded: 0 }));
+
                           if (failed > 0) {
                             showToast(`${failed} of ${toDismiss.length} items failed to dismiss.`, "error");
                           } else if (succeeded > 0) {
                             showToast(`${succeeded} item(s) dismissed.`, "success");
                           }
-                          if (succeeded > 0 && hideDismissed && setFiles) {
+                          if (succeeded > 0 && failed === 0 && hideDismissed && setFiles) {
                             setFiles((currentFiles) => {
                               if (!currentFiles) return currentFiles;
                               const updated = { ...currentFiles };
@@ -325,16 +366,23 @@ const useFileContextMenu = (
                             (entry) =>
                               mongoFs.isCachedDismissed(basename(entry, ".json"), mongoDb, mongoCol)
                           );
-                          const { succeeded, failed } = await runMongoPatchBatch(
-                            toUndismiss.map((entry) => () => {
-                              const relativePath = entry.replace(
-                                `${mountUrl}/`,
-                                ""
-                              );
-                              // eslint-disable-next-line unicorn/no-null -- MongoDB $unset requires null
-                              return mongoFs.patchDocument(relativePath, { dismissed: null });
-                            })
-                          );
+                          const documentNames = toUndismiss.map((entry) => basename(entry, ".json"));
+                          const { succeeded, failed } = await mongoFs
+                            .patchDocuments(
+                              mongoDb,
+                              mongoCol,
+                              documentNames,
+                              {
+                                // eslint-disable-next-line unicorn/no-null -- MongoDB $unset requires null
+                                dismissed: null,
+                              }
+                            )
+                            .then((result) => ({
+                              failed: Math.max(0, toUndismiss.length - result.matchedCount),
+                              succeeded: result.matchedCount,
+                            }))
+                            .catch(() => ({ failed: toUndismiss.length, succeeded: 0 }));
+
                           if (failed > 0) {
                             showToast(`${failed} of ${toUndismiss.length} items failed to undismiss.`, "error");
                           } else if (succeeded > 0) {

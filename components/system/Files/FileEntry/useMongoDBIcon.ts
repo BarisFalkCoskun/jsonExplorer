@@ -11,6 +11,21 @@ interface MongoDBIconState {
   isLoading: boolean;
 }
 
+export interface MongoDBIconMount {
+  mongoFS: MongoDBFileSystem;
+  mountPoint: string;
+}
+
+type UseMongoDBIconResult = MongoDBIconState & {
+  canGoToNext: boolean;
+  canGoToPrevious: boolean;
+  getCurrentImageUrl: () => string | undefined;
+  goToNextImage: () => void;
+  goToPreviousImage: () => void;
+  isMongoDocument: boolean;
+  loadImages: () => Promise<void>;
+};
+
 const INITIAL_STATE: MongoDBIconState = {
   currentImageIndex: 0,
   error: undefined,
@@ -48,8 +63,11 @@ const findMongoDBFileSystem = (
   return undefined;
 };
 
-// eslint-disable-next-line @typescript-eslint/explicit-function-return-type, @typescript-eslint/explicit-module-boundary-types -- hook return type is inferred
-export const useMongoDBIcon = (path: string, visible = false) => {
+export const useMongoDBIcon = (
+  path: string,
+  mountedMongo?: MongoDBIconMount,
+  visible = false
+): UseMongoDBIconResult => {
   const [state, setState] = useState<MongoDBIconState>(INITIAL_STATE);
   const { rootFs } = useFileSystem();
   const loadingRef = useRef<AbortController | null>(null);
@@ -57,10 +75,17 @@ export const useMongoDBIcon = (path: string, visible = false) => {
   const isLoadingRef = useRef(false);
   const hasFullImagesRef = useRef(false);
 
-  const mongoData = useMemo(
-    () => findMongoDBFileSystem(path, rootFs),
-    [path, rootFs]
-  );
+  const mongoData = useMemo(() => {
+    if (mountedMongo) {
+      return {
+        mongoFS: mountedMongo.mongoFS,
+        mountPoint: mountedMongo.mountPoint,
+        relativePath: path.slice(mountedMongo.mountPoint.length),
+      };
+    }
+
+    return findMongoDBFileSystem(path, rootFs);
+  }, [mountedMongo, path, rootFs]);
 
   // Check if this is a MongoDB document
   const isMongoDocument = useCallback(() => {

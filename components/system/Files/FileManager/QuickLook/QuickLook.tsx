@@ -21,6 +21,7 @@ const QuickLookImage: FC<{ path: string; scale: number }> = ({
   const [visible, setVisible] = useState(false);
   const { images, currentImageIndex, getCurrentImageUrl } = useMongoDBIcon(
     path,
+    undefined,
     visible
   );
   const imageUrl = getCurrentImageUrl();

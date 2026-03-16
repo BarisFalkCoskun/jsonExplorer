@@ -14,7 +14,10 @@ import { m as motion } from "motion/react";
 import { type Columns } from "components/system/Files/FileManager/Columns/constants";
 import StyledFigure from "components/system/Files/FileEntry/StyledFigure";
 import SubIcons from "components/system/Files/FileEntry/SubIcons";
-import { useMongoDBIcon } from "components/system/Files/FileEntry/useMongoDBIcon";
+import {
+  type MongoDBIconMount,
+  useMongoDBIcon,
+} from "components/system/Files/FileEntry/useMongoDBIcon";
 import ImageNavigation from "components/system/Files/FileEntry/ImageNavigation";
 import {
   getCachedIconUrl,
@@ -100,6 +103,7 @@ type FileEntryProps = {
   isHeading?: boolean;
   isLoadingFileManager: boolean;
   loadIconImmediately?: boolean;
+  mongoIconMount?: MongoDBIconMount;
   name: string;
   path: string;
   readOnly?: boolean;
@@ -156,6 +160,7 @@ const FileEntry: FC<FileEntryProps> = ({
   isHeading,
   isLoadingFileManager,
   loadIconImmediately,
+  mongoIconMount,
   name,
   path,
   readOnly,
@@ -195,7 +200,7 @@ const FileEntry: FC<FileEntryProps> = ({
   const { formats, sizes } = useTheme();
 
   // MongoDB icon integration
-  const mongoDBIcon = useMongoDBIcon(path, isVisible);
+  const mongoDBIcon = useMongoDBIcon(path, mongoIconMount, isVisible);
   const {
     isMongoDocument,
     images,
