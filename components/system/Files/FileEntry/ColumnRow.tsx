@@ -1,8 +1,8 @@
-import type Stats from "browserfs/dist/node/core/node_fs_stats";
 import { useCallback, useState, useRef, useEffect, memo } from "react";
 import { useTheme } from "styled-components";
 import StyledColumnRow from "components/system/Files/FileEntry/StyledColumnRow";
 import { type Columns } from "components/system/Files/FileManager/Columns/constants";
+import { type FileStat } from "components/system/Files/FileManager/functions";
 import {
   getDateModified,
   getFileType,
@@ -21,11 +21,26 @@ const ColumnRow: FC<{
   columns: Columns;
   isDirectory: boolean;
   path: string;
-  stats: Stats;
+  stats: FileStat;
 }> = ({ columns, isDirectory, path, stats }) => {
   const { stat } = useFileSystem();
   const { formats } = useTheme();
   const getColumnData = useCallback(async (): Promise<ColumnDataProps> => {
+    if (
+      stats.listingType ||
+      typeof stats.listingDateModifiedMs === "number" ||
+      "listingSizeText" in stats
+    ) {
+      return {
+        date:
+          typeof stats.listingDateModifiedMs === "number"
+            ? getDateModified(path, stats, formats.dateModified)
+            : "",
+        size: isDirectory ? "" : stats.listingSizeText || "",
+        type: isDirectory ? "File folder" : stats.listingType || getFileType(getExtension(path)),
+      };
+    }
+
     const fullStats = stats.size === UNKNOWN_SIZE ? await stat(path) : stats;
 
     return {

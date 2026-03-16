@@ -107,6 +107,47 @@ const extractDatabaseNameFromConnectionString = (
   return databaseName || undefined;
 };
 
+const isTruthyQueryFlag = (value: string | string[] | undefined): boolean =>
+  value === "1" || value === "true";
+
+const appendFilter = (
+  baseFilter: Record<string, unknown>,
+  condition: Record<string, unknown>
+): Record<string, unknown> =>
+  Object.keys(baseFilter).length > 0
+    ? { $and: [baseFilter, condition] }
+    : condition;
+
+const buildUpdateOps = (
+  updates: Record<string, unknown>
+): Record<string, unknown> | undefined => {
+  const ILLEGAL_FIELD_PATTERN = /^\$|\./;
+
+  for (const field of Object.keys(updates)) {
+    if (ILLEGAL_FIELD_PATTERN.test(field)) {
+      throw new Error(`Invalid field name: "${field}"`);
+    }
+  }
+
+  const setFields: Record<string, unknown> = {};
+  const unsetFields: Record<string, string> = {};
+
+  for (const [field, value] of Object.entries(updates)) {
+    if (value === null || value === undefined) {
+      unsetFields[field] = "";
+    } else {
+      setFields[field] = value;
+    }
+  }
+
+  const updateOps: Record<string, unknown> = {};
+
+  if (Object.keys(setFields).length > 0) updateOps.$set = setFields;
+  if (Object.keys(unsetFields).length > 0) updateOps.$unset = unsetFields;
+
+  return Object.keys(updateOps).length > 0 ? updateOps : undefined;
+};
+
 const handleDatabases = async (
   client: MongoClient,
   connectionString: string,
@@ -179,6 +220,74 @@ const handleDocuments = async (
 
   const db = client.db(dbName);
   const collection = db.collection(collectionName);
+
+  if (req.method === "PATCH") {
+    const body = req.body as
+      | {
+          documentIds?: unknown;
+          updates?: Record<string, unknown>;
+        }
+      | undefined;
+
+    if (!body || typeof body !== "object") {
+      res.status(400).json({ error: "Request body must be a JSON object" });
+      return;
+    }
+
+    const { documentIds, updates } = body;
+
+    if (!Array.isArray(documentIds) || documentIds.length === 0) {
+      res.status(400).json({ error: "documentIds must be a non-empty array" });
+      return;
+    }
+
+    if (
+      documentIds.some(
+        (documentId) =>
+          typeof documentId !== "string" || documentId.trim().length === 0
+      )
+    ) {
+      res.status(400).json({ error: "documentIds must contain only strings" });
+      return;
+    }
+
+    if (!updates || typeof updates !== "object") {
+      res.status(400).json({ error: "updates must be a JSON object" });
+      return;
+    }
+
+    let updateOps: Record<string, unknown> | undefined;
+
+    try {
+      updateOps = buildUpdateOps(updates);
+    } catch (updateError) {
+      res.status(400).json({
+        error: updateError instanceof Error ? updateError.message : "Invalid update payload",
+      });
+      return;
+    }
+
+    if (!updateOps) {
+      res.status(400).json({ error: "No update fields provided" });
+      return;
+    }
+
+    const documentFilters = (documentIds as string[]).flatMap((documentId) =>
+      getDocumentFilters(documentId)
+    );
+
+    const result = await collection.updateMany(
+      { $or: documentFilters },
+      updateOps
+    );
+
+    res.json({
+      matchedCount: result.matchedCount,
+      modifiedCount: result.modifiedCount,
+    });
+    return;
+  }
+
   const metaOnly = req.query.meta === '1' || req.query.meta === 'true';
   let filter: Record<string, unknown> = {};
 
@@ -196,6 +305,14 @@ const handleDocuments = async (
   } catch (sanitizeError) {
     res.status(400).json({ error: sanitizeError instanceof Error ? sanitizeError.message : 'Invalid filter' });
     return;
+  }
+
+  if (isTruthyQueryFlag(req.query.hideCategorized)) {
+    filter = appendFilter(filter, { category: { $exists: false } });
+  }
+
+  if (isTruthyQueryFlag(req.query.hideDismissed)) {
+    filter = appendFilter(filter, { dismissed: { $ne: true } });
   }
 
   // Keyset pagination (not used with meta=1 which always returns full list)
@@ -290,32 +407,18 @@ const handleDocument = async (
       return;
     }
 
-    const ILLEGAL_FIELD_PATTERN = /^\$|\./;
+    let updateOps: Record<string, unknown> | undefined;
 
-    for (const field of Object.keys(updates)) {
-      if (ILLEGAL_FIELD_PATTERN.test(field)) {
-        res.status(400).json({ error: `Invalid field name: "${field}"` });
-        return;
-      }
+    try {
+      updateOps = buildUpdateOps(updates);
+    } catch (updateError) {
+      res.status(400).json({
+        error: updateError instanceof Error ? updateError.message : "Invalid update payload",
+      });
+      return;
     }
 
-    const setFields: Record<string, unknown> = {};
-    const unsetFields: Record<string, string> = {};
-
-    for (const [field, value] of Object.entries(updates)) {
-      if (value === null || value === undefined) {
-        unsetFields[field] = "";
-      } else {
-        setFields[field] = value;
-      }
-    }
-
-    const updateOps: Record<string, unknown> = {};
-
-    if (Object.keys(setFields).length > 0) updateOps.$set = setFields;
-    if (Object.keys(unsetFields).length > 0) updateOps.$unset = unsetFields;
-
-    if (Object.keys(updateOps).length === 0) {
+    if (!updateOps) {
       res.status(400).json({ error: "No update fields provided" });
       return;
     }

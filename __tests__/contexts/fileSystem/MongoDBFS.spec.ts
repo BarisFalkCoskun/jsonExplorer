@@ -8,7 +8,13 @@ interface MongoDocument {
 // Access private members for testing via double cast (TS private is compile-time only)
 type MongoDBFSTestable = {
   collectionEntriesCache: Map<string, { cachedAt: number; entries: Set<string> }>;
-  documentsListCache: Map<string, { cachedAt: number; documentIndex: Map<string, MongoDocument>; documents: MongoDocument[] }>;
+  documentsListCache: Map<string, {
+    cachedAt: number;
+    categorizedDocumentNames: Set<string>;
+    dismissedDocumentNames: Set<string>;
+    documentIndex: Map<string, MongoDocument>;
+    documents: MongoDocument[];
+  }>;
   getCachedCollectionEntries: (database: string, collection: string) => Set<string> | null;
   getCachedDismissedNames: (database: string, collection: string) => Set<string> | null;
   getCachedDocumentCategory: (docName: string, database: string, collection: string) => string | null;
@@ -18,7 +24,23 @@ type MongoDBFSTestable = {
   isCachedDismissed: (docName: string, database: string, collection: string) => boolean;
   parsePath: (path: string) => { collection?: string; database?: string; document?: string };
   patchDocument: (path: string, updates: Record<string, unknown>) => Promise<void>;
-  readdirPaged: (path: string, cursor?: { afterId: string; afterName: string }, limit?: number) => Promise<{ entries: string[]; hasMore: boolean; nextCursor?: { afterId: string; afterName: string } }>;
+  patchDocuments: (
+    database: string,
+    collection: string,
+    documentNames: string[],
+    updates: Record<string, unknown>
+  ) => Promise<{ matchedCount: number; modifiedCount: number }>;
+  readdirPaged: (
+    path: string,
+    cursor?: { afterId: string; afterName: string },
+    limit?: number,
+    options?: { hideCategorized?: boolean; hideDismissed?: boolean }
+  ) => Promise<{
+    entries: string[];
+    entryStats?: Record<string, { listingDateModifiedMs?: number; listingSizeText?: string; listingType?: string }>;
+    hasMore: boolean;
+    nextCursor?: { afterId: string; afterName: string };
+  }>;
   setCachedCollectionEntries: (database: string, collection: string, entries: string[]) => void;
   setCachedDocumentsList: (database: string, collection: string, documents: MongoDocument[]) => void;
   stat: (path: string, isLstat: boolean | ((error: unknown, stats?: unknown) => void), callback?: (error: unknown, stats?: unknown) => void) => Promise<void>;
@@ -29,15 +51,34 @@ const createFS = (): MongoDBFSTestable =>
   new MongoDBFileSystem("mongodb://localhost:27017") as unknown as MongoDBFSTestable;
 
 /** Build a cache entry with both documents array and documentIndex Map. */
-function buildCacheEntry(fs: MongoDBFSTestable, documents: MongoDocument[]): { cachedAt: number; documentIndex: Map<string, MongoDocument>; documents: MongoDocument[] } {
+function buildCacheEntry(
+  fs: MongoDBFSTestable,
+  documents: MongoDocument[]
+): {
+  cachedAt: number;
+  categorizedDocumentNames: Set<string>;
+  dismissedDocumentNames: Set<string>;
+  documentIndex: Map<string, MongoDocument>;
+  documents: MongoDocument[];
+} {
+  const categorizedDocumentNames = new Set<string>();
+  const dismissedDocumentNames = new Set<string>();
   const documentIndex = new Map<string, MongoDocument>();
   for (const doc of documents) {
     const key = MongoDBFileSystem.decodeDocumentIdentifier(
       fs.getDocumentIdentifier(doc)
     );
     documentIndex.set(key, doc);
+    if ("category" in doc) categorizedDocumentNames.add(key);
+    if (doc.dismissed) dismissedDocumentNames.add(key);
   }
-  return { cachedAt: Date.now(), documentIndex, documents };
+  return {
+    cachedAt: Date.now(),
+    categorizedDocumentNames,
+    dismissedDocumentNames,
+    documentIndex,
+    documents,
+  };
 }
 
 describe("MongoDBFileSystem cache scoping", () => {
@@ -426,6 +467,54 @@ describe("paged initial load contract", () => {
     expect(fetchUrl).toContain("limit=200");
     expect(fetchUrl).not.toContain("meta=1");
   });
+
+  it("passes hide filters through paged requests", async () => {
+    const fs = createFS();
+
+    global.fetch = jest.fn().mockResolvedValue({
+      json: () => Promise.resolve({
+        documents: [{ _id: "doc1", name: "doc1" }],
+        hasMore: false,
+      }),
+      ok: true,
+    });
+
+    await fs.readdirPaged("testdb/products", undefined, 200, {
+      hideCategorized: true,
+      hideDismissed: true,
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- accessing jest mock internals
+    const fetchUrl = (global.fetch as jest.Mock).mock.calls[0][0] as string;
+    expect(fetchUrl).toContain("hideCategorized=1");
+    expect(fetchUrl).toContain("hideDismissed=1");
+  });
+
+  it("hydrates entry stats with listing metadata from paged response", async () => {
+    const fs = createFS();
+
+    global.fetch = jest.fn().mockResolvedValue({
+      json: () => Promise.resolve({
+        documents: [{
+          __listingDateModifiedMs: 1_700_000_000_000,
+          __listingSizeText: "",
+          __listingType: "JSON File",
+          _id: "doc1",
+          name: "doc1",
+        }],
+        hasMore: false,
+      }),
+      ok: true,
+    });
+
+    const result = await fs.readdirPaged("testdb/products", undefined, 200);
+    const stats = result.entryStats?.["doc1.json"];
+
+    expect(stats).toBeDefined();
+    expect(stats?.listingDateModifiedMs).toBe(1_700_000_000_000);
+    expect(stats?.listingSizeText).toBe("");
+    expect(stats?.listingType).toBe("JSON File");
+  });
 });
 
 describe("stat cache key encoding", () => {
@@ -508,5 +597,30 @@ describe("PATCH cache invalidation", () => {
     const entries = fs.getCachedCollectionEntries("testdb", "products");
     expect(entries).not.toBeNull();
     expect(entries?.has("doc1")).toBe(true);
+  });
+
+  it("patchDocuments updates categorized and dismissed cache sets", async () => {
+    const fs = createFS();
+
+    fs.setCachedDocumentsList("testdb", "products", [
+      { _id: "doc1", name: "doc1" } as MongoDocument,
+      { _id: "doc2", dismissed: true, name: "doc2" } as MongoDocument,
+    ]);
+
+    global.fetch = jest.fn().mockResolvedValue({
+      json: () => Promise.resolve({ matchedCount: 2, modifiedCount: 2 }),
+      ok: true,
+    });
+
+    await fs.patchDocuments("testdb", "products", ["doc1", "doc2"], {
+      category: "fruit",
+      // eslint-disable-next-line unicorn/no-null -- MongoDB bulk unset payload
+      dismissed: null,
+    });
+
+    expect(fs.getCachedDocumentNames("testdb", "products")).toEqual(
+      new Set(["doc1", "doc2"])
+    );
+    expect(fs.getCachedDismissedNames("testdb", "products")).toEqual(new Set());
   });
 });

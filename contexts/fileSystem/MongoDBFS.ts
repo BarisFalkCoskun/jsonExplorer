@@ -8,6 +8,9 @@ import type Stats from "browserfs/dist/node/core/node_fs_stats";
 
 interface MongoDocument {
   [key: string]: unknown;
+  __listingDateModifiedMs?: number;
+  __listingSizeText?: string;
+  __listingType?: string;
   _id?: string;
   dismissed?: boolean;
   imageCount?: number;
@@ -35,6 +38,8 @@ type CachedCollectionEntries = {
 
 type CachedDocumentsList = {
   cachedAt: number;
+  categorizedDocumentNames: Set<string>;
+  dismissedDocumentNames: Set<string>;
   documentIndex: Map<string, MongoDocument>;
   documents: MongoDocument[];
 };
@@ -407,16 +412,35 @@ export class MongoDBFileSystem implements FileSystem {
     collection: string,
     documents: MongoDocument[]
   ): void {
+    const categorizedDocumentNames = new Set<string>();
+    const dismissedDocumentNames = new Set<string>();
     const documentIndex = new Map<string, MongoDocument>();
+
     for (const doc of documents) {
       const key = MongoDBFileSystem.decodeDocumentIdentifier(
         this.getDocumentIdentifier(doc)
       );
+
       documentIndex.set(key, doc);
+
+      if ("category" in doc) {
+        categorizedDocumentNames.add(key);
+      }
+
+      if (doc.dismissed) {
+        dismissedDocumentNames.add(key);
+      }
     }
+
     this.documentsListCache.set(
       this.getCollectionCacheKey(database, collection),
-      { cachedAt: Date.now(), documentIndex, documents }
+      {
+        cachedAt: Date.now(),
+        categorizedDocumentNames,
+        dismissedDocumentNames,
+        documentIndex,
+        documents,
+      }
     );
   }
 
@@ -507,13 +531,7 @@ export class MongoDBFileSystem implements FileSystem {
     const cached = this.documentsListCache.get(key);
     if (!cached) return null; // eslint-disable-line unicorn/no-null
 
-    const categorized = new Set<string>();
-    for (const doc of cached.documents) {
-      if ("category" in doc) {
-        categorized.add(this.getDocumentIdentifier(doc));
-      }
-    }
-    return categorized;
+    return cached.categorizedDocumentNames;
   }
 
   /**
@@ -525,13 +543,7 @@ export class MongoDBFileSystem implements FileSystem {
     const cached = this.documentsListCache.get(key);
     if (!cached) return null; // eslint-disable-line unicorn/no-null
 
-    const dismissed = new Set<string>();
-    for (const doc of cached.documents) {
-      if (doc.dismissed) {
-        dismissed.add(this.getDocumentIdentifier(doc));
-      }
-    }
-    return dismissed;
+    return cached.dismissedDocumentNames;
   }
 
   // docName is the encoded filesystem entry name (from getDocumentIdentifier)
@@ -556,6 +568,41 @@ export class MongoDBFileSystem implements FileSystem {
       MongoDBFileSystem.decodeDocumentIdentifier(docName)
     );
     return doc && "category" in doc ? (doc.category as string) : null; // eslint-disable-line unicorn/no-null
+  }
+
+  private applyCachedDocumentUpdates(
+    cached: CachedDocumentsList,
+    documentName: string,
+    updates: Record<string, unknown>
+  ): void {
+    const doc = cached.documentIndex.get(documentName);
+
+    if (!doc) return;
+
+    for (const [k, v] of Object.entries(updates)) {
+      if (v === undefined || v === null) {
+        const mutableDoc = doc as Record<string, unknown>;
+        delete mutableDoc[k];
+      } else {
+        (doc as Record<string, unknown>)[k] = v;
+      }
+    }
+
+    if ("category" in updates) {
+      if ("category" in doc) {
+        cached.categorizedDocumentNames.add(documentName);
+      } else {
+        cached.categorizedDocumentNames.delete(documentName);
+      }
+    }
+
+    if ("dismissed" in updates) {
+      if (doc.dismissed) {
+        cached.dismissedDocumentNames.add(documentName);
+      } else {
+        cached.dismissedDocumentNames.delete(documentName);
+      }
+    }
   }
 
   public async patchDocument(
@@ -595,19 +642,58 @@ export class MongoDBFileSystem implements FileSystem {
     const cached = this.documentsListCache.get(cacheKey);
 
     if (cached) {
-      const doc = cached.documentIndex.get(documentName);
+      this.applyCachedDocumentUpdates(cached, documentName, updates);
+    }
+  }
 
-      if (doc) {
-        for (const [k, v] of Object.entries(updates)) {
-          if (v === undefined) {
-            const mutableDoc = doc as Record<string, unknown>;
-            delete mutableDoc[k];
-          } else {
-            (doc as Record<string, unknown>)[k] = v;
-          }
-        }
+  public async patchDocuments(
+    database: string,
+    collection: string,
+    documentNames: string[],
+    updates: Record<string, unknown>
+  ): Promise<{ matchedCount: number; modifiedCount: number }> {
+    if (!database || !collection || documentNames.length === 0) {
+      throw new Error("Invalid bulk document patch request");
+    }
+
+    const response = await MongoDBFileSystem.fetchWithTimeout(
+      `/api/mongodb/documents/${encodeURIComponent(database)}/${encodeURIComponent(collection)}`,
+      {
+        body: JSON.stringify({
+          documentIds: documentNames.map((documentName) =>
+            MongoDBFileSystem.decodeDocumentIdentifier(documentName)
+          ),
+          updates,
+        }),
+        headers: {
+          "Content-Type": "application/json",
+          "x-mongodb-connection": this.connectionString,
+        },
+        method: "PATCH",
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const result = (await response.json()) as {
+      matchedCount: number;
+      modifiedCount: number;
+    };
+
+    if (result.matchedCount === 0) return result;
+
+    const cacheKey = this.getCollectionCacheKey(database, collection);
+    const cached = this.documentsListCache.get(cacheKey);
+
+    if (cached) {
+      for (const documentName of documentNames) {
+        this.applyCachedDocumentUpdates(cached, documentName, updates);
       }
     }
+
+    return result;
   }
 
   public isMongoDBDocument(checkPath: string): boolean {
@@ -679,6 +765,12 @@ export class MongoDBFileSystem implements FileSystem {
         if (!existingDocsList.documentIndex.has(identifier)) {
           existingDocsList.documents.push(doc);
           existingDocsList.documentIndex.set(identifier, doc);
+          if ("category" in doc) {
+            existingDocsList.categorizedDocumentNames.add(identifier);
+          }
+          if (doc.dismissed) {
+            existingDocsList.dismissedDocumentNames.add(identifier);
+          }
         }
       }
       existingDocsList.cachedAt = Date.now();
@@ -805,11 +897,20 @@ export class MongoDBFileSystem implements FileSystem {
     };
   }
 
-  private createStats(isDir: boolean, size = 0): Stats {
+  private createStats(
+    isDir: boolean,
+    size = 0,
+    modifiedTimeMs = Date.now()
+  ): Stats {
+    const modifiedDate = new Date(modifiedTimeMs);
+
     return {
-      atime: new Date(),
-      birthtime: new Date(),
-      ctime: new Date(),
+      atime: modifiedDate,
+      atimeMs: modifiedTimeMs,
+      birthtime: modifiedDate,
+      birthtimeMs: modifiedTimeMs,
+      ctime: modifiedDate,
+      ctimeMs: modifiedTimeMs,
       isBlockDevice: () => false,
       isCharacterDevice: () => false,
       isDirectory: () => isDir,
@@ -819,7 +920,8 @@ export class MongoDBFileSystem implements FileSystem {
       isSocket: () => false,
       isSymbolicLink: () => false,
       mode: isDir ? 16877 : 33188,
-      mtime: new Date(),
+      mtime: modifiedDate,
+      mtimeMs: modifiedTimeMs,
       size,
     } as Stats;
   }
@@ -914,8 +1016,17 @@ export class MongoDBFileSystem implements FileSystem {
   public async readdirPaged(
     pagedPath: string,
     cursor?: { afterId: string; afterName: string },
-    limit = 500
-  ): Promise<{ entries: string[]; hasMore: boolean; nextCursor?: { afterId: string; afterName: string } }> {
+    limit?: number,
+    options?: {
+      hideCategorized?: boolean;
+      hideDismissed?: boolean;
+    }
+  ): Promise<{
+    entries: string[];
+    entryStats?: Record<string, Stats>;
+    hasMore: boolean;
+    nextCursor?: { afterId: string; afterName: string };
+  }> {
     const { collection, database } = this.parsePath(pagedPath);
 
     if (!database || !collection) {
@@ -928,10 +1039,16 @@ export class MongoDBFileSystem implements FileSystem {
       });
     }
 
-    const params = new URLSearchParams({ limit: String(limit) });
+    const params = new URLSearchParams({ limit: String(limit ?? 500) });
     if (cursor) {
       params.set("afterId", cursor.afterId);
       params.set("afterName", cursor.afterName);
+    }
+    if (options?.hideCategorized) {
+      params.set("hideCategorized", "1");
+    }
+    if (options?.hideDismissed) {
+      params.set("hideDismissed", "1");
     }
 
     const url = `/api/mongodb/documents/${encodeURIComponent(database)}/${encodeURIComponent(collection)}?${params}`;
@@ -952,9 +1069,27 @@ export class MongoDBFileSystem implements FileSystem {
     this.mergePagesIntoCaches(database, collection, result.documents);
 
     const pagedEntries = result.documents.map((doc) => `${this.getDocumentIdentifier(doc)}.json`);
+    const entryStats = Object.fromEntries(
+      result.documents.map((doc, index) => [
+        pagedEntries[index],
+        Object.assign(
+          this.createStats(
+            false,
+            UNKNOWN_DOCUMENT_SIZE,
+            doc.__listingDateModifiedMs
+          ),
+          {
+            listingDateModifiedMs: doc.__listingDateModifiedMs,
+            listingSizeText: doc.__listingSizeText,
+            listingType: doc.__listingType,
+          }
+        ),
+      ])
+    );
 
     return {
       entries: pagedEntries,
+      entryStats,
       hasMore: result.hasMore,
       nextCursor: result.nextCursor,
     };

@@ -36,6 +36,10 @@ describe("API method guards", () => {
     }
   });
 
+  it("allows PATCH for bulk documents updates", () => {
+    expect(isMethodAllowed("documents", "PATCH")).toBe(true);
+  });
+
   it("rejects POST for read-only operations", () => {
     for (const op of ["databases", "collections", "documents", "images", "test"]) {
       expect(isMethodAllowed(op, "POST")).toBe(false);

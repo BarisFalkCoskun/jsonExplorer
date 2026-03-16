@@ -1,3 +1,4 @@
+import { ObjectId } from "bson";
 import { addThumbnailFields } from "utils/mongoApi";
 
 describe("paged listing projection", () => {
@@ -57,5 +58,34 @@ describe("paged listing projection", () => {
 
     expect(result.thumbnail).toBeUndefined();
     expect(result).toHaveProperty("imageCount", 0);
+  });
+
+  it("adds lightweight listing metadata for details rows", () => {
+    const doc = {
+      _id: "doc5",
+      name: "elderberry",
+      updatedAt: "2024-01-02T03:04:05.000Z",
+    };
+
+    const result = addThumbnailFields(doc);
+
+    expect(result).toHaveProperty("__listingType", "JSON File");
+    expect(result).toHaveProperty("__listingSizeText", "");
+    expect(result).toHaveProperty(
+      "__listingDateModifiedMs",
+      new Date("2024-01-02T03:04:05.000Z").getTime()
+    );
+  });
+
+  it("falls back to ObjectId timestamp when updatedAt is absent", () => {
+    const objectId = new ObjectId("65b8e7f40000000000000000");
+    const doc = {
+      _id: objectId,
+      name: "fig",
+    };
+
+    const result = addThumbnailFields(doc);
+
+    expect(result.__listingDateModifiedMs).toBe(objectId.getTimestamp().getTime());
   });
 });

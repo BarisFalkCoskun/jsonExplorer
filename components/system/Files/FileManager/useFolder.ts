@@ -147,6 +147,8 @@ const useFolder = (
     writeFile,
   } = useFileSystem();
   const {
+    hideCategorized,
+    hideDismissed,
     iconPositions,
     sessionLoaded,
     setIconPositions,
@@ -243,6 +245,7 @@ const useFolder = (
             ? sortByDate(directory)
             : sortBySize;
         const effectiveSortOrder = (!skipSorting && sortOrder) || [];
+        const isAscendingSort = sortAscending !== false;
 
         const statFile = async (
           file: string
@@ -308,7 +311,15 @@ const useFolder = (
           // MongoDB collection paths: use paged first load (no full meta=1 fetch)
           if (mongoFsRef.current) {
             const mongoFs = mongoFsRef.current;
-            const result = await mongoFs.readdirPaged(directory, undefined, BATCH_SIZE);
+            const result = await mongoFs.readdirPaged(
+              directory,
+              undefined,
+              BATCH_SIZE,
+              {
+                hideCategorized,
+                hideDismissed,
+              }
+            );
 
             if (result.entries.length === 0) {
               setFiles({});
@@ -316,18 +327,33 @@ const useFolder = (
               return;
             }
 
-            const fileStatsResults = await Promise.all(
-              result.entries
-                .filter(filterSystemFiles(directory))
-                .map((file) => statFile(file))
-            );
+            const fileStatsResults = result.entryStats
+              ? result.entries
+                  .filter(filterSystemFiles(directory))
+                  .map((file) => {
+                    const stats = result.entryStats?.[file];
 
-            const sortedFiles = sortContents(
-              buildFilesObject(fileStatsResults),
-              effectiveSortOrder,
-              sortFn,
-              sortAscending
-            );
+                    return stats ? { file, stats } : undefined;
+                  })
+              : await Promise.all(
+                  result.entries
+                    .filter(filterSystemFiles(directory))
+                    .map((file) => statFile(file))
+                );
+            const mongoPageFiles = buildFilesObject(fileStatsResults);
+            const canReuseMongoOrder =
+              Boolean(result.entryStats) &&
+              isAscendingSort &&
+              effectiveSortOrder.length === 0 &&
+              (skipSorting || !sortBy || sortBy === "name");
+            const sortedFiles = canReuseMongoOrder
+              ? mongoPageFiles
+              : sortContents(
+                  mongoPageFiles,
+                  effectiveSortOrder,
+                  sortFn,
+                  sortAscending
+                );
 
             setFiles(sortedFiles);
             updateSortOrder(sortedFiles);
@@ -400,6 +426,8 @@ const useFolder = (
       closeProcessesByUrl,
       directory,
       exists,
+      hideCategorized,
+      hideDismissed,
       hideFolders,
       isSimpleSort,
       lstat,
@@ -427,7 +455,11 @@ const useFolder = (
         const result = await mongoFs.readdirPaged(
           directory,
           mongoCursorRef.current ?? undefined,
-          BATCH_SIZE
+          BATCH_SIZE,
+          {
+            hideCategorized,
+            hideDismissed,
+          }
         );
 
         if (result.entries.length === 0) {
@@ -441,41 +473,73 @@ const useFolder = (
             ? sortByDate(directory)
             : sortBySize;
         const mongoSortOrder = (!skipSorting && sortOrder) || [];
+        const isAscendingSort = sortAscending !== false;
 
-        const batchResults = await Promise.all(
-          result.entries
-            .filter(filterSystemFiles(directory))
-            .map(async (file) => {
-              try {
-                const filePath = join(directory, file);
-                const fileStats = isSimpleSort
-                  ? await lstat(filePath)
-                  : await stat(filePath);
+        const batchResults = result.entryStats
+          ? result.entries
+              .filter(filterSystemFiles(directory))
+              .map((file) => {
+                const stats = result.entryStats?.[file];
 
-                // eslint-disable-next-line unicorn/no-null -- filter sentinel
-                if (hideFolders && fileStats.isDirectory()) return null;
+                return stats ? { file, stats } : undefined;
+              })
+          : await Promise.all(
+              result.entries
+                .filter(filterSystemFiles(directory))
+                .map(async (file) => {
+                  try {
+                    const filePath = join(directory, file);
+                    const fileStats = isSimpleSort
+                      ? await lstat(filePath)
+                      : await stat(filePath);
 
-                const statsWithInfo = await statsWithShortcutInfo(file, fileStats);
-                return { file, stats: statsWithInfo };
-              } catch {
-                // eslint-disable-next-line unicorn/no-null -- filter sentinel
-                return null;
-              }
-            })
-        );
+                    // eslint-disable-next-line unicorn/no-null -- filter sentinel
+                    if (hideFolders && fileStats.isDirectory()) return null;
+
+                    const statsWithInfo = await statsWithShortcutInfo(file, fileStats);
+                    return { file, stats: statsWithInfo };
+                  } catch {
+                    // eslint-disable-next-line unicorn/no-null -- filter sentinel
+                    return null;
+                  }
+                })
+            );
 
         const batchFiles: Files = {};
         for (const r of batchResults) {
           if (r) batchFiles[r.file] = r.stats;
         }
 
+        const canAppendMongoOrder =
+          Boolean(result.entryStats) &&
+          isAscendingSort &&
+          (skipSorting || !sortBy || sortBy === "name");
+
+        if (canAppendMongoOrder && !skipSorting) {
+          window.requestAnimationFrame(() =>
+            setSortOrder(
+              directory,
+              (currentOrder = []) => [
+                ...currentOrder,
+                ...Object.keys(batchFiles).filter(
+                  (file) => !currentOrder.includes(file)
+                ),
+              ],
+              sortBy,
+              sortAscending
+            )
+          );
+        }
+
         setFiles((prev = {}) =>
-          sortContents(
-            { ...prev, ...batchFiles },
-            mongoSortOrder,
-            mongoSortFn,
-            sortAscending
-          )
+          canAppendMongoOrder
+            ? { ...prev, ...batchFiles }
+            : sortContents(
+                { ...prev, ...batchFiles },
+                mongoSortOrder,
+                mongoSortFn,
+                sortAscending
+              )
         );
 
         // eslint-disable-next-line unicorn/no-null -- ref sentinel for "no cursor"
@@ -552,9 +616,12 @@ const useFolder = (
     }
   }, [
     directory,
+    hideCategorized,
+    hideDismissed,
     hideFolders,
     isSimpleSort,
     lstat,
+    setSortOrder,
     skipSorting,
     sortAscending,
     sortBy,

@@ -6,6 +6,11 @@ export type MongoImage = {
   small?: string;
 };
 
+type MongoListingDocument = Record<string, unknown> & {
+  _id?: ObjectId | number | string;
+  updatedAt?: Date | number | string;
+};
+
 const PRODUCT_IMAGE_BASE_URL = "http://localhost:8100/imgs/";
 
 export const normalizeImageUrl = (img: unknown): string => {
@@ -28,6 +33,26 @@ export const normalizeProductImageUrl = (path: unknown): string => {
   return "";
 };
 
+const getListingModifiedTime = (
+  doc: MongoListingDocument
+): number | undefined => {
+  const { updatedAt } = doc;
+
+  if (updatedAt instanceof Date) {
+    const timestamp = updatedAt.getTime();
+    return Number.isNaN(timestamp) ? undefined : timestamp;
+  }
+
+  if (typeof updatedAt === "number" || typeof updatedAt === "string") {
+    const timestamp = new Date(updatedAt).getTime();
+    if (!Number.isNaN(timestamp)) return timestamp;
+  }
+
+  return doc._id instanceof ObjectId
+    ? doc._id.getTimestamp().getTime()
+    : undefined;
+};
+
 export const addThumbnailFields = (doc: Record<string, unknown>): Record<string, unknown> => {
   const productImages = Array.isArray(doc.productImages) ? (doc.productImages as unknown[]) : undefined;
 
@@ -48,6 +73,9 @@ export const addThumbnailFields = (doc: Record<string, unknown>): Record<string,
   }
 
   const result = { ...doc };
+  result.__listingDateModifiedMs = getListingModifiedTime(doc);
+  result.__listingSizeText = "";
+  result.__listingType = "JSON File";
   result.thumbnail = firstUrl || undefined;
   result.imageCount = imageCount;
   delete result.productImages;
@@ -92,7 +120,7 @@ export const ALLOWED_METHODS: Record<string, string[]> = {
   'collections': ['GET'],
   'databases': ['GET'],
   'document': ['DELETE', 'GET', 'PATCH', 'PUT'],
-  'documents': ['GET'],
+  'documents': ['GET', 'PATCH'],
   'drop-collection': ['DELETE'],
   'drop-database': ['DELETE'],
   'images': ['GET'],

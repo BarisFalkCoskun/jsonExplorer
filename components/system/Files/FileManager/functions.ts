@@ -24,6 +24,9 @@ import { getExtension, haltEvent, toSorted } from "utils/functions";
 import { get9pSize } from "contexts/fileSystem/core";
 
 export type FileStat = Stats & {
+  listingDateModifiedMs?: number;
+  listingSizeText?: string;
+  listingType?: string;
   systemShortcut?: boolean;
 };
 
