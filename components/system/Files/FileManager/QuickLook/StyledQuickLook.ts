@@ -70,6 +70,7 @@ const StyledQuickLook = styled.div`
     display: flex;
     flex: 1;
     justify-content: center;
+    min-height: 0;
     overflow: hidden;
     padding: 16px;
     position: relative;
