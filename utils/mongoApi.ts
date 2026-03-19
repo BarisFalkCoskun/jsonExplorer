@@ -61,10 +61,10 @@ export const LISTING_PROJECTION = {
   _id: 1,
   category: 1,
   dismissed: 1,
-  images: { $slice: 1 },
+  images: 1,
   name: 1,
-  oldImages: { $slice: 1 },
-  productImages: { $slice: 1 },
+  oldImages: 1,
+  productImages: 1,
 };
 
 export const SAFE_FILTER_OPERATORS = new Set([
