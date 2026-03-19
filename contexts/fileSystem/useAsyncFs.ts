@@ -169,10 +169,32 @@ const useAsyncFs = (): AsyncFSModule => {
         }),
       readdir: (path) =>
         new Promise((resolve, reject) => {
-          fs?.readdir(path, (error, data = []) =>
-            // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- BrowserFS ErrorLike
-            error ? reject(error) : resolve(data)
-          );
+          fs?.readdir(path, (error, data = []) => {
+            if (error) {
+              // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors -- BrowserFS ErrorLike
+              reject(error);
+              return;
+            }
+
+            // BrowserFS omits mount-point children when the separator
+            // is left in the sliced name (e.g. "/Local" instead of "Local").
+            // Merge any direct-child mount points that were missed.
+            if (rootFs?.mntMap) {
+              const trailing = path.endsWith("/") ? path : `${path}/`;
+
+              for (const mp of Object.keys(rootFs.mntMap)) {
+                if (mp.startsWith(trailing)) {
+                  const rest = mp.slice(trailing.length);
+
+                  if (rest && !rest.includes("/") && !data.includes(rest)) {
+                    data.push(rest);
+                  }
+                }
+              }
+            }
+
+            resolve(data);
+          });
         }),
       rename: (oldPath, newPath) =>
         new Promise((resolve, reject) => {

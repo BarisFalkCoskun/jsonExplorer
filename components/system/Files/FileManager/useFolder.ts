@@ -187,6 +187,7 @@ const useFolder = (
   const isLoadingMoreRef = useRef(false);
   const mongoCursorRef = useRef<{ afterId: string; afterName: string } | null>(null);
   const mongoFsRef = useRef<MongoDBFileSystem | null>(null);
+  const mongoMountPointRef = useRef("");
   const updateFiles = useCallback(
     async (newFile?: string, oldFile?: string) => {
       if (oldFile) {
@@ -226,6 +227,7 @@ const useFolder = (
           ...currentFiles,
           [baseName]: fileStats,
         }));
+        setIsLoading(false);
       } else {
         progressiveLoadRef.current?.abort();
         // eslint-disable-next-line unicorn/no-null -- ref sentinel for "no controller"
@@ -295,11 +297,12 @@ const useFolder = (
 
         try {
           // Detect if this directory is on a MongoDB filesystem
-          const mountedFs = rootFs?.mntMap
+          const mountEntry = rootFs?.mntMap
             ? Object.entries(rootFs.mntMap).find(
                 ([mp]) => directory === mp || directory.startsWith(`${mp}/`)
-              )?.[1]
+              )
             : undefined;
+          const mountedFs = mountEntry?.[1];
           // eslint-disable-next-line unicorn/no-null -- refs use null as "no value" sentinel
           mongoFsRef.current = mountedFs instanceof MongoDBFileSystem ? mountedFs : null;
           // eslint-disable-next-line unicorn/no-null -- refs use null as "no value" sentinel
@@ -308,7 +311,12 @@ const useFolder = (
           // MongoDB collection paths: use paged first load (no full meta=1 fetch)
           if (mongoFsRef.current) {
             const mongoFs = mongoFsRef.current;
-            const result = await mongoFs.readdirPaged(directory, undefined, BATCH_SIZE);
+            const mountPoint = mountEntry?.[0] || "";
+            mongoMountPointRef.current = mountPoint;
+            const relativePath = directory === mountPoint
+              ? "/"
+              : directory.slice(mountPoint.length);
+            const result = await mongoFs.readdirPaged(relativePath, undefined, BATCH_SIZE);
 
             if (result.entries.length === 0) {
               setFiles({});
@@ -424,8 +432,10 @@ const useFolder = (
       isLoadingMoreRef.current = true;
 
       try {
+        const mp = mongoMountPointRef.current;
+        const relPath = directory === mp ? "/" : directory.slice(mp.length);
         const result = await mongoFs.readdirPaged(
-          directory,
+          relPath,
           mongoCursorRef.current ?? undefined,
           BATCH_SIZE
         );
