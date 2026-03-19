@@ -68,7 +68,7 @@ const StyledQuickLook = styled.div`
   .ql-content {
     align-items: center;
     display: flex;
-    flex: 1;
+    flex: 1 1 0;
     justify-content: center;
     min-height: 0;
     overflow: hidden;
@@ -76,10 +76,10 @@ const StyledQuickLook = styled.div`
     position: relative;
 
     img {
-      max-height: 100%;
-      max-width: 100%;
+      height: 100%;
       object-fit: contain;
       user-select: none;
+      width: 100%;
       -webkit-user-drag: none;
     }
   }
