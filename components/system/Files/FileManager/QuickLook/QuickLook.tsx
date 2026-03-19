@@ -12,18 +12,43 @@ type QuickLookProps = {
   url: string;
 };
 
+type QuickLookImageProps = {
+  onImageNav: (nav: {
+    goNext: () => void;
+    goPrev: () => void;
+  }) => void;
+  path: string;
+  scale: number;
+};
+
 // Inner component keyed by path — each file gets a clean hook mount cycle,
 // avoiding the race condition between useMongoDBIcon's load and reset effects.
-const QuickLookImage: FC<{ path: string; scale: number }> = ({
+const QuickLookImage: FC<QuickLookImageProps> = ({
+  onImageNav,
   path,
   scale,
 }) => {
   const [visible, setVisible] = useState(false);
-  const { images, currentImageIndex, getCurrentImageUrl } = useMongoDBIcon(
-    path,
-    visible
-  );
+  const {
+    images,
+    currentImageIndex,
+    getCurrentImageUrl,
+    goToNextImage,
+    goToPreviousImage,
+    loadImages,
+  } = useMongoDBIcon(path, visible);
   const imageUrl = getCurrentImageUrl();
+
+  useEffect(() => {
+    onImageNav({ goNext: goToNextImage, goPrev: goToPreviousImage });
+  }, [onImageNav, goToNextImage, goToPreviousImage]);
+
+  // Auto-load full images so Up/Down navigation works immediately
+  useEffect(() => {
+    if (visible && images.length > 0) {
+      loadImages();
+    }
+  }, [visible]); // eslint-disable-line react-hooks/exhaustive-deps -- only on visibility change
 
   useEffect(() => {
     setVisible(true);
@@ -58,8 +83,16 @@ const QuickLook: FC<QuickLookProps> = ({ files, onClose, path, url }) => {
   const [currentFile, setCurrentFile] = useState(basename(path));
   const [scale, setScale] = useState(1);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const imageNavRef = useRef<{ goNext: () => void; goPrev: () => void } | null>(null);
   const currentPath = join(url, currentFile);
   const displayName = basename(currentFile, ".json");
+
+  const handleImageNav = useCallback(
+    (nav: { goNext: () => void; goPrev: () => void }) => {
+      imageNavRef.current = nav;
+    },
+    []
+  );
 
   const navigateFile = useCallback(
     (direction: -1 | 1) => {
@@ -91,6 +124,14 @@ const QuickLook: FC<QuickLookProps> = ({ files, onClose, path, url }) => {
         case "ArrowRight":
           haltEvent(event);
           navigateFile(1);
+          break;
+        case "ArrowUp":
+          haltEvent(event);
+          imageNavRef.current?.goPrev();
+          break;
+        case "ArrowDown":
+          haltEvent(event);
+          imageNavRef.current?.goNext();
           break;
         default:
           break;
@@ -132,7 +173,7 @@ const QuickLook: FC<QuickLookProps> = ({ files, onClose, path, url }) => {
           <button aria-label="Close" onClick={onClose} type="button" />
           <span>{displayName}</span>
         </div>
-        <QuickLookImage key={currentPath} path={currentPath} scale={scale} />
+        <QuickLookImage key={currentPath} onImageNav={handleImageNav} path={currentPath} scale={scale} />
       </div>
     </StyledQuickLook>
   );
