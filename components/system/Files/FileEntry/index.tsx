@@ -198,9 +198,9 @@ const FileEntry: FC<FileEntryProps> = ({
   const mongoDBIcon = useMongoDBIcon(path, isVisible);
   const {
     isMongoDocument,
-    images,
     currentImageIndex,
     hasNavigationArrows,
+    totalImageCount,
     canGoToPrevious,
     canGoToNext,
     getCurrentImageUrl,
@@ -676,7 +676,7 @@ const FileEntry: FC<FileEntryProps> = ({
                 onNext={goToNextImage}
                 onPrevious={goToPreviousImage}
                 show={showImageNavigation}
-                totalImages={images.length}
+                totalImages={totalImageCount}
               />
             )}
           </div>

@@ -9,6 +9,7 @@ interface MongoDBIconState {
   hasNavigationArrows: boolean;
   images: string[];
   isLoading: boolean;
+  totalImageCount: number;
 }
 
 const INITIAL_STATE: MongoDBIconState = {
@@ -17,6 +18,7 @@ const INITIAL_STATE: MongoDBIconState = {
   hasNavigationArrows: false,
   images: [],
   isLoading: false,
+  totalImageCount: 0,
 };
 
 /**
@@ -87,6 +89,7 @@ export const useMongoDBIcon = (path: string, visible = false) => {
       currentImageIndex: 0,
       hasNavigationArrows: imageCount > 1,
       images: thumbnail ? [thumbnail] : [],
+      totalImageCount: imageCount,
     }));
   }, [isMongoDocument, mongoData]);
 
@@ -116,6 +119,7 @@ export const useMongoDBIcon = (path: string, visible = false) => {
         hasNavigationArrows: images.length > 1,
         images,
         isLoading: false,
+        totalImageCount: images.length,
       }));
     } catch (error) {
       if (abortController.signal.aborted) return;
