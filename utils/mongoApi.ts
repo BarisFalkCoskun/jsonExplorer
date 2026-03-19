@@ -23,7 +23,7 @@ export const normalizeImageUrl = (img: unknown): string => {
 
 export const normalizeProductImageUrl = (path: unknown): string => {
   if (typeof path === 'string' && path.trim().length > 0) {
-    return `${PRODUCT_IMAGE_BASE_URL}${path.trim()}`;
+    return `${PRODUCT_IMAGE_BASE_URL}${path.trim().replace(/^\//, '')}`;
   }
   return "";
 };
