@@ -180,7 +180,7 @@ export const useMongoDBIcon = (path: string, visible = false) => {
 
   // Check if can navigate in direction
   const canGoToPrevious = state.currentImageIndex > 0;
-  const canGoToNext = state.currentImageIndex < (state.totalImageCount > state.images.length ? state.totalImageCount : state.images.length) - 1;
+  const canGoToNext = state.currentImageIndex < Math.max(state.totalImageCount, state.images.length) - 1;
 
   // Reset when path changes — MUST be declared before visibility effect
   // so React runs it first when path changes
