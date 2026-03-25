@@ -13,7 +13,7 @@ type FocusedEntryProps = {
   onMouseUp: React.MouseEventHandler;
 };
 
-type FocusableEntry = (file: string) => FocusedEntryProps;
+type FocusableEntry = (file: string, label?: string) => FocusedEntryProps;
 
 export type FocusEntryFunctions = {
   blurEntry: (entry?: string) => void;
@@ -81,7 +81,7 @@ const useFocusableEntries = (
   const mouseDownPositionRef = useRef({ x: 0, y: 0 });
   const { formats, sizes } = useTheme();
   const focusableEntry = useCallback(
-    (file: string): FocusedEntryProps => {
+    (file: string, label?: string): FocusedEntryProps => {
       const isFocused = focusedEntries.includes(file);
       const className = isFocused ? "focus-within" : undefined;
       const onMouseDown: React.MouseEventHandler = ({
@@ -124,7 +124,7 @@ const useFocusableEntries = (
 
         mouseDownPositionRef.current = { x: 0, y: 0 };
       };
-      const textLabel = file.replace(SHORTCUT_EXTENSION, "");
+      const textLabel = label || file.replace(SHORTCUT_EXTENSION, "");
       let $labelHeightOffset = 0;
 
       if (adjustLabelMargin) {
@@ -138,7 +138,7 @@ const useFocusableEntries = (
         if (lines.length > 1) {
           try {
             const element = fileManagerRef.current?.querySelector(
-              `[aria-label='${CSS.escape(textLabel)}'] figcaption`
+              `[data-file-id='${CSS.escape(file)}'] figcaption`
             );
 
             if (element) {

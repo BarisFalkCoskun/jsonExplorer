@@ -170,14 +170,14 @@ const useFileKeyboardShortcuts = (
                 onToggleHideCategorized();
               }
               break;
-            
+
             case "l":
               if (onSetCategory && focusedEntries.length > 0) {
                 haltEvent(event);
                 onSetCategory(focusedEntries);
               }
               break;
-            
+
             case "r":
               haltEvent(event);
               updateFiles();
@@ -322,8 +322,14 @@ const useFileKeyboardShortcuts = (
                 const focusOnEntry = fileNamesStartingFromLastFocusedEntry.find(
                   (name) =>
                     !focusedEntries.includes(name) &&
-                    (name.startsWith(lowerCaseKey) ||
-                      name.startsWith(upperCaseKey))
+                    ((
+                      files[name]?.displayName ||
+                      name.replace(SHORTCUT_EXTENSION, "")
+                    ).startsWith(lowerCaseKey) ||
+                      (
+                        files[name]?.displayName ||
+                        name.replace(SHORTCUT_EXTENSION, "")
+                      ).startsWith(upperCaseKey))
                 );
 
                 if (focusOnEntry) {
@@ -333,7 +339,7 @@ const useFileKeyboardShortcuts = (
                   try {
                     fileManagerRef.current
                       ?.querySelector(
-                        `button[aria-label='${CSS.escape(focusOnEntry.replace(SHORTCUT_EXTENSION, ""))}']`
+                        `button[data-file-id='${CSS.escape(focusOnEntry)}']`
                       )
                       ?.scrollIntoView();
                   } catch {

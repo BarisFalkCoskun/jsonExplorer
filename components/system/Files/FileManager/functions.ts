@@ -24,6 +24,7 @@ import { getExtension, haltEvent, toSorted } from "utils/functions";
 import { get9pSize } from "contexts/fileSystem/core";
 
 export type FileStat = Stats & {
+  displayName?: string;
   systemShortcut?: boolean;
 };
 
@@ -31,8 +32,18 @@ type FileStats = [string, FileStat];
 
 type SortFunction = (a: FileStats, b: FileStats) => number;
 
-const sortByName = ([a]: FileStats, [b]: FileStats): number =>
-  a.localeCompare(b, "en", { sensitivity: "base" });
+const getEntrySortName = ([name, { displayName }]: FileStats): string =>
+  displayName || name;
+
+const sortByName = (a: FileStats, b: FileStats): number => {
+  const diff = getEntrySortName(a).localeCompare(getEntrySortName(b), "en", {
+    sensitivity: "base",
+  });
+
+  return diff === 0
+    ? a[0].localeCompare(b[0], "en", { sensitivity: "base" })
+    : diff;
+};
 
 export const sortByDate =
   (directory: string) =>

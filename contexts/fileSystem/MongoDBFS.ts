@@ -5,6 +5,7 @@ import { type FileSystem } from "browserfs/dist/node/core/file_system";
 // eslint-disable-next-line import/no-unresolved
 import { type ApiError } from "browserfs/dist/node/core/api_error";
 import type Stats from "browserfs/dist/node/core/node_fs_stats";
+import { getPreferredMongoDocumentLabel } from "utils/mongoDocument";
 
 interface MongoDocument {
   [key: string]: unknown;
@@ -15,6 +16,7 @@ interface MongoDocument {
   name?: string;
   oldImages?: string[];
   thumbnail?: string;
+  title?: string;
 }
 
 interface MongoFSEntry {
@@ -40,20 +42,34 @@ type CachedDocumentsList = {
 };
 
 interface MongoCollection {
-  deleteOne: (filter: Record<string, unknown>) => Promise<{ deletedCount: number }>;
+  deleteOne: (
+    filter: Record<string, unknown>
+  ) => Promise<{ deletedCount: number }>;
   drop: () => Promise<{ ok: number }>;
   find: () => { toArray: () => Promise<MongoDocument[]> };
-  findOne: (filter: Record<string, unknown>) => Promise<MongoDocument | undefined>;
+  findOne: (
+    filter: Record<string, unknown>
+  ) => Promise<MongoDocument | undefined>;
   getImages: (documentId: string) => Promise<string[]>;
-  insertOne: (doc: Record<string, unknown>) => Promise<{ acknowledged: boolean }>;
-  replaceOne: (filter: Record<string, unknown>, doc: Record<string, unknown>, options: Record<string, unknown>) => Promise<{ acknowledged: boolean }>;
+  insertOne: (
+    doc: Record<string, unknown>
+  ) => Promise<{ acknowledged: boolean }>;
+  replaceOne: (
+    filter: Record<string, unknown>,
+    doc: Record<string, unknown>,
+    options: Record<string, unknown>
+  ) => Promise<{ acknowledged: boolean }>;
 }
 
 interface MongoDb {
-  admin: () => { listDatabases: () => Promise<{ databases: { name: string }[] }> };
+  admin: () => {
+    listDatabases: () => Promise<{ databases: { name: string }[] }>;
+  };
   collection: (name: string) => MongoCollection;
   dropDatabase: () => Promise<{ ok: number }>;
-  listCollections: () => Promise<{ name: string }[]> | { toArray: () => Promise<{ name: string }[]> };
+  listCollections: () =>
+    | Promise<{ name: string }[]>
+    | { toArray: () => Promise<{ name: string }[]> };
 }
 
 interface MongoAPIClient {
@@ -69,7 +85,10 @@ export class MongoDBFileSystem implements FileSystem {
 
   private readonly connectionString: string;
 
-  private readonly collectionEntriesCache = new Map<string, CachedCollectionEntries>();
+  private readonly collectionEntriesCache = new Map<
+    string,
+    CachedCollectionEntries
+  >();
 
   private readonly documentsListCache = new Map<string, CachedDocumentsList>();
 
@@ -126,7 +145,9 @@ export class MongoDBFileSystem implements FileSystem {
       return await fetch(url, { ...options, signal: controller.signal });
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
-        throw new Error(`Request timed out after ${MongoDBFileSystem.FETCH_TIMEOUT_MS}ms: ${url}`);
+        throw new Error(
+          `Request timed out after ${MongoDBFileSystem.FETCH_TIMEOUT_MS}ms: ${url}`
+        );
       }
       throw error;
     } finally {
@@ -140,16 +161,19 @@ export class MongoDBFileSystem implements FileSystem {
     filter: Record<string, unknown>
   ): Promise<{ deletedCount: number }> {
     const documentId = MongoDBFileSystem.extractFilterId(filter);
-    const response = await MongoDBFileSystem.fetchWithTimeout(`/api/mongodb/document/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}/${encodeURIComponent(documentId)}`, {
-      headers: {
-        'x-mongodb-connection': this.connectionString,
-      },
-      method: 'DELETE',
-    });
+    const response = await MongoDBFileSystem.fetchWithTimeout(
+      `/api/mongodb/document/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}/${encodeURIComponent(documentId)}`,
+      {
+        headers: {
+          "x-mongodb-connection": this.connectionString,
+        },
+        method: "DELETE",
+      }
+    );
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
-    const result = await response.json() as { deletedCount: number };
+    const result = (await response.json()) as { deletedCount: number };
     return { deletedCount: result.deletedCount };
   }
 
@@ -159,15 +183,18 @@ export class MongoDBFileSystem implements FileSystem {
     filter: Record<string, unknown>
   ): Promise<MongoDocument | undefined> {
     const documentId = MongoDBFileSystem.extractFilterId(filter);
-    const response = await MongoDBFileSystem.fetchWithTimeout(`/api/mongodb/document/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}/${encodeURIComponent(documentId)}`, {
-      headers: {
-        'x-mongodb-connection': this.connectionString,
-      },
-    });
+    const response = await MongoDBFileSystem.fetchWithTimeout(
+      `/api/mongodb/document/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}/${encodeURIComponent(documentId)}`,
+      {
+        headers: {
+          "x-mongodb-connection": this.connectionString,
+        },
+      }
+    );
     if (!response.ok) {
       return undefined;
     }
-    return await response.json() as MongoDocument;
+    return (await response.json()) as MongoDocument;
   }
 
   private createAPIClient(): MongoAPIClient {
@@ -178,17 +205,26 @@ export class MongoDBFileSystem implements FileSystem {
       db: (dbName?: string): MongoDb => ({
         admin: () => ({
           listDatabases: async () => {
-            const response = await MongoDBFileSystem.fetchWithTimeout('/api/mongodb/databases', {
-              headers: {
-                'x-mongodb-connection': this.connectionString,
-              },
-            });
+            const response = await MongoDBFileSystem.fetchWithTimeout(
+              "/api/mongodb/databases",
+              {
+                headers: {
+                  "x-mongodb-connection": this.connectionString,
+                },
+              }
+            );
             if (!response.ok) {
-              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+              throw new Error(
+                `HTTP ${response.status}: ${response.statusText}`
+              );
             }
-            const databases = await response.json() as string[];
-            return { databases: databases.map((dbItemName: string) => ({ name: dbItemName })) };
-          }
+            const databases = (await response.json()) as string[];
+            return {
+              databases: databases.map((dbItemName: string) => ({
+                name: dbItemName,
+              })),
+            };
+          },
         }),
         collection: (collectionName: string): MongoCollection => ({
           deleteOne: (filter: Record<string, unknown>) => {
@@ -200,59 +236,74 @@ export class MongoDBFileSystem implements FileSystem {
             const response = await MongoDBFileSystem.fetchWithTimeout(
               `/api/mongodb/drop-collection/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}`,
               {
-                headers: { 'x-mongodb-connection': this.connectionString },
-                method: 'DELETE',
+                headers: { "x-mongodb-connection": this.connectionString },
+                method: "DELETE",
               }
             );
             if (!response.ok) {
-              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+              throw new Error(
+                `HTTP ${response.status}: ${response.statusText}`
+              );
             }
             return { ok: 1 };
           },
           find: () => ({
             toArray: async () => {
               if (!dbName) return [];
-              const response = await MongoDBFileSystem.fetchWithTimeout(`/api/mongodb/documents/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}`, {
-                headers: {
-                  'x-mongodb-connection': this.connectionString,
-                },
-              });
+              const response = await MongoDBFileSystem.fetchWithTimeout(
+                `/api/mongodb/documents/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}`,
+                {
+                  headers: {
+                    "x-mongodb-connection": this.connectionString,
+                  },
+                }
+              );
               if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                throw new Error(
+                  `HTTP ${response.status}: ${response.statusText}`
+                );
               }
-              return await response.json() as MongoDocument[];
-            }
+              return (await response.json()) as MongoDocument[];
+            },
           }),
-          findOne: (filter: Record<string, unknown>): Promise<MongoDocument | undefined> => {
+          findOne: (
+            filter: Record<string, unknown>
+          ): Promise<MongoDocument | undefined> => {
             if (!dbName) return Promise.resolve(undefined); // eslint-disable-line unicorn/no-useless-undefined
             return this.makeFindOneRequest(dbName, collectionName, filter);
           },
           getImages: async (documentId: string) => {
             if (!dbName) return [];
-            const response = await MongoDBFileSystem.fetchWithTimeout(`/api/mongodb/images/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}/${encodeURIComponent(documentId)}`, {
-              headers: {
-                'x-mongodb-connection': this.connectionString,
-              },
-            });
+            const response = await MongoDBFileSystem.fetchWithTimeout(
+              `/api/mongodb/images/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}/${encodeURIComponent(documentId)}`,
+              {
+                headers: {
+                  "x-mongodb-connection": this.connectionString,
+                },
+              }
+            );
             if (!response.ok) {
               return [];
             }
-            const result = await response.json() as { images?: string[] };
+            const result = (await response.json()) as { images?: string[] };
             return result.images ?? [];
           },
           insertOne: (doc: Record<string, unknown>) =>
             // For inserts, we'll use the upsert functionality of replaceOne
             this.replaceDocument(dbName ?? "", collectionName, doc),
-          replaceOne: (_filter: Record<string, unknown>, doc: Record<string, unknown>, _options: Record<string, unknown>) =>
-            this.replaceDocument(dbName ?? "", collectionName, doc)
+          replaceOne: (
+            _filter: Record<string, unknown>,
+            doc: Record<string, unknown>,
+            _options: Record<string, unknown>
+          ) => this.replaceDocument(dbName ?? "", collectionName, doc),
         }),
         dropDatabase: async () => {
           if (!dbName) throw new Error("No database name");
           const response = await MongoDBFileSystem.fetchWithTimeout(
             `/api/mongodb/drop-database/${encodeURIComponent(dbName)}`,
             {
-              headers: { 'x-mongodb-connection': this.connectionString },
-              method: 'DELETE',
+              headers: { "x-mongodb-connection": this.connectionString },
+              method: "DELETE",
             }
           );
           if (!response.ok) {
@@ -262,32 +313,43 @@ export class MongoDBFileSystem implements FileSystem {
         },
         listCollections: async () => {
           if (!dbName) return [];
-          const response = await MongoDBFileSystem.fetchWithTimeout(`/api/mongodb/collections/${encodeURIComponent(dbName)}`, {
-            headers: {
-              'x-mongodb-connection': this.connectionString,
-            },
-          });
+          const response = await MongoDBFileSystem.fetchWithTimeout(
+            `/api/mongodb/collections/${encodeURIComponent(dbName)}`,
+            {
+              headers: {
+                "x-mongodb-connection": this.connectionString,
+              },
+            }
+          );
           if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
           }
-          const collections = await response.json() as string[];
+          const collections = (await response.json()) as string[];
           return collections.map((colName: string) => ({ name: colName }));
-        }
-      })
+        },
+      }),
     };
   }
 
-  private async replaceDocument(dbName: string, collectionName: string, doc: Record<string, unknown>): Promise<{ acknowledged: boolean }> {
+  private async replaceDocument(
+    dbName: string,
+    collectionName: string,
+    doc: Record<string, unknown>
+  ): Promise<{ acknowledged: boolean }> {
     const rawDocId = doc._id ?? doc.name ?? Date.now().toString();
-    const documentId = typeof rawDocId === "string" ? rawDocId : JSON.stringify(rawDocId);
-    const response = await MongoDBFileSystem.fetchWithTimeout(`/api/mongodb/document/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}/${encodeURIComponent(documentId)}`, {
-      body: JSON.stringify(doc),
-      headers: {
-        'Content-Type': 'application/json',
-        'x-mongodb-connection': this.connectionString,
-      },
-      method: 'PUT',
-    });
+    const documentId =
+      typeof rawDocId === "string" ? rawDocId : JSON.stringify(rawDocId);
+    const response = await MongoDBFileSystem.fetchWithTimeout(
+      `/api/mongodb/document/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}/${encodeURIComponent(documentId)}`,
+      {
+        body: JSON.stringify(doc),
+        headers: {
+          "Content-Type": "application/json",
+          "x-mongodb-connection": this.connectionString,
+        },
+        method: "PUT",
+      }
+    );
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
@@ -297,32 +359,85 @@ export class MongoDBFileSystem implements FileSystem {
   private createMockClient(): MongoAPIClient {
     // Mock MongoDB client for demonstration in browser
     const mockData: Record<string, Record<string, MongoDocument[]>> = {
-      "blogDB": {
-        "comments": [
-          { _id: "comment1", author: "user123", name: "comment_001", postId: "post1", text: "Great post!" },
-          { _id: "comment2", author: "user456", name: "comment_002", postId: "post1", text: "Very helpful, thanks!" }
+      blogDB: {
+        comments: [
+          {
+            _id: "comment1",
+            author: "user123",
+            name: "comment_001",
+            postId: "post1",
+            text: "Great post!",
+          },
+          {
+            _id: "comment2",
+            author: "user456",
+            name: "comment_002",
+            postId: "post1",
+            text: "Very helpful, thanks!",
+          },
         ],
-        "posts": [
-          { _id: "post1", author: "john_doe", content: "MongoDB is a NoSQL database...", name: "first_post", title: "Getting Started with MongoDB" },
-          { _id: "post2", author: "jane_smith", content: "Learn advanced querying techniques...", name: "second_post", title: "Advanced MongoDB Queries" }
-        ]
+        posts: [
+          {
+            _id: "post1",
+            author: "john_doe",
+            content: "MongoDB is a NoSQL database...",
+            name: "first_post",
+            title: "Getting Started with MongoDB",
+          },
+          {
+            _id: "post2",
+            author: "jane_smith",
+            content: "Learn advanced querying techniques...",
+            name: "second_post",
+            title: "Advanced MongoDB Queries",
+          },
+        ],
       },
-      "sampleDB": {
-        "orders": [
-          { _id: "order1", name: "order_001", productId: "prod1", quantity: 1, total: 999.99, userId: "1" },
-          { _id: "order2", name: "order_002", productId: "prod2", quantity: 2, total: 39.98, userId: "2" }
+      sampleDB: {
+        orders: [
+          {
+            _id: "order1",
+            name: "order_001",
+            productId: "prod1",
+            quantity: 1,
+            total: 999.99,
+            userId: "1",
+          },
+          {
+            _id: "order2",
+            name: "order_002",
+            productId: "prod2",
+            quantity: 2,
+            total: 39.98,
+            userId: "2",
+          },
         ],
-        "products": [
-          { _id: "prod1", category: "electronics", name: "laptop", price: 999.99 },
+        products: [
+          {
+            _id: "prod1",
+            category: "electronics",
+            name: "laptop",
+            price: 999.99,
+          },
           { _id: "prod2", category: "books", name: "book", price: 19.99 },
-          { _id: "prod3", category: "electronics", name: "headphones", price: 79.99 }
+          {
+            _id: "prod3",
+            category: "electronics",
+            name: "headphones",
+            price: 79.99,
+          },
         ],
-        "users": [
+        users: [
           { _id: "1", age: 30, email: "john@example.com", name: "john_doe" },
           { _id: "2", age: 25, email: "jane@example.com", name: "jane_smith" },
-          { _id: "3", email: "admin@example.com", name: "admin_user", role: "admin" }
-        ]
-      }
+          {
+            _id: "3",
+            email: "admin@example.com",
+            name: "admin_user",
+            role: "admin",
+          },
+        ],
+      },
     };
 
     return {
@@ -330,33 +445,52 @@ export class MongoDBFileSystem implements FileSystem {
       connect: () => Promise.resolve(),
       db: (dbName?: string): MongoDb => ({
         admin: () => ({
-          listDatabases: () => Promise.resolve({
-            databases: Object.keys(mockData).map(mockDbName => ({ name: mockDbName }))
-          })
+          listDatabases: () =>
+            Promise.resolve({
+              databases: Object.keys(mockData).map((mockDbName) => ({
+                name: mockDbName,
+              })),
+            }),
         }),
         collection: (collectionName: string): MongoCollection => ({
-          deleteOne: (_filter: Record<string, unknown>) => Promise.resolve({ acknowledged: true, deletedCount: 1 }),
+          deleteOne: (_filter: Record<string, unknown>) =>
+            Promise.resolve({ acknowledged: true, deletedCount: 1 }),
           drop: () => Promise.resolve({ ok: 1 }),
           find: () => ({
             toArray: () => {
-              if (!dbName || !mockData[dbName]?.[collectionName]) return Promise.resolve([]);
+              if (!dbName || !mockData[dbName]?.[collectionName])
+                return Promise.resolve([]);
               return Promise.resolve(mockData[dbName][collectionName]);
-            }
+            },
           }),
-          findOne: (_filter: Record<string, unknown>): Promise<MongoDocument | undefined> => Promise.resolve(undefined), // eslint-disable-line unicorn/no-useless-undefined
+          findOne: (
+            _filter: Record<string, unknown>
+          ): Promise<MongoDocument | undefined> => Promise.resolve(undefined), // eslint-disable-line unicorn/no-useless-undefined
           getImages: (_documentId: string) => Promise.resolve([] as string[]),
           insertOne: (doc: Record<string, unknown>) => {
             const mockId = doc._id ?? Date.now().toString();
-            return Promise.resolve({ acknowledged: true, insertedId: typeof mockId === "string" ? mockId : JSON.stringify(mockId) });
+            return Promise.resolve({
+              acknowledged: true,
+              insertedId:
+                typeof mockId === "string" ? mockId : JSON.stringify(mockId),
+            });
           },
-          replaceOne: (_filter: Record<string, unknown>, _doc: Record<string, unknown>, _options: Record<string, unknown>) => Promise.resolve({ acknowledged: true, modifiedCount: 1 })
+          replaceOne: (
+            _filter: Record<string, unknown>,
+            _doc: Record<string, unknown>,
+            _options: Record<string, unknown>
+          ) => Promise.resolve({ acknowledged: true, modifiedCount: 1 }),
         }),
         dropDatabase: () => Promise.resolve({ ok: 1 }),
         listCollections: () => {
           if (!dbName || !mockData[dbName]) return Promise.resolve([]);
-          return Promise.resolve(Object.keys(mockData[dbName]).map(mockColName => ({ name: mockColName })));
-        }
-      })
+          return Promise.resolve(
+            Object.keys(mockData[dbName]).map((mockColName) => ({
+              name: mockColName,
+            }))
+          );
+        },
+      }),
     };
   }
 
@@ -380,7 +514,11 @@ export class MongoDBFileSystem implements FileSystem {
     const listCollectionsResult = await database.listCollections();
     const collections = Array.isArray(listCollectionsResult)
       ? listCollectionsResult
-      : await (listCollectionsResult as { toArray: () => Promise<{ name: string }[]> }).toArray();
+      : await (
+          listCollectionsResult as {
+            toArray: () => Promise<{ name: string }[]>;
+          }
+        ).toArray();
 
     return collections.map((col: { name: string }) => col.name);
   }
@@ -448,7 +586,11 @@ export class MongoDBFileSystem implements FileSystem {
   }
 
   public async getDocumentImages(imagePath: string): Promise<string[]> {
-    const { collection, database, document: documentName } = this.parsePath(imagePath);
+    const {
+      collection,
+      database,
+      document: documentName,
+    } = this.parsePath(imagePath);
 
     if (!database || !collection || !documentName) {
       return [];
@@ -469,10 +611,15 @@ export class MongoDBFileSystem implements FileSystem {
     }
   }
 
-  public getDocumentThumbnail(
-    thumbnailPath: string
-  ): { imageCount: number; thumbnail: string | undefined } {
-    const { collection, database, document: documentName } = this.parsePath(thumbnailPath);
+  public getDocumentThumbnail(thumbnailPath: string): {
+    imageCount: number;
+    thumbnail: string | undefined;
+  } {
+    const {
+      collection,
+      database,
+      document: documentName,
+    } = this.parsePath(thumbnailPath);
 
     if (!database || !collection || !documentName) {
       return { imageCount: 0, thumbnail: undefined };
@@ -502,7 +649,10 @@ export class MongoDBFileSystem implements FileSystem {
    * scoped to a specific database/collection cache entry.
    * Does NOT check TTL — the toggle should use whatever was loaded this session.
    */
-  public getCachedDocumentNames(database: string, collection: string): Set<string> | null {
+  public getCachedDocumentNames(
+    database: string,
+    collection: string
+  ): Set<string> | null {
     const key = this.getCollectionCacheKey(database, collection);
     const cached = this.documentsListCache.get(key);
     if (!cached) return null; // eslint-disable-line unicorn/no-null
@@ -520,7 +670,10 @@ export class MongoDBFileSystem implements FileSystem {
    * Returns a Set of document names that have a `dismissed` field,
    * scoped to a specific database/collection cache entry.
    */
-  public getCachedDismissedNames(database: string, collection: string): Set<string> | null {
+  public getCachedDismissedNames(
+    database: string,
+    collection: string
+  ): Set<string> | null {
     const key = this.getCollectionCacheKey(database, collection);
     const cached = this.documentsListCache.get(key);
     if (!cached) return null; // eslint-disable-line unicorn/no-null
@@ -535,7 +688,11 @@ export class MongoDBFileSystem implements FileSystem {
   }
 
   // docName is the encoded filesystem entry name (from getDocumentIdentifier)
-  public isCachedDismissed(docName: string, database: string, collection: string): boolean {
+  public isCachedDismissed(
+    docName: string,
+    database: string,
+    collection: string
+  ): boolean {
     const key = this.getCollectionCacheKey(database, collection);
     const cached = this.documentsListCache.get(key);
     if (!cached) return false;
@@ -547,7 +704,11 @@ export class MongoDBFileSystem implements FileSystem {
   }
 
   // docName is the encoded filesystem entry name (from getDocumentIdentifier)
-  public getCachedDocumentCategory(docName: string, database: string, collection: string): string | null {
+  public getCachedDocumentCategory(
+    docName: string,
+    database: string,
+    collection: string
+  ): string | null {
     const key = this.getCollectionCacheKey(database, collection);
     const cached = this.documentsListCache.get(key);
     if (!cached) return null; // eslint-disable-line unicorn/no-null
@@ -562,7 +723,10 @@ export class MongoDBFileSystem implements FileSystem {
    * Returns a Set of document names that have a `substituteGroup` field,
    * scoped to a specific database/collection cache entry.
    */
-  public getCachedSubstituteGroupNames(database: string, collection: string): Set<string> | null {
+  public getCachedSubstituteGroupNames(
+    database: string,
+    collection: string
+  ): Set<string> | null {
     const key = this.getCollectionCacheKey(database, collection);
     const cached = this.documentsListCache.get(key);
     if (!cached) return null; // eslint-disable-line unicorn/no-null
@@ -577,7 +741,11 @@ export class MongoDBFileSystem implements FileSystem {
   }
 
   // docName is the encoded filesystem entry name (from getDocumentIdentifier)
-  public getCachedDocumentSubstituteGroup(docName: string, database: string, collection: string): string | null {
+  public getCachedDocumentSubstituteGroup(
+    docName: string,
+    database: string,
+    collection: string
+  ): string | null {
     const key = this.getCollectionCacheKey(database, collection);
     const cached = this.documentsListCache.get(key);
     if (!cached) return null; // eslint-disable-line unicorn/no-null
@@ -585,14 +753,20 @@ export class MongoDBFileSystem implements FileSystem {
     const doc = cached.documentIndex.get(
       MongoDBFileSystem.decodeDocumentIdentifier(docName)
     );
-    return doc && "substituteGroup" in doc ? (doc.substituteGroup as string) : null; // eslint-disable-line unicorn/no-null
+    return doc && "substituteGroup" in doc
+      ? (doc.substituteGroup as string)
+      : null; // eslint-disable-line unicorn/no-null
   }
 
   public async patchDocument(
     patchPath: string,
     updates: Record<string, unknown>
   ): Promise<void> {
-    const { collection, database, document: documentName } = this.parsePath(patchPath);
+    const {
+      collection,
+      database,
+      document: documentName,
+    } = this.parsePath(patchPath);
 
     if (!database || !collection || !documentName) {
       throw new Error("Invalid document path");
@@ -614,7 +788,10 @@ export class MongoDBFileSystem implements FileSystem {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
-    const result = await response.json() as { matchedCount: number; modifiedCount: number };
+    const result = (await response.json()) as {
+      matchedCount: number;
+      modifiedCount: number;
+    };
 
     // Only mutate cache if server confirmed the document was found
     if (result.matchedCount === 0) return;
@@ -641,17 +818,32 @@ export class MongoDBFileSystem implements FileSystem {
   }
 
   public isMongoDBDocument(checkPath: string): boolean {
-    const { collection, database, document: documentName } = this.parsePath(checkPath);
-    return !!(database && collection && documentName && checkPath.endsWith('.json'));
+    const {
+      collection,
+      database,
+      document: documentName,
+    } = this.parsePath(checkPath);
+    return !!(
+      database &&
+      collection &&
+      documentName &&
+      checkPath.endsWith(".json")
+    );
   }
 
-  private parsePath(filePath: string): { collection?: string; database?: string; document?: string } {
+  private parsePath(filePath: string): {
+    collection?: string;
+    database?: string;
+    document?: string;
+  } {
     const parts = filePath.split("/").filter(Boolean);
     return {
       collection: parts[1],
       database: parts[0],
       document: parts[2]
-        ? MongoDBFileSystem.decodeDocumentIdentifier(parts[2].replace(/\.json$/, ""))
+        ? MongoDBFileSystem.decodeDocumentIdentifier(
+            parts[2].replace(/\.json$/, "")
+          )
         : undefined,
     };
   }
@@ -660,7 +852,10 @@ export class MongoDBFileSystem implements FileSystem {
     return `${database}/${collection}`;
   }
 
-  private getCachedCollectionEntries(database: string, collection: string): Set<string> | null {
+  private getCachedCollectionEntries(
+    database: string,
+    collection: string
+  ): Set<string> | null {
     const key = this.getCollectionCacheKey(database, collection);
     const cached = this.collectionEntriesCache.get(key);
 
@@ -681,10 +876,13 @@ export class MongoDBFileSystem implements FileSystem {
     collection: string,
     entries: string[]
   ): void {
-    this.collectionEntriesCache.set(this.getCollectionCacheKey(database, collection), {
-      cachedAt: Date.now(),
-      entries: new Set(entries),
-    });
+    this.collectionEntriesCache.set(
+      this.getCollectionCacheKey(database, collection),
+      {
+        cachedAt: Date.now(),
+        entries: new Set(entries),
+      }
+    );
   }
 
   /**
@@ -724,12 +922,17 @@ export class MongoDBFileSystem implements FileSystem {
       }
       existingEntries.cachedAt = Date.now();
     } else {
-      const identifiers = documents.map((doc) => this.getDocumentIdentifier(doc));
+      const identifiers = documents.map((doc) =>
+        this.getDocumentIdentifier(doc)
+      );
       this.setCachedCollectionEntries(database, collection, identifiers);
     }
   }
 
-  private invalidateCollectionCache(database?: string, collection?: string): void {
+  private invalidateCollectionCache(
+    database?: string,
+    collection?: string
+  ): void {
     if (database && collection) {
       const key = this.getCollectionCacheKey(database, collection);
       this.collectionEntriesCache.delete(key);
@@ -765,8 +968,22 @@ export class MongoDBFileSystem implements FileSystem {
     return encodeURIComponent(raw);
   }
 
+  private getCachedDocument(
+    database: string,
+    collection: string,
+    documentName: string
+  ): MongoDocument | undefined {
+    return this.documentsListCache
+      .get(this.getCollectionCacheKey(database, collection))
+      ?.documentIndex.get(documentName);
+  }
+
   public static decodeDocumentIdentifier(encoded: string): string {
-    try { return decodeURIComponent(encoded); } catch { return encoded; }
+    try {
+      return decodeURIComponent(encoded);
+    } catch {
+      return encoded;
+    }
   }
 
   private async getDocument(
@@ -793,7 +1010,11 @@ export class MongoDBFileSystem implements FileSystem {
   }
 
   private async getEntry(entryPath: string): Promise<MongoFSEntry | undefined> {
-    const { collection, database, document: documentName } = this.parsePath(entryPath);
+    const {
+      collection,
+      database,
+      document: documentName,
+    } = this.parsePath(entryPath);
 
     if (!database) {
       // Root path - represents the MongoDB connection itself
@@ -835,11 +1056,12 @@ export class MongoDBFileSystem implements FileSystem {
     };
   }
 
-  private createStats(isDir: boolean, size = 0): Stats {
+  private createStats(isDir: boolean, size = 0, displayName?: string): Stats {
     return {
       atime: new Date(),
       birthtime: new Date(),
       ctime: new Date(),
+      ...(displayName ? { displayName } : undefined),
       isBlockDevice: () => false,
       isCharacterDevice: () => false,
       isDirectory: () => isDir,
@@ -854,12 +1076,20 @@ export class MongoDBFileSystem implements FileSystem {
     } as Stats;
   }
 
-  public async stat(statPath: string, isLstat: boolean | ((error: ApiError | null, stats?: Stats) => void), callback?: (error: ApiError | null, stats?: Stats) => void): Promise<void> {
+  public async stat(
+    statPath: string,
+    isLstat: boolean | ((error: ApiError | null, stats?: Stats) => void),
+    callback?: (error: ApiError | null, stats?: Stats) => void
+  ): Promise<void> {
     // BrowserFS calls stat(path, isLstat, callback) with 3 args
-    const cb = typeof isLstat === 'function' ? isLstat : callback;
+    const cb = typeof isLstat === "function" ? isLstat : callback;
     if (!cb) return;
     try {
-      const { collection, database, document: documentName } = this.parsePath(statPath);
+      const {
+        collection,
+        database,
+        document: documentName,
+      } = this.parsePath(statPath);
 
       if (!database) {
         cb(null, this.createStats(true, 0)); // eslint-disable-line unicorn/no-null
@@ -867,10 +1097,27 @@ export class MongoDBFileSystem implements FileSystem {
       }
 
       if (database && collection && documentName) {
-        const cachedEntries = this.getCachedCollectionEntries(database, collection);
+        const cachedEntries = this.getCachedCollectionEntries(
+          database,
+          collection
+        );
+        const cachedDocument = this.getCachedDocument(
+          database,
+          collection,
+          documentName
+        );
 
         if (cachedEntries?.has(encodeURIComponent(documentName))) {
-          cb(null, this.createStats(false, UNKNOWN_DOCUMENT_SIZE)); // eslint-disable-line unicorn/no-null
+          cb(
+            null,
+            this.createStats(
+              false,
+              UNKNOWN_DOCUMENT_SIZE,
+              cachedDocument
+                ? getPreferredMongoDocumentLabel(cachedDocument)
+                : documentName
+            )
+          ); // eslint-disable-line unicorn/no-null
           return;
         }
       }
@@ -878,18 +1125,25 @@ export class MongoDBFileSystem implements FileSystem {
       const entry = await this.getEntry(statPath);
 
       if (!entry) {
-        const statError = new Error("ENOENT: no such file or directory") as ApiError;
+        const statError = new Error(
+          "ENOENT: no such file or directory"
+        ) as ApiError;
         statError.code = "ENOENT";
         cb(statError);
         return;
       }
 
       const isDir = entry.type === "database" || entry.type === "collection";
-      const entrySize = entry.type === "document" && entry.data
-        ? Buffer.byteLength(JSON.stringify(entry.data, null, 2)) // eslint-disable-line unicorn/no-null
-        : UNKNOWN_DOCUMENT_SIZE;
+      const entrySize =
+        entry.type === "document" && entry.data
+          ? Buffer.byteLength(JSON.stringify(entry.data, null, 2)) // eslint-disable-line unicorn/no-null
+          : UNKNOWN_DOCUMENT_SIZE;
+      const displayName =
+        entry.type === "document" && entry.data
+          ? getPreferredMongoDocumentLabel(entry.data)
+          : undefined;
 
-      cb(null, this.createStats(isDir, entrySize)); // eslint-disable-line unicorn/no-null
+      cb(null, this.createStats(isDir, entrySize, displayName)); // eslint-disable-line unicorn/no-null
     } catch (caughtError) {
       const apiError = new Error(String(caughtError)) as ApiError;
       apiError.code = "EIO";
@@ -897,14 +1151,17 @@ export class MongoDBFileSystem implements FileSystem {
     }
   }
 
-  public async readdir(readdirPath: string, callback: (error: ApiError | null, files?: string[]) => void): Promise<void> {
+  public async readdir(
+    readdirPath: string,
+    callback: (error: ApiError | null, files?: string[]) => void
+  ): Promise<void> {
     try {
       const { collection, database } = this.parsePath(readdirPath);
 
       if (!database) {
         // Root path - list databases
         const databases = await this.getDatabases();
-        if (typeof callback === 'function') {
+        if (typeof callback === "function") {
           callback(null, databases); // eslint-disable-line unicorn/no-null
         }
         return;
@@ -913,7 +1170,7 @@ export class MongoDBFileSystem implements FileSystem {
       if (!collection) {
         // Database path - list collections
         const collections = await this.getCollections(database);
-        if (typeof callback === 'function') {
+        if (typeof callback === "function") {
           callback(null, collections); // eslint-disable-line unicorn/no-null
         }
         return;
@@ -924,14 +1181,16 @@ export class MongoDBFileSystem implements FileSystem {
       const entries = documents.map((doc) => this.getDocumentIdentifier(doc));
       this.setCachedCollectionEntries(database, collection, entries);
 
-      const filenames = documents.map((doc) => `${this.getDocumentIdentifier(doc)}.json`);
-      if (typeof callback === 'function') {
+      const filenames = documents.map(
+        (doc) => `${this.getDocumentIdentifier(doc)}.json`
+      );
+      if (typeof callback === "function") {
         callback(null, filenames); // eslint-disable-line unicorn/no-null
       }
     } catch (caughtError) {
       const apiError = new Error(String(caughtError)) as ApiError;
       apiError.code = "EIO";
-      if (typeof callback === 'function') {
+      if (typeof callback === "function") {
         callback(apiError);
       }
     }
@@ -943,16 +1202,23 @@ export class MongoDBFileSystem implements FileSystem {
    */
   public async readdirPaged(
     pagedPath: string,
-    cursor?: { afterId: string; afterName: string },
+    cursor?: { afterId: string; afterLabel: string },
     limit = 500
-  ): Promise<{ entries: string[]; hasMore: boolean; nextCursor?: { afterId: string; afterName: string } }> {
+  ): Promise<{
+    entries: string[];
+    hasMore: boolean;
+    nextCursor?: { afterId: string; afterLabel: string };
+  }> {
     const { collection, database } = this.parsePath(pagedPath);
 
     if (!database || !collection) {
       // Non-collection paths: delegate to regular readdir
       return new Promise((resolve, reject) => {
         this.readdir(pagedPath, (readdirError, files) => {
-          if (readdirError) { reject(readdirError); return; }
+          if (readdirError) {
+            reject(readdirError);
+            return;
+          }
           resolve({ entries: files ?? [], hasMore: false });
         });
       });
@@ -961,7 +1227,7 @@ export class MongoDBFileSystem implements FileSystem {
     const params = new URLSearchParams({ limit: String(limit) });
     if (cursor) {
       params.set("afterId", cursor.afterId);
-      params.set("afterName", cursor.afterName);
+      params.set("afterLabel", cursor.afterLabel);
     }
 
     const url = `/api/mongodb/documents/${encodeURIComponent(database)}/${encodeURIComponent(collection)}?${params}`;
@@ -976,12 +1242,14 @@ export class MongoDBFileSystem implements FileSystem {
     const result = (await response.json()) as {
       documents: MongoDocument[];
       hasMore: boolean;
-      nextCursor?: { afterId: string; afterName: string };
+      nextCursor?: { afterId: string; afterLabel: string };
     };
 
     this.mergePagesIntoCaches(database, collection, result.documents);
 
-    const pagedEntries = result.documents.map((doc) => `${this.getDocumentIdentifier(doc)}.json`);
+    const pagedEntries = result.documents.map(
+      (doc) => `${this.getDocumentIdentifier(doc)}.json`
+    );
 
     return {
       entries: pagedEntries,
@@ -997,12 +1265,18 @@ export class MongoDBFileSystem implements FileSystem {
     callback: (error: ApiError | null, data?: Buffer | string) => void
   ): Promise<void> {
     try {
-      const { collection, database, document: documentName } = this.parsePath(readPath);
+      const {
+        collection,
+        database,
+        document: documentName,
+      } = this.parsePath(readPath);
 
       if (!database || !collection || !documentName) {
-        const readError = new Error("ENOENT: no such file or directory") as ApiError;
+        const readError = new Error(
+          "ENOENT: no such file or directory"
+        ) as ApiError;
         readError.code = "ENOENT";
-        if (typeof callback === 'function') {
+        if (typeof callback === "function") {
           callback(readError);
         }
         return;
@@ -1011,9 +1285,11 @@ export class MongoDBFileSystem implements FileSystem {
       const doc = await this.getDocument(database, collection, documentName);
 
       if (!doc) {
-        const readError = new Error("ENOENT: no such file or directory") as ApiError;
+        const readError = new Error(
+          "ENOENT: no such file or directory"
+        ) as ApiError;
         readError.code = "ENOENT";
-        if (typeof callback === 'function') {
+        if (typeof callback === "function") {
           callback(readError);
         }
         return;
@@ -1022,7 +1298,7 @@ export class MongoDBFileSystem implements FileSystem {
       const jsonContent = JSON.stringify(doc, null, 2); // eslint-disable-line unicorn/no-null
       const buffer = Buffer.from(jsonContent);
 
-      if (typeof callback === 'function') {
+      if (typeof callback === "function") {
         callback(
           null, // eslint-disable-line unicorn/no-null
           encoding ? buffer.toString(encoding as BufferEncoding) : buffer
@@ -1031,7 +1307,7 @@ export class MongoDBFileSystem implements FileSystem {
     } catch (caughtError) {
       const apiError = new Error(String(caughtError)) as ApiError;
       apiError.code = "EIO";
-      if (typeof callback === 'function') {
+      if (typeof callback === "function") {
         callback(apiError);
       }
     }
@@ -1046,7 +1322,11 @@ export class MongoDBFileSystem implements FileSystem {
     callback: (error: ApiError | null) => void
   ): Promise<void> {
     try {
-      const { collection, database, document: documentName } = this.parsePath(writePath);
+      const {
+        collection,
+        database,
+        document: documentName,
+      } = this.parsePath(writePath);
 
       if (!database || !collection || !documentName) {
         const writeError = new Error("EINVAL: invalid argument") as ApiError;
@@ -1065,9 +1345,13 @@ export class MongoDBFileSystem implements FileSystem {
       const jsonData = JSON.parse(content) as Record<string, unknown>;
 
       // Use the document name as identifier, or _id if provided
-      const filter = jsonData._id ? { _id: jsonData._id } : { name: documentName };
+      const filter = jsonData._id
+        ? { _id: jsonData._id }
+        : { name: documentName };
 
-      await col.replaceOne(filter as Record<string, unknown>, jsonData, { upsert: true });
+      await col.replaceOne(filter as Record<string, unknown>, jsonData, {
+        upsert: true,
+      });
       this.invalidateCollectionCache(database, collection);
       callback(null); // eslint-disable-line unicorn/no-null
     } catch (caughtError) {
@@ -1089,9 +1373,17 @@ export class MongoDBFileSystem implements FileSystem {
     return null; // eslint-disable-line unicorn/no-null
   }
 
-  public async mkdir(mkdirPath: string, _mode: number, callback: (error: ApiError | null) => void): Promise<void> {
+  public async mkdir(
+    mkdirPath: string,
+    _mode: number,
+    callback: (error: ApiError | null) => void
+  ): Promise<void> {
     try {
-      const { collection, database, document: documentName } = this.parsePath(mkdirPath);
+      const {
+        collection,
+        database,
+        document: documentName,
+      } = this.parsePath(mkdirPath);
 
       if (!database) {
         const mkdirError = new Error("EINVAL: invalid argument") as ApiError;
@@ -1102,7 +1394,9 @@ export class MongoDBFileSystem implements FileSystem {
 
       // Cannot create folders inside a collection (depth 3+)
       if (documentName) {
-        const mkdirError = new Error("Cannot create a folder inside a collection") as ApiError;
+        const mkdirError = new Error(
+          "Cannot create a folder inside a collection"
+        ) as ApiError;
         mkdirError.code = "EINVAL";
         callback(mkdirError);
         return;
@@ -1132,13 +1426,15 @@ export class MongoDBFileSystem implements FileSystem {
 
       const response = await MongoDBFileSystem.fetchWithTimeout(url, {
         headers: {
-          'x-mongodb-connection': this.connectionString,
+          "x-mongodb-connection": this.connectionString,
         },
-        method: 'POST',
+        method: "POST",
       });
 
       if (!response.ok) {
-        const fetchResult = await response.json().catch(() => ({ error: 'Unknown error' })) as { error?: string };
+        const fetchResult = (await response
+          .json()
+          .catch(() => ({ error: "Unknown error" }))) as { error?: string };
         throw new Error(fetchResult.error ?? `HTTP ${response.status}`);
       }
 
@@ -1151,9 +1447,16 @@ export class MongoDBFileSystem implements FileSystem {
     }
   }
 
-  public async unlink(unlinkPath: string, callback: (error: ApiError | null) => void): Promise<void> {
+  public async unlink(
+    unlinkPath: string,
+    callback: (error: ApiError | null) => void
+  ): Promise<void> {
     try {
-      const { collection, database, document: documentName } = this.parsePath(unlinkPath);
+      const {
+        collection,
+        database,
+        document: documentName,
+      } = this.parsePath(unlinkPath);
 
       if (!database) {
         const unlinkError = new Error("EINVAL: invalid argument") as ApiError;
@@ -1180,7 +1483,9 @@ export class MongoDBFileSystem implements FileSystem {
       if (deleteResult.deletedCount === 0) {
         const fallback = await col.deleteOne({ name: documentName });
         if (fallback.deletedCount === 0) {
-          const enoent = new Error("ENOENT: no such file or directory") as ApiError;
+          const enoent = new Error(
+            "ENOENT: no such file or directory"
+          ) as ApiError;
           enoent.code = "ENOENT";
           callback(enoent);
           return;
@@ -1196,7 +1501,10 @@ export class MongoDBFileSystem implements FileSystem {
     }
   }
 
-  public async rmdir(rmdirPath: string, callback: (error: ApiError | null) => void): Promise<void> {
+  public async rmdir(
+    rmdirPath: string,
+    callback: (error: ApiError | null) => void
+  ): Promise<void> {
     try {
       const { collection, database } = this.parsePath(rmdirPath);
 
@@ -1257,7 +1565,9 @@ export class MongoDBFileSystem implements FileSystem {
     _len: number,
     callback: (error: ApiError | null) => void
   ): void {
-    const truncateError = new Error("ENOSYS: function not implemented") as ApiError;
+    const truncateError = new Error(
+      "ENOSYS: function not implemented"
+    ) as ApiError;
     truncateError.code = "ENOSYS";
     callback(truncateError);
   }
@@ -1272,10 +1582,7 @@ export class MongoDBFileSystem implements FileSystem {
     callback(null, Math.floor(Math.random() * 1000)); // eslint-disable-line unicorn/no-null
   }
 
-  public close(
-    _fd: number,
-    callback: (error: ApiError | null) => void
-  ): void {
+  public close(_fd: number, callback: (error: ApiError | null) => void): void {
     callback(null); // eslint-disable-line unicorn/no-null
   }
 
@@ -1285,7 +1592,11 @@ export class MongoDBFileSystem implements FileSystem {
     _offset: number,
     _length: number,
     _position: number | null,
-    callback: (error: ApiError | null, bytesRead?: number, buffer?: Buffer) => void
+    callback: (
+      error: ApiError | null,
+      bytesRead?: number,
+      buffer?: Buffer
+    ) => void
   ): void {
     const readError = new Error("ENOSYS: function not implemented") as ApiError;
     readError.code = "ENOSYS";
@@ -1298,17 +1609,20 @@ export class MongoDBFileSystem implements FileSystem {
     _offset: number,
     _length: number,
     _position: number | null,
-    callback: (error: ApiError | null, bytesWritten?: number, buffer?: Buffer) => void
+    callback: (
+      error: ApiError | null,
+      bytesWritten?: number,
+      buffer?: Buffer
+    ) => void
   ): void {
-    const writeError = new Error("ENOSYS: function not implemented") as ApiError;
+    const writeError = new Error(
+      "ENOSYS: function not implemented"
+    ) as ApiError;
     writeError.code = "ENOSYS";
     callback(writeError);
   }
 
-  public sync(
-    _fd: number,
-    callback: (error: ApiError | null) => void
-  ): void {
+  public sync(_fd: number, callback: (error: ApiError | null) => void): void {
     callback(null); // eslint-disable-line unicorn/no-null
   }
 
@@ -1343,7 +1657,9 @@ export class MongoDBFileSystem implements FileSystem {
     _newPath: string,
     callback: (error: ApiError | null) => void
   ): void {
-    const renameError = new Error("ENOSYS: function not implemented") as ApiError;
+    const renameError = new Error(
+      "ENOSYS: function not implemented"
+    ) as ApiError;
     renameError.code = "ENOSYS";
     callback(renameError);
   }
@@ -1364,7 +1680,9 @@ export class MongoDBFileSystem implements FileSystem {
     _type: string,
     callback: (error: ApiError | null) => void
   ): void {
-    const symlinkError = new Error("ENOSYS: function not implemented") as ApiError;
+    const symlinkError = new Error(
+      "ENOSYS: function not implemented"
+    ) as ApiError;
     symlinkError.code = "ENOSYS";
     callback(symlinkError);
   }
@@ -1373,7 +1691,9 @@ export class MongoDBFileSystem implements FileSystem {
     _path: string,
     callback: (error: ApiError | null, linkString?: string) => void
   ): void {
-    const readlinkError = new Error("ENOSYS: function not implemented") as ApiError;
+    const readlinkError = new Error(
+      "ENOSYS: function not implemented"
+    ) as ApiError;
     readlinkError.code = "ENOSYS";
     callback(readlinkError);
   }
@@ -1392,15 +1712,27 @@ export class MongoDBFileSystem implements FileSystem {
     callback?: (error: ApiError | null, stats?: Stats) => void
   ): void {
     // For MongoDB FS, lstat is the same as stat (no symbolic links)
-    this.stat(lstatPath, isLstat, callback).catch(() => { /* noop: stat handles errors via callback */ });
+    this.stat(lstatPath, isLstat, callback).catch(() => {
+      /* noop: stat handles errors via callback */
+    });
   }
 
-  public async exists(existsPath: string, callback: (exists: boolean) => void): Promise<void> {
+  public async exists(
+    existsPath: string,
+    callback: (exists: boolean) => void
+  ): Promise<void> {
     try {
-      const { collection, database, document: documentName } = this.parsePath(existsPath);
+      const {
+        collection,
+        database,
+        document: documentName,
+      } = this.parsePath(existsPath);
 
       if (database && collection && documentName) {
-        const cachedEntries = this.getCachedCollectionEntries(database, collection);
+        const cachedEntries = this.getCachedCollectionEntries(
+          database,
+          collection
+        );
 
         if (cachedEntries?.has(encodeURIComponent(documentName))) {
           callback(true);

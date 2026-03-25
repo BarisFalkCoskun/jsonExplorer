@@ -11,7 +11,10 @@ describe("paged listing projection", () => {
 
     const result = addThumbnailFields(doc);
 
-    expect(result).toHaveProperty("thumbnail", "http://localhost:8100/imgs/beepr/abc123.jpg");
+    expect(result).toHaveProperty(
+      "thumbnail",
+      "http://localhost:8100/imgs/beepr/abc123.jpg"
+    );
     expect(result).toHaveProperty("imageCount", 1);
     expect(result).not.toHaveProperty("productImages");
     expect(result).not.toHaveProperty("images");
@@ -49,6 +52,8 @@ describe("paged listing projection", () => {
 
   it("handles docs with no image fields at all", () => {
     const doc = {
+      __sortId: "doc4",
+      __sortLabel: "Date",
       _id: "doc4",
       name: "date",
     };
@@ -57,5 +62,7 @@ describe("paged listing projection", () => {
 
     expect(result.thumbnail).toBeUndefined();
     expect(result).toHaveProperty("imageCount", 0);
+    expect(result).not.toHaveProperty("__sortId");
+    expect(result).not.toHaveProperty("__sortLabel");
   });
 });
