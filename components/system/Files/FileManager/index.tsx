@@ -80,7 +80,18 @@ const FileManager: FC<FileManagerProps> = ({
   skipSorting,
   url,
 }) => {
-  const { hideCategorized, hideDismissed, hideSubstituteGroup, iconZoomLevel, setHideCategorized, setHideDismissed, setHideSubstituteGroup, setIconZoomLevel, views, setViews } = useSession();
+  const {
+    hideCategorized,
+    hideDismissed,
+    hideSubstituteGroup,
+    iconZoomLevel,
+    setHideCategorized,
+    setHideDismissed,
+    setHideSubstituteGroup,
+    setIconZoomLevel,
+    views,
+    setViews,
+  } = useSession();
   const { showToast } = useToast();
   const view = useMemo(() => {
     if (isDesktop) return "icon";
@@ -102,15 +113,25 @@ const FileManager: FC<FileManagerProps> = ({
   );
   const { focusedEntries, focusableEntry, ...focusFunctions } =
     useFocusableEntries(fileManagerRef, isFileExplorerIconView);
-  const { fileActions, files, folderActions, hasMore, isLoading, loadMore, setFiles, updateFiles } =
-    useFolder(url, setRenaming, focusFunctions, {
-      hideFolders,
-      hideLoading,
-      isDesktop,
-      skipFsWatcher,
-      skipSorting,
-    });
-  const allFilesRef = useRef<{ files: NonNullable<typeof files>; key: string } | undefined>(undefined);
+  const {
+    fileActions,
+    files,
+    folderActions,
+    hasMore,
+    isLoading,
+    loadMore,
+    setFiles,
+    updateFiles,
+  } = useFolder(url, setRenaming, focusFunctions, {
+    hideFolders,
+    hideLoading,
+    isDesktop,
+    skipFsWatcher,
+    skipSorting,
+  });
+  const allFilesRef = useRef<
+    { files: NonNullable<typeof files>; key: string } | undefined
+  >(undefined);
   const { lstat, mountFs, rootFs } = useFileSystem();
   const { mountUrl, isMongoFS, mongoFs } = useMemo(() => {
     const mUrl = rootFs?.mntMap ? getMountUrl(url, rootFs.mntMap) : undefined;
@@ -135,7 +156,10 @@ const FileManager: FC<FileManagerProps> = ({
     setHideCategorized(newHidden);
 
     if (newHidden) {
-      const cachedDocs = mongoFs.getCachedDocumentNames(mongoCollection.database, mongoCollection.collection);
+      const cachedDocs = mongoFs.getCachedDocumentNames(
+        mongoCollection.database,
+        mongoCollection.collection
+      );
 
       if (cachedDocs) {
         setFiles((currentFiles) => {
@@ -163,10 +187,16 @@ const FileManager: FC<FileManagerProps> = ({
     } else if (allFilesRef.current?.key === url) {
       if (hideDismissed || hideSubstituteGroup) {
         const dismissedNames = hideDismissed
-          ? mongoFs.getCachedDismissedNames(mongoCollection.database, mongoCollection.collection)
+          ? mongoFs.getCachedDismissedNames(
+              mongoCollection.database,
+              mongoCollection.collection
+            )
           : undefined;
         const substituteGroupNames = hideSubstituteGroup
-          ? mongoFs.getCachedSubstituteGroupNames(mongoCollection.database, mongoCollection.collection)
+          ? mongoFs.getCachedSubstituteGroupNames(
+              mongoCollection.database,
+              mongoCollection.collection
+            )
           : undefined;
 
         if (dismissedNames || substituteGroupNames) {
@@ -202,7 +232,17 @@ const FileManager: FC<FileManagerProps> = ({
       allFilesRef.current = undefined;
       updateFiles();
     }
-  }, [hideCategorized, hideDismissed, hideSubstituteGroup, mongoCollection, mongoFs, setFiles, setHideCategorized, updateFiles, url]);
+  }, [
+    hideCategorized,
+    hideDismissed,
+    hideSubstituteGroup,
+    mongoCollection,
+    mongoFs,
+    setFiles,
+    setHideCategorized,
+    updateFiles,
+    url,
+  ]);
   const handleToggleHideDismissed = useCallback(() => {
     if (!mongoFs) return;
 
@@ -210,7 +250,10 @@ const FileManager: FC<FileManagerProps> = ({
     setHideDismissed(newHidden);
 
     if (newHidden) {
-      const cachedDocs = mongoFs.getCachedDismissedNames(mongoCollection.database, mongoCollection.collection);
+      const cachedDocs = mongoFs.getCachedDismissedNames(
+        mongoCollection.database,
+        mongoCollection.collection
+      );
 
       if (cachedDocs) {
         setFiles((currentFiles) => {
@@ -238,10 +281,16 @@ const FileManager: FC<FileManagerProps> = ({
     } else if (allFilesRef.current?.key === url) {
       if (hideCategorized || hideSubstituteGroup) {
         const categorizedNames = hideCategorized
-          ? mongoFs.getCachedDocumentNames(mongoCollection.database, mongoCollection.collection)
+          ? mongoFs.getCachedDocumentNames(
+              mongoCollection.database,
+              mongoCollection.collection
+            )
           : undefined;
         const substituteGroupNames = hideSubstituteGroup
-          ? mongoFs.getCachedSubstituteGroupNames(mongoCollection.database, mongoCollection.collection)
+          ? mongoFs.getCachedSubstituteGroupNames(
+              mongoCollection.database,
+              mongoCollection.collection
+            )
           : undefined;
 
         if (categorizedNames || substituteGroupNames) {
@@ -277,7 +326,17 @@ const FileManager: FC<FileManagerProps> = ({
       allFilesRef.current = undefined;
       updateFiles();
     }
-  }, [hideCategorized, hideDismissed, hideSubstituteGroup, mongoCollection, mongoFs, setFiles, setHideDismissed, updateFiles, url]);
+  }, [
+    hideCategorized,
+    hideDismissed,
+    hideSubstituteGroup,
+    mongoCollection,
+    mongoFs,
+    setFiles,
+    setHideDismissed,
+    updateFiles,
+    url,
+  ]);
   const handleToggleHideSubstituteGroup = useCallback(() => {
     if (!mongoFs) return;
 
@@ -285,7 +344,10 @@ const FileManager: FC<FileManagerProps> = ({
     setHideSubstituteGroup(newHidden);
 
     if (newHidden) {
-      const cachedDocs = mongoFs.getCachedSubstituteGroupNames(mongoCollection.database, mongoCollection.collection);
+      const cachedDocs = mongoFs.getCachedSubstituteGroupNames(
+        mongoCollection.database,
+        mongoCollection.collection
+      );
 
       if (cachedDocs) {
         setFiles((currentFiles) => {
@@ -313,10 +375,16 @@ const FileManager: FC<FileManagerProps> = ({
     } else if (allFilesRef.current?.key === url) {
       if (hideCategorized || hideDismissed) {
         const categorizedNames = hideCategorized
-          ? mongoFs.getCachedDocumentNames(mongoCollection.database, mongoCollection.collection)
+          ? mongoFs.getCachedDocumentNames(
+              mongoCollection.database,
+              mongoCollection.collection
+            )
           : undefined;
         const dismissedNames = hideDismissed
-          ? mongoFs.getCachedDismissedNames(mongoCollection.database, mongoCollection.collection)
+          ? mongoFs.getCachedDismissedNames(
+              mongoCollection.database,
+              mongoCollection.collection
+            )
           : undefined;
 
         if (categorizedNames || dismissedNames) {
@@ -352,23 +420,37 @@ const FileManager: FC<FileManagerProps> = ({
       allFilesRef.current = undefined;
       updateFiles();
     }
-  }, [hideCategorized, hideDismissed, hideSubstituteGroup, mongoCollection, mongoFs, setFiles, setHideSubstituteGroup, updateFiles, url]);
+  }, [
+    hideCategorized,
+    hideDismissed,
+    hideSubstituteGroup,
+    mongoCollection,
+    mongoFs,
+    setFiles,
+    setHideSubstituteGroup,
+    updateFiles,
+    url,
+  ]);
   const handleDismiss = useCallback(
     async (entries: string[]) => {
       if (!mongoFs || !mountUrl) return;
 
       const { succeeded, failed } = await runMongoPatchBatch(
         entries.map((entry) => () => {
-          const relativePath = `${url.replace(`${mountUrl}/`, "")}/${entry}`.replace(
-            /\.json$/,
-            ""
-          );
+          const relativePath =
+            `${url.replace(`${mountUrl}/`, "")}/${entry}`.replace(
+              /\.json$/,
+              ""
+            );
           return mongoFs.patchDocument(relativePath, { dismissed: true });
         })
       );
 
       if (failed > 0) {
-        showToast(`${failed} of ${entries.length} items failed to dismiss.`, "error");
+        showToast(
+          `${failed} of ${entries.length} items failed to dismiss.`,
+          "error"
+        );
       } else if (succeeded > 0) {
         showToast(`${succeeded} item(s) dismissed.`, "success");
       }
@@ -399,7 +481,11 @@ const FileManager: FC<FileManagerProps> = ({
 
       // Pre-fill only when ALL selected entries share the same category
       const categories = entries.map((e) =>
-        mongoFs.getCachedDocumentCategory(e.replace(/\.json$/, ""), database, collection)
+        mongoFs.getCachedDocumentCategory(
+          e.replace(/\.json$/, ""),
+          database,
+          collection
+        )
       );
       const first = categories[0];
       const allSame =
@@ -409,13 +495,18 @@ const FileManager: FC<FileManagerProps> = ({
         );
       const defaultValue = allSame ? first : "";
 
-      const raw = window.prompt( // eslint-disable-line no-alert -- user-facing category input
+      // eslint-disable-next-line no-alert -- user-facing category input
+      const raw = window.prompt(
         "Enter category (comma-separated for multiple):",
         defaultValue
       );
 
       if (raw) {
-        const newLabels = raw.toLowerCase().split(",").map((l) => l.trim()).filter(Boolean);
+        const newLabels = raw
+          .toLowerCase()
+          .split(",")
+          .map((l) => l.trim())
+          .filter(Boolean);
 
         const { succeeded, failed } = await runMongoPatchBatch(
           entries.map((entry) => () => {
@@ -424,21 +515,29 @@ const FileManager: FC<FileManagerProps> = ({
               database,
               collection
             );
-            const existingLabels = existing ? existing.split(",").map((l) => l.trim().toLowerCase()) : [];
-            const labelsToAdd = newLabels.filter((l) => !existingLabels.includes(l));
+            const existingLabels = existing
+              ? existing.split(",").map((l) => l.trim().toLowerCase())
+              : [];
+            const labelsToAdd = newLabels.filter(
+              (l) => !existingLabels.includes(l)
+            );
             if (labelsToAdd.length === 0) return Promise.resolve();
 
             const merged = [...existingLabels, ...labelsToAdd].join(", ");
-            const relativePath = `${url.replace(`${mountUrl}/`, "")}/${entry}`.replace(
-              /\.json$/,
-              ""
-            );
+            const relativePath =
+              `${url.replace(`${mountUrl}/`, "")}/${entry}`.replace(
+                /\.json$/,
+                ""
+              );
             return mongoFs.patchDocument(relativePath, { category: merged });
           })
         );
 
         if (failed > 0) {
-          showToast(`${failed} of ${entries.length} items failed to save.`, "error");
+          showToast(
+            `${failed} of ${entries.length} items failed to save.`,
+            "error"
+          );
         } else if (succeeded > 0) {
           showToast(`Category set for ${succeeded} item(s).`, "success");
         }
@@ -454,7 +553,15 @@ const FileManager: FC<FileManagerProps> = ({
         }
       }
     },
-    [hideCategorized, mongoCollection, mongoFs, mountUrl, setFiles, showToast, url]
+    [
+      hideCategorized,
+      mongoCollection,
+      mongoFs,
+      mountUrl,
+      setFiles,
+      showToast,
+      url,
+    ]
   );
   const [quickLookPath, setQuickLookPath] = useState("");
   const handleQuickLook = useCallback(
@@ -530,6 +637,19 @@ const FileManager: FC<FileManagerProps> = ({
     [keyShortcuts, renaming]
   );
   const fileKeys = useMemo(() => Object.keys(files), [files]);
+  const getEntryLabel = useCallback(
+    (file: string): string =>
+      files[file]?.displayName ||
+      (isMongoFS
+        ? MongoDBFileSystem.decodeDocumentIdentifier(basename(file, ".json"))
+        : basename(file, SHORTCUT_EXTENSION)),
+    [files, isMongoFS]
+  );
+  const quickLookLabels = useMemo(
+    () =>
+      Object.fromEntries(fileKeys.map((file) => [file, getEntryLabel(file)])),
+    [fileKeys, getEntryLabel]
+  );
   const isEmptyFolder = useMemo(
     () => !isDesktop && !isStartMenu && !loading && fileKeys.length === 0,
     [fileKeys.length, isDesktop, isStartMenu, loading]
@@ -576,7 +696,10 @@ const FileManager: FC<FileManagerProps> = ({
                 .then(() => setTimeout(updateFiles, 100))
                 .catch((mountError: Error) => {
                   // eslint-disable-next-line no-console
-                  console.warn(`Failed to mount filesystem at ${url}:`, mountError);
+                  console.warn(
+                    `Failed to mount filesystem at ${url}:`,
+                    mountError
+                  );
                 });
             }
             return true;
@@ -660,7 +783,12 @@ const FileManager: FC<FileManagerProps> = ({
 
   // Re-apply active filters when files change (e.g. after readdir refresh)
   useEffect(() => {
-    if (!mongoFs || (!hideCategorized && !hideDismissed && !hideSubstituteGroup)) return;
+    if (
+      !mongoFs ||
+      (!hideCategorized && !hideDismissed && !hideSubstituteGroup)
+    ) {
+      return;
+    }
 
     const { database, collection } = mongoCollection;
     const categorizedNames = hideCategorized
@@ -713,7 +841,7 @@ const FileManager: FC<FileManagerProps> = ({
 
       return changed ? filtered : currentFiles;
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks-addons/no-unused-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks-addons/no-unused-deps
   }, [files]);
 
   return (
@@ -751,12 +879,14 @@ const FileManager: FC<FileManagerProps> = ({
               <StyledFileEntry
                 key={file}
                 $desktop={isDesktop}
-                $iconZoomLevel={isIconView && !isDesktop ? iconZoomLevel : undefined}
+                $iconZoomLevel={
+                  isIconView && !isDesktop ? iconZoomLevel : undefined
+                }
                 $selecting={isSelecting}
                 $visible={!isLoading}
                 {...(!readOnly && draggableEntry(url, file, renaming === file))}
                 {...(renaming === "" && { onKeyDown: keyShortcuts(file) })}
-                {...focusableEntry(file)}
+                {...focusableEntry(file, getEntryLabel(file))}
               >
                 <FileEntry
                   columns={columns}
@@ -767,12 +897,14 @@ const FileManager: FC<FileManagerProps> = ({
                   focusedEntries={focusedEntries}
                   hasNewFolderIcon={isStartMenu}
                   hideShortcutIcon={hideShortcutIcons}
-                  iconZoomLevel={isIconView && !isDesktop ? iconZoomLevel : undefined}
+                  iconZoomLevel={
+                    isIconView && !isDesktop ? iconZoomLevel : undefined
+                  }
                   isDesktop={isDesktop}
                   isHeading={isDesktop && files[file].systemShortcut}
                   isLoadingFileManager={isLoading}
                   loadIconImmediately={loadIconsImmediately}
-                  name={isMongoFS ? MongoDBFileSystem.decodeDocumentIdentifier(basename(file, SHORTCUT_EXTENSION)) : basename(file, SHORTCUT_EXTENSION)}
+                  name={getEntryLabel(file)}
                   path={join(url, file)}
                   readOnly={readOnly}
                   renaming={renaming === file}
@@ -790,6 +922,7 @@ const FileManager: FC<FileManagerProps> = ({
       {quickLookPath && (
         <QuickLook
           files={fileKeys}
+          labels={quickLookLabels}
           onClose={handleQuickLookClose}
           path={quickLookPath}
           url={url}

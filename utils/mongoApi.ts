@@ -9,11 +9,11 @@ export type MongoImage = {
 const PRODUCT_IMAGE_BASE_URL = "http://localhost:8100/imgs/";
 
 export const normalizeImageUrl = (img: unknown): string => {
-  if (typeof img === 'string' && img.trim().length > 0) {
+  if (typeof img === "string" && img.trim().length > 0) {
     return img.trim();
   }
 
-  if (img && typeof img === 'object') {
+  if (img && typeof img === "object") {
     const imgObj = img as MongoImage;
     return imgObj.medium || imgObj.small || imgObj.large || "";
   }
@@ -22,14 +22,18 @@ export const normalizeImageUrl = (img: unknown): string => {
 };
 
 export const normalizeProductImageUrl = (path: unknown): string => {
-  if (typeof path === 'string' && path.trim().length > 0) {
-    return `${PRODUCT_IMAGE_BASE_URL}${path.trim().replace(/^\//, '')}`;
+  if (typeof path === "string" && path.trim().length > 0) {
+    return `${PRODUCT_IMAGE_BASE_URL}${path.trim().replace(/^\//, "")}`;
   }
   return "";
 };
 
-export const addThumbnailFields = (doc: Record<string, unknown>): Record<string, unknown> => {
-  const productImages = Array.isArray(doc.productImages) ? (doc.productImages as unknown[]) : undefined;
+export const addThumbnailFields = (
+  doc: Record<string, unknown>
+): Record<string, unknown> => {
+  const productImages = Array.isArray(doc.productImages)
+    ? (doc.productImages as unknown[])
+    : undefined;
 
   let firstUrl: string;
   let imageCount: number;
@@ -37,17 +41,24 @@ export const addThumbnailFields = (doc: Record<string, unknown>): Record<string,
   if (productImages === undefined) {
     // Fallback: use images/oldImages
     const images = Array.isArray(doc.images) ? (doc.images as unknown[]) : [];
-    const oldImages = Array.isArray(doc.oldImages) ? (doc.oldImages as unknown[]) : [];
+    const oldImages = Array.isArray(doc.oldImages)
+      ? (doc.oldImages as unknown[])
+      : [];
     const allImages = [...images, ...oldImages];
     firstUrl = allImages.length > 0 ? normalizeImageUrl(allImages[0]) : "";
     imageCount = allImages.length;
   } else {
     // productImages exists: use it as primary source (empty array = no images)
-    firstUrl = productImages.length > 0 ? normalizeProductImageUrl(productImages[0]) : "";
+    firstUrl =
+      productImages.length > 0
+        ? normalizeProductImageUrl(productImages[0])
+        : "";
     imageCount = productImages.length;
   }
 
   const result = { ...doc };
+  delete result.__sortId;
+  delete result.__sortLabel;
   result.thumbnail = firstUrl || undefined;
   result.imageCount = imageCount;
   delete result.productImages;
@@ -66,39 +77,84 @@ export const LISTING_PROJECTION = {
   oldImages: 1,
   productImages: 1,
   substituteGroup: 1,
+  title: 1,
+};
+
+const nonEmptyStringField = (fieldPath: string): Record<string, unknown> => ({
+  $let: {
+    in: {
+      $cond: [
+        {
+          $and: [
+            { $eq: [{ $type: "$$value" }, "string"] },
+            {
+              $gt: [{ $strLenCP: { $trim: { input: "$$value" } } }, 0],
+            },
+          ],
+        },
+        "$$value",
+        null,
+      ],
+    },
+    vars: { value: fieldPath },
+  },
+});
+
+export const PREFERRED_DOCUMENT_LABEL_AGGREGATION = {
+  $ifNull: [
+    nonEmptyStringField("$name"),
+    {
+      $ifNull: [nonEmptyStringField("$title"), { $toString: "$_id" }],
+    },
+  ],
 };
 
 export const SAFE_FILTER_OPERATORS = new Set([
-  '$all', '$and', '$elemMatch', '$eq', '$exists',
-  '$gt', '$gte', '$in', '$lt', '$lte',
-  '$ne', '$nin', '$nor', '$not', '$options',
-  '$or', '$regex', '$size', '$type',
+  "$all",
+  "$and",
+  "$elemMatch",
+  "$eq",
+  "$exists",
+  "$gt",
+  "$gte",
+  "$in",
+  "$lt",
+  "$lte",
+  "$ne",
+  "$nin",
+  "$nor",
+  "$not",
+  "$options",
+  "$or",
+  "$regex",
+  "$size",
+  "$type",
 ]);
 
 export const sanitizeFilter = (obj: unknown): void => {
-  if (!obj || typeof obj !== 'object') return;
+  if (!obj || typeof obj !== "object") return;
   for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
-    if (key.startsWith('$') && !SAFE_FILTER_OPERATORS.has(key)) {
+    if (key.startsWith("$") && !SAFE_FILTER_OPERATORS.has(key)) {
       throw new Error(`Disallowed filter operator: ${key}`);
     }
     if (Array.isArray(value)) {
       for (const item of value) sanitizeFilter(item);
-    } else if (value && typeof value === 'object') {
+    } else if (value && typeof value === "object") {
       sanitizeFilter(value);
     }
   }
 };
 
 export const ALLOWED_METHODS: Record<string, string[]> = {
-  'collections': ['GET'],
-  'databases': ['GET'],
-  'document': ['DELETE', 'GET', 'PATCH', 'PUT'],
-  'documents': ['GET'],
-  'drop-collection': ['DELETE'],
-  'drop-database': ['DELETE'],
-  'images': ['GET'],
-  'mkdir': ['POST'],
-  'test': ['GET'],
+  collections: ["GET"],
+  databases: ["GET"],
+  document: ["DELETE", "GET", "PATCH", "PUT"],
+  documents: ["GET"],
+  "drop-collection": ["DELETE"],
+  "drop-database": ["DELETE"],
+  images: ["GET"],
+  mkdir: ["POST"],
+  test: ["GET"],
 };
 
 export const getDocumentFilters = (documentId: string): object[] => {

@@ -7,16 +7,15 @@ import { haltEvent } from "utils/functions";
 
 type QuickLookProps = {
   files: string[];
+  labels: Record<string, string>;
   onClose: () => void;
   path: string;
   url: string;
 };
 
 type QuickLookImageProps = {
-  onImageNav: (nav: {
-    goNext: () => void;
-    goPrev: () => void;
-  }) => void;
+  label: string;
+  onImageNav: (nav: { goNext: () => void; goPrev: () => void }) => void;
   path: string;
   scale: number;
 };
@@ -24,6 +23,7 @@ type QuickLookImageProps = {
 // Inner component keyed by path — each file gets a clean hook mount cycle,
 // avoiding the race condition between useMongoDBIcon's load and reset effects.
 const QuickLookImage: FC<QuickLookImageProps> = ({
+  label,
   onImageNav,
   path,
   scale,
@@ -58,9 +58,8 @@ const QuickLookImage: FC<QuickLookImageProps> = ({
     <>
       <div className="ql-content">
         {imageUrl ? (
-           
           <img
-            alt={basename(path, ".json")}
+            alt={label}
             src={imageUrl}
             style={{ transform: `scale(${scale})` }}
           />
@@ -79,13 +78,21 @@ const QuickLookImage: FC<QuickLookImageProps> = ({
   );
 };
 
-const QuickLook: FC<QuickLookProps> = ({ files, onClose, path, url }) => {
+const QuickLook: FC<QuickLookProps> = ({
+  files,
+  labels,
+  onClose,
+  path,
+  url,
+}) => {
   const [currentFile, setCurrentFile] = useState(basename(path));
   const [scale, setScale] = useState(1);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const imageNavRef = useRef<{ goNext: () => void; goPrev: () => void } | null>(null);
+  const imageNavRef = useRef<{ goNext: () => void; goPrev: () => void } | null>(
+    null
+  );
   const currentPath = join(url, currentFile);
-  const displayName = basename(currentFile, ".json");
+  const displayName = labels[currentFile] || basename(currentFile);
 
   const handleImageNav = useCallback(
     (nav: { goNext: () => void; goPrev: () => void }) => {
@@ -173,7 +180,13 @@ const QuickLook: FC<QuickLookProps> = ({ files, onClose, path, url }) => {
           <button aria-label="Close" onClick={onClose} type="button" />
           <span>{displayName}</span>
         </div>
-        <QuickLookImage key={currentPath} onImageNav={handleImageNav} path={currentPath} scale={scale} />
+        <QuickLookImage
+          key={currentPath}
+          label={displayName}
+          onImageNav={handleImageNav}
+          path={currentPath}
+          scale={scale}
+        />
       </div>
     </StyledQuickLook>
   );

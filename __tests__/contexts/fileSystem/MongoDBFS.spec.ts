@@ -3,33 +3,100 @@ import { MongoDBFileSystem } from "contexts/fileSystem/MongoDBFS";
 interface MongoDocument {
   [key: string]: unknown;
   _id?: string;
+  title?: string;
 }
 
 // Access private members for testing via double cast (TS private is compile-time only)
 type MongoDBFSTestable = {
-  collectionEntriesCache: Map<string, { cachedAt: number; entries: Set<string> }>;
-  documentsListCache: Map<string, { cachedAt: number; documentIndex: Map<string, MongoDocument>; documents: MongoDocument[] }>;
-  getCachedCollectionEntries: (database: string, collection: string) => Set<string> | null;
-  getCachedDismissedNames: (database: string, collection: string) => Set<string> | null;
-  getCachedDocumentCategory: (docName: string, database: string, collection: string) => string | null;
-  getCachedDocumentNames: (database: string, collection: string) => Set<string> | null;
+  collectionEntriesCache: Map<
+    string,
+    { cachedAt: number; entries: Set<string> }
+  >;
+  documentsListCache: Map<
+    string,
+    {
+      cachedAt: number;
+      documentIndex: Map<string, MongoDocument>;
+      documents: MongoDocument[];
+    }
+  >;
+  getCachedCollectionEntries: (
+    database: string,
+    collection: string
+  ) => Set<string> | null;
+  getCachedDismissedNames: (
+    database: string,
+    collection: string
+  ) => Set<string> | null;
+  getCachedDocumentCategory: (
+    docName: string,
+    database: string,
+    collection: string
+  ) => string | null;
+  getCachedDocumentNames: (
+    database: string,
+    collection: string
+  ) => Set<string> | null;
   getCollectionCacheKey: (db: string, col: string) => string;
   getDocumentIdentifier: (doc: MongoDocument) => string;
-  isCachedDismissed: (docName: string, database: string, collection: string) => boolean;
-  parsePath: (path: string) => { collection?: string; database?: string; document?: string };
-  patchDocument: (path: string, updates: Record<string, unknown>) => Promise<void>;
-  readdirPaged: (path: string, cursor?: { afterId: string; afterName: string }, limit?: number) => Promise<{ entries: string[]; hasMore: boolean; nextCursor?: { afterId: string; afterName: string } }>;
-  setCachedCollectionEntries: (database: string, collection: string, entries: string[]) => void;
-  setCachedDocumentsList: (database: string, collection: string, documents: MongoDocument[]) => void;
-  stat: (path: string, isLstat: boolean | ((error: unknown, stats?: unknown) => void), callback?: (error: unknown, stats?: unknown) => void) => Promise<void>;
-  unlink: (path: string, callback: (error: { code: string; message: string } | undefined) => void) => Promise<void>;
+  isCachedDismissed: (
+    docName: string,
+    database: string,
+    collection: string
+  ) => boolean;
+  parsePath: (path: string) => {
+    collection?: string;
+    database?: string;
+    document?: string;
+  };
+  patchDocument: (
+    path: string,
+    updates: Record<string, unknown>
+  ) => Promise<void>;
+  readdirPaged: (
+    path: string,
+    cursor?: { afterId: string; afterLabel: string },
+    limit?: number
+  ) => Promise<{
+    entries: string[];
+    hasMore: boolean;
+    nextCursor?: { afterId: string; afterLabel: string };
+  }>;
+  setCachedCollectionEntries: (
+    database: string,
+    collection: string,
+    entries: string[]
+  ) => void;
+  setCachedDocumentsList: (
+    database: string,
+    collection: string,
+    documents: MongoDocument[]
+  ) => void;
+  stat: (
+    path: string,
+    isLstat: boolean | ((error: unknown, stats?: unknown) => void),
+    callback?: (error: unknown, stats?: unknown) => void
+  ) => Promise<void>;
+  unlink: (
+    path: string,
+    callback: (error: { code: string; message: string } | undefined) => void
+  ) => Promise<void>;
 };
 
 const createFS = (): MongoDBFSTestable =>
-  new MongoDBFileSystem("mongodb://localhost:27017") as unknown as MongoDBFSTestable;
+  new MongoDBFileSystem(
+    "mongodb://localhost:27017"
+  ) as unknown as MongoDBFSTestable;
 
 /** Build a cache entry with both documents array and documentIndex Map. */
-function buildCacheEntry(fs: MongoDBFSTestable, documents: MongoDocument[]): { cachedAt: number; documentIndex: Map<string, MongoDocument>; documents: MongoDocument[] } {
+function buildCacheEntry(
+  fs: MongoDBFSTestable,
+  documents: MongoDocument[]
+): {
+  cachedAt: number;
+  documentIndex: Map<string, MongoDocument>;
+  documents: MongoDocument[];
+} {
   const documentIndex = new Map<string, MongoDocument>();
   for (const doc of documents) {
     const key = MongoDBFileSystem.decodeDocumentIdentifier(
@@ -46,13 +113,17 @@ describe("MongoDBFileSystem cache scoping", () => {
     const key1 = fs.getCollectionCacheKey("db1", "products");
     const key2 = fs.getCollectionCacheKey("db1", "orders");
 
-    fs.documentsListCache.set(key1, buildCacheEntry(fs, [
+    fs.documentsListCache.set(
+      key1,
+      buildCacheEntry(fs, [
         { _id: "1", category: "fruit", name: "apple" },
         { _id: "2", name: "banana" },
-    ]));
-    fs.documentsListCache.set(key2, buildCacheEntry(fs, [
-        { _id: "3", category: "processed", name: "order1" },
-    ]));
+      ])
+    );
+    fs.documentsListCache.set(
+      key2,
+      buildCacheEntry(fs, [{ _id: "3", category: "processed", name: "order1" }])
+    );
 
     // Should return only categorized docs from db1/products (identified by _id)
     const result = fs.getCachedDocumentNames("db1", "products");
@@ -67,10 +138,13 @@ describe("MongoDBFileSystem cache scoping", () => {
     const fs = createFS();
     const key = fs.getCollectionCacheKey("db1", "products");
 
-    fs.documentsListCache.set(key, buildCacheEntry(fs, [
+    fs.documentsListCache.set(
+      key,
+      buildCacheEntry(fs, [
         { _id: "1", dismissed: true, name: "apple" },
         { _id: "2", name: "banana" },
-    ]));
+      ])
+    );
 
     const result = fs.getCachedDismissedNames("db1", "products");
     expect(result).toEqual(new Set(["1"]));
@@ -81,12 +155,14 @@ describe("MongoDBFileSystem cache scoping", () => {
     const key1 = fs.getCollectionCacheKey("db1", "col1");
     const key2 = fs.getCollectionCacheKey("db1", "col2");
 
-    fs.documentsListCache.set(key1, buildCacheEntry(fs, [
-      { _id: "1", dismissed: true, name: "docA" },
-    ]));
-    fs.documentsListCache.set(key2, buildCacheEntry(fs, [
-      { _id: "2", name: "docA" },
-    ]));
+    fs.documentsListCache.set(
+      key1,
+      buildCacheEntry(fs, [{ _id: "1", dismissed: true, name: "docA" }])
+    );
+    fs.documentsListCache.set(
+      key2,
+      buildCacheEntry(fs, [{ _id: "2", name: "docA" }])
+    );
 
     expect(fs.isCachedDismissed("1", "db1", "col1")).toBe(true);
     expect(fs.isCachedDismissed("2", "db1", "col2")).toBe(false);
@@ -96,10 +172,13 @@ describe("MongoDBFileSystem cache scoping", () => {
     const fs = createFS();
     const key = fs.getCollectionCacheKey("db1", "products");
 
-    fs.documentsListCache.set(key, buildCacheEntry(fs, [
+    fs.documentsListCache.set(
+      key,
+      buildCacheEntry(fs, [
         { _id: "1", category: "fruit", name: "apple" },
         { _id: "2", name: "banana" },
-    ]));
+      ])
+    );
 
     expect(fs.getCachedDocumentCategory("1", "db1", "products")).toBe("fruit");
     expect(fs.getCachedDocumentCategory("2", "db1", "products")).toBeNull();
@@ -117,9 +196,10 @@ describe("MongoDBFileSystem document identity", () => {
     const fs = createFS();
     const key = fs.getCollectionCacheKey("db1", "products");
 
-    fs.documentsListCache.set(key, buildCacheEntry(fs, [
-        { _id: "1", category: "fruit", name: "weird/name" },
-    ]));
+    fs.documentsListCache.set(
+      key,
+      buildCacheEntry(fs, [{ _id: "1", category: "fruit", name: "weird/name" }])
+    );
 
     const categorized = fs.getCachedDocumentNames("db1", "products");
     expect(categorized).toBeDefined();
@@ -131,10 +211,13 @@ describe("MongoDBFileSystem document identity", () => {
     const fs = createFS();
     const key = fs.getCollectionCacheKey("db1", "products");
 
-    fs.documentsListCache.set(key, buildCacheEntry(fs, [
+    fs.documentsListCache.set(
+      key,
+      buildCacheEntry(fs, [
         { _id: "1", category: "x", name: "a/b" },
         { _id: "2", category: "y", name: "a_b" },
-    ]));
+      ])
+    );
 
     const categorized = fs.getCachedDocumentNames("db1", "products");
     expect(categorized).toBeDefined();
@@ -148,9 +231,10 @@ describe("MongoDBFileSystem document identity", () => {
     const fs = createFS();
     const key = fs.getCollectionCacheKey("db1", "products");
 
-    fs.documentsListCache.set(key, buildCacheEntry(fs, [
-        { _id: "1", category: "fruit", name: "weird/name" },
-    ]));
+    fs.documentsListCache.set(
+      key,
+      buildCacheEntry(fs, [{ _id: "1", category: "fruit", name: "weird/name" }])
+    );
 
     const categorized = fs.getCachedDocumentNames("db1", "products");
     expect(categorized).toBeDefined();
@@ -161,17 +245,22 @@ describe("MongoDBFileSystem document identity", () => {
   });
 
   it("decode helper handles invalid sequences gracefully", () => {
-    expect(MongoDBFileSystem.decodeDocumentIdentifier("valid%2Fname")).toBe("valid/name");
-    expect(MongoDBFileSystem.decodeDocumentIdentifier("%ZZinvalid")).toBe("%ZZinvalid");
+    expect(MongoDBFileSystem.decodeDocumentIdentifier("valid%2Fname")).toBe(
+      "valid/name"
+    );
+    expect(MongoDBFileSystem.decodeDocumentIdentifier("%ZZinvalid")).toBe(
+      "%ZZinvalid"
+    );
   });
 
   it("uses _id as string when name is missing", () => {
     const fs = createFS();
     const key = fs.getCollectionCacheKey("db1", "products");
 
-    fs.documentsListCache.set(key, buildCacheEntry(fs, [
-        { _id: "abc123", category: "electronics" },
-    ]));
+    fs.documentsListCache.set(
+      key,
+      buildCacheEntry(fs, [{ _id: "abc123", category: "electronics" }])
+    );
 
     const categorized = fs.getCachedDocumentNames("db1", "products");
     expect(categorized).toEqual(new Set(["abc123"]));
@@ -181,9 +270,10 @@ describe("MongoDBFileSystem document identity", () => {
     const fs = createFS();
     const key = fs.getCollectionCacheKey("db1", "products");
 
-    fs.documentsListCache.set(key, buildCacheEntry(fs, [
-        { _id: "fallback-id", category: "misc" },
-    ]));
+    fs.documentsListCache.set(
+      key,
+      buildCacheEntry(fs, [{ _id: "fallback-id", category: "misc" }])
+    );
 
     const categorized = fs.getCachedDocumentNames("db1", "products");
     expect(categorized).toBeDefined();
@@ -196,45 +286,71 @@ describe("parsePath decoding", () => {
   it("decodes percent-encoded slash in document name", () => {
     const fs = createFS();
     const result = fs.parsePath("db1/col1/a%2Fb.json");
-    expect(result).toEqual({ collection: "col1", database: "db1", document: "a/b" });
+    expect(result).toEqual({
+      collection: "col1",
+      database: "db1",
+      document: "a/b",
+    });
   });
 
   it("leaves normal names unchanged", () => {
     const fs = createFS();
     const result = fs.parsePath("db1/col1/laptop.json");
-    expect(result).toEqual({ collection: "col1", database: "db1", document: "laptop" });
+    expect(result).toEqual({
+      collection: "col1",
+      database: "db1",
+      document: "laptop",
+    });
   });
 
   it("decodes percent-encoded space in document name", () => {
     const fs = createFS();
     const result = fs.parsePath("db1/col1/hello%20world.json");
-    expect(result).toEqual({ collection: "col1", database: "db1", document: "hello world" });
+    expect(result).toEqual({
+      collection: "col1",
+      database: "db1",
+      document: "hello world",
+    });
   });
 
   it("round-trips a raw percent sign correctly", () => {
     const fs = createFS();
     // raw "%ZZ" → encoded "%25ZZ" → decoded "%ZZ"
     const result = fs.parsePath("db1/col1/%25ZZ.json");
-    expect(result).toEqual({ collection: "col1", database: "db1", document: "%ZZ" });
+    expect(result).toEqual({
+      collection: "col1",
+      database: "db1",
+      document: "%ZZ",
+    });
   });
 
   it("returns undefined document when path has no document segment", () => {
     const fs = createFS();
     const result = fs.parsePath("db1/col1");
-    expect(result).toEqual({ collection: "col1", database: "db1", document: undefined });
+    expect(result).toEqual({
+      collection: "col1",
+      database: "db1",
+      document: undefined,
+    });
   });
 
   it("only strips trailing .json extension, not internal occurrences", () => {
     const fs = createFS();
     const result = fs.parsePath("db1/col1/data.json.backup.json");
-    expect(result).toEqual({ collection: "col1", database: "db1", document: "data.json.backup" });
+    expect(result).toEqual({
+      collection: "col1",
+      database: "db1",
+      document: "data.json.backup",
+    });
   });
 });
 
 describe("unlink error codes", () => {
   it("returns EISDIR for collection-level paths", async () => {
     const fs = createFS();
-    const error = await new Promise<{ code: string; message: string } | undefined>((resolve) => {
+    const error = await new Promise<
+      { code: string; message: string } | undefined
+    >((resolve) => {
       fs.unlink("db1/col1", resolve);
     });
     expect(error).toBeDefined();
@@ -243,7 +359,9 @@ describe("unlink error codes", () => {
 
   it("returns EISDIR for database-level paths", async () => {
     const fs = createFS();
-    const error = await new Promise<{ code: string; message: string } | undefined>((resolve) => {
+    const error = await new Promise<
+      { code: string; message: string } | undefined
+    >((resolve) => {
       fs.unlink("db1", resolve);
     });
     expect(error).toBeDefined();
@@ -252,7 +370,9 @@ describe("unlink error codes", () => {
 
   it("returns EINVAL for empty paths", async () => {
     const fs = createFS();
-    const error = await new Promise<{ code: string; message: string } | undefined>((resolve) => {
+    const error = await new Promise<
+      { code: string; message: string } | undefined
+    >((resolve) => {
       fs.unlink("", resolve);
     });
     expect(error).toBeDefined();
@@ -261,7 +381,9 @@ describe("unlink error codes", () => {
 
   it("returns EIO when document path cannot connect to MongoDB", async () => {
     const fs = createFS();
-    const error = await new Promise<{ code: string; message: string } | undefined>((resolve) => {
+    const error = await new Promise<
+      { code: string; message: string } | undefined
+    >((resolve) => {
       fs.unlink("db1/col1/doc1.json", resolve);
     });
     expect(error).toBeDefined();
@@ -319,8 +441,8 @@ describe("patchDocument cache mutation", () => {
 
 const mockPagedResponse = (
   documents: MongoDocument[],
-  nextCursor?: { afterId: string; afterName: string },
-  hasMore = false,
+  nextCursor?: { afterId: string; afterLabel: string },
+  hasMore = false
 ): Response =>
   ({
     json: () => Promise.resolve({ documents, hasMore, nextCursor }),
@@ -365,11 +487,20 @@ describe("readdirPaged cache hydration", () => {
     ];
 
     fetchMock
-      .mockResolvedValueOnce(mockPagedResponse(page1Docs, { afterId: "1", afterName: "apple" }, true))
+      .mockResolvedValueOnce(
+        mockPagedResponse(
+          page1Docs,
+          { afterId: "1", afterLabel: "apple" },
+          true
+        )
+      )
       .mockResolvedValueOnce(mockPagedResponse(page2Docs));
 
     await fs.readdirPaged("db1/products");
-    await fs.readdirPaged("db1/products", { afterId: "1", afterName: "apple" });
+    await fs.readdirPaged("db1/products", {
+      afterId: "1",
+      afterLabel: "apple",
+    });
 
     const categorized = fs.getCachedDocumentNames("db1", "products");
     expect(categorized).not.toBeNull();
@@ -395,11 +526,13 @@ describe("readdirPaged cache hydration", () => {
     fetchMock.mockClear();
 
     // stat() should resolve from cache without additional fetch calls
-    const statResult = await new Promise<{ error: unknown; stats: unknown }>((resolve) => {
-      fs.stat("db1/products/doc1.json", (error: unknown, stats: unknown) => {
-        resolve({ error, stats });
-      });
-    });
+    const statResult = await new Promise<{ error: unknown; stats: unknown }>(
+      (resolve) => {
+        fs.stat("db1/products/doc1.json", (error: unknown, stats: unknown) => {
+          resolve({ error, stats });
+        });
+      }
+    );
 
     expect(statResult.error).toBeNull();
     expect(statResult.stats).toBeDefined();
@@ -412,10 +545,11 @@ describe("paged initial load contract", () => {
     const fs = createFS();
 
     global.fetch = jest.fn().mockResolvedValue({
-      json: () => Promise.resolve({
-        documents: [{ _id: "doc1", name: "doc1" }],
-        hasMore: false,
-      }),
+      json: () =>
+        Promise.resolve({
+          documents: [{ _id: "doc1", name: "doc1" }],
+          hasMore: false,
+        }),
       ok: true,
     });
 
@@ -439,11 +573,13 @@ describe("stat cache key encoding", () => {
     // stat() receives a path where the filename is encoded (from readdir/readdirPaged)
     // parsePath decodes it back to "my document"
     // The fix ensures stat() re-encodes before cache lookup
-    const statResult = await new Promise<{ error: unknown; stats: unknown }>((resolve) => {
-      fs.stat("testdb/products/my%20document.json", false, (error, stats) => {
-        resolve({ error, stats });
-      });
-    });
+    const statResult = await new Promise<{ error: unknown; stats: unknown }>(
+      (resolve) => {
+        fs.stat("testdb/products/my%20document.json", false, (error, stats) => {
+          resolve({ error, stats });
+        });
+      }
+    );
 
     // Should hit cache and return stats (not ENOENT from a network call)
     expect(statResult.error).toBeNull();
@@ -455,14 +591,50 @@ describe("stat cache key encoding", () => {
 
     fs.setCachedCollectionEntries("testdb", "products", ["simple-doc"]);
 
-    const statResult = await new Promise<{ error: unknown; stats: unknown }>((resolve) => {
-      fs.stat("testdb/products/simple-doc.json", false, (error, stats) => {
-        resolve({ error, stats });
-      });
-    });
+    const statResult = await new Promise<{ error: unknown; stats: unknown }>(
+      (resolve) => {
+        fs.stat("testdb/products/simple-doc.json", false, (error, stats) => {
+          resolve({ error, stats });
+        });
+      }
+    );
 
     expect(statResult.error).toBeNull();
     expect(statResult.stats).toBeDefined();
+  });
+
+  it("adds displayName from name/title fallback for MongoDB documents", async () => {
+    const fs = createFS();
+
+    fs.setCachedCollectionEntries("testdb", "products", ["doc-1", "doc-2"]);
+    fs.setCachedDocumentsList("testdb", "products", [
+      { _id: "doc-1", name: "Visible Name" },
+      { _id: "doc-2", title: "Visible Title" },
+    ]);
+
+    const namedStat = await new Promise<{ error: unknown; stats: unknown }>(
+      (resolve) => {
+        fs.stat("testdb/products/doc-1.json", false, (error, stats) => {
+          resolve({ error, stats });
+        });
+      }
+    );
+    const titledStat = await new Promise<{ error: unknown; stats: unknown }>(
+      (resolve) => {
+        fs.stat("testdb/products/doc-2.json", false, (error, stats) => {
+          resolve({ error, stats });
+        });
+      }
+    );
+
+    expect(namedStat.error).toBeNull();
+    expect((namedStat.stats as { displayName?: string }).displayName).toBe(
+      "Visible Name"
+    );
+    expect(titledStat.error).toBeNull();
+    expect((titledStat.stats as { displayName?: string }).displayName).toBe(
+      "Visible Title"
+    );
   });
 });
 
