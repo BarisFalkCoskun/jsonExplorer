@@ -25,9 +25,11 @@ type StatusBarProps = {
   fileDrop: FileDrop;
   hideCategorized?: boolean;
   hideDismissed?: boolean;
+  hideSubstituteGroup?: boolean;
   iconZoomLevel: number;
   onToggleHideCategorized?: () => void;
   onToggleHideDismissed?: () => void;
+  onToggleHideSubstituteGroup?: () => void;
   selected: string[];
   setIconZoomLevel: React.Dispatch<React.SetStateAction<number>>;
   setView: (view: FileManagerViewNames) => void;
@@ -42,9 +44,11 @@ const StatusBar: FC<StatusBarProps> = ({
   fileDrop,
   hideCategorized,
   hideDismissed,
+  hideSubstituteGroup,
   iconZoomLevel,
   onToggleHideCategorized,
   onToggleHideDismissed,
+  onToggleHideSubstituteGroup,
   selected,
   setIconZoomLevel,
   setView,
@@ -120,7 +124,7 @@ const StatusBar: FC<StatusBarProps> = ({
             : ""}
         </div>
       )}
-      {(onToggleHideCategorized || onToggleHideDismissed) && (
+      {(onToggleHideCategorized || onToggleHideDismissed || onToggleHideSubstituteGroup) && (
         <div className="hide-toggles">
           {onToggleHideCategorized && (
             <Button
@@ -138,6 +142,15 @@ const StatusBar: FC<StatusBarProps> = ({
               {...label("Toggle visibility of dismissed items (Ctrl+Shift+D)")}
             >
               {hideDismissed ? "Show Dismissed" : "Hide Dismissed"}
+            </Button>
+          )}
+          {onToggleHideSubstituteGroup && (
+            <Button
+              className={`hide-toggle${hideSubstituteGroup ? " active" : ""}`}
+              onClick={onToggleHideSubstituteGroup}
+              {...label("Toggle visibility of substitute group items (Ctrl+G)")}
+            >
+              {hideSubstituteGroup ? "Show Grouped" : "Hide Grouped"}
             </Button>
           )}
         </div>

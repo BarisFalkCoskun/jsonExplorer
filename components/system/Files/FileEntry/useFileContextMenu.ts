@@ -271,6 +271,64 @@ const useFileContextMenu = (
                     label: "Remove Category",
                   },
                   MENU_SEPERATOR,
+                  {
+                    action: async () => {
+                      const entries = absoluteEntries();
+                      const groups = entries.map((e) =>
+                        mongoFs.getCachedDocumentSubstituteGroup(basename(e, ".json"), mongoDb, mongoCol)
+                      );
+                      const first = groups[0];
+                      const allSame =
+                        first !== null &&
+                        groups.every(
+                          (g) => g !== null && g.toLowerCase() === first.toLowerCase()
+                        );
+                      const defaultValue = allSame ? first : "";
+                      const raw = window.prompt("Enter substitute group name:", defaultValue); // eslint-disable-line no-alert -- user-facing substitute group input
+                      if (raw) {
+                        const groupName = raw.trim().toLowerCase();
+                        if (groupName) {
+                          const { succeeded, failed } = await runMongoPatchBatch(
+                            entries.map((entry) => () => {
+                              const relativePath = entry.replace(
+                                `${mountUrl}/`,
+                                ""
+                              );
+                              return mongoFs.patchDocument(relativePath, { substituteGroup: groupName });
+                            })
+                          );
+                          if (failed > 0) {
+                            showToast(`${failed} of ${entries.length} items failed to save.`, "error");
+                          } else if (succeeded > 0) {
+                            showToast(`Substitute group set for ${succeeded} item(s).`, "success");
+                          }
+                        }
+                      }
+                    },
+                    label: "Set Substitute Group",
+                  },
+                  {
+                    action: async () => {
+                      const entries = absoluteEntries();
+                      const { succeeded, failed } = await runMongoPatchBatch(
+                        entries.map((entry) => () => {
+                          const relativePath = entry.replace(
+                            `${mountUrl}/`,
+                            ""
+                          );
+                          // eslint-disable-next-line unicorn/no-null -- MongoDB $unset requires null
+                          return mongoFs.patchDocument(relativePath, { substituteGroup: null });
+                        })
+                      );
+                      if (failed > 0) {
+                        showToast(`${failed} of ${entries.length} items failed to update.`, "error");
+                      } else if (succeeded > 0) {
+                        showToast(`Substitute group removed from ${succeeded} item(s).`, "success");
+                      }
+                    },
+                    label: "Remove Substitute Group",
+                  },
+                  MENU_SEPERATOR,
                   ...(() => {
                     const entries = absoluteEntries();
                     const someDismissed = entries.some((entry) =>

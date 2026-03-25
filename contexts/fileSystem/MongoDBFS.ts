@@ -558,6 +558,36 @@ export class MongoDBFileSystem implements FileSystem {
     return doc && "category" in doc ? (doc.category as string) : null; // eslint-disable-line unicorn/no-null
   }
 
+  /**
+   * Returns a Set of document names that have a `substituteGroup` field,
+   * scoped to a specific database/collection cache entry.
+   */
+  public getCachedSubstituteGroupNames(database: string, collection: string): Set<string> | null {
+    const key = this.getCollectionCacheKey(database, collection);
+    const cached = this.documentsListCache.get(key);
+    if (!cached) return null; // eslint-disable-line unicorn/no-null
+
+    const grouped = new Set<string>();
+    for (const doc of cached.documents) {
+      if ("substituteGroup" in doc) {
+        grouped.add(this.getDocumentIdentifier(doc));
+      }
+    }
+    return grouped;
+  }
+
+  // docName is the encoded filesystem entry name (from getDocumentIdentifier)
+  public getCachedDocumentSubstituteGroup(docName: string, database: string, collection: string): string | null {
+    const key = this.getCollectionCacheKey(database, collection);
+    const cached = this.documentsListCache.get(key);
+    if (!cached) return null; // eslint-disable-line unicorn/no-null
+
+    const doc = cached.documentIndex.get(
+      MongoDBFileSystem.decodeDocumentIdentifier(docName)
+    );
+    return doc && "substituteGroup" in doc ? (doc.substituteGroup as string) : null; // eslint-disable-line unicorn/no-null
+  }
+
   public async patchDocument(
     patchPath: string,
     updates: Record<string, unknown>

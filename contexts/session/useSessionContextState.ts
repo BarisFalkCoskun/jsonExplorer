@@ -63,6 +63,7 @@ const useSessionContextState = (): SessionContextState => {
   const [aiEnabled, setAiEnabled] = useState(false);
   const [hideCategorized, setHideCategorized] = useState(false);
   const [hideDismissed, setHideDismissed] = useState(false);
+  const [hideSubstituteGroup, setHideSubstituteGroup] = useState(false);
   const [lazySheep, setLazySheep] = useState(false);
   const [windowStates, setWindowStates] = useState<WindowStates>({});
   const [sortOrders, setSortOrders] = useState<SortOrders>({});
@@ -223,6 +224,7 @@ const useSessionContextState = (): SessionContextState => {
               cursor,
               hideCategorized,
               hideDismissed,
+              hideSubstituteGroup,
               iconPositions,
               iconZoomLevel,
               lazySheep,
@@ -247,6 +249,7 @@ const useSessionContextState = (): SessionContextState => {
     haltSession,
     hideCategorized,
     hideDismissed,
+    hideSubstituteGroup,
     iconPositions,
     iconZoomLevel,
     lazySheep,
@@ -296,6 +299,7 @@ const useSessionContextState = (): SessionContextState => {
           if (session.aiEnabled) setAiEnabled(session.aiEnabled);
           if (session.hideCategorized) setHideCategorized(session.hideCategorized);
           if (session.hideDismissed) setHideDismissed(session.hideDismissed);
+          if (session.hideSubstituteGroup) setHideSubstituteGroup(session.hideSubstituteGroup);
           if (session.themeName) setThemeName(session.themeName);
           if (session.wallpaperImage) {
             setWallpaper(session.wallpaperImage, session.wallpaperFit);
@@ -409,6 +413,7 @@ const useSessionContextState = (): SessionContextState => {
     foregroundId,
     hideCategorized,
     hideDismissed,
+    hideSubstituteGroup,
     iconPositions,
     iconZoomLevel,
     prependToStack,
@@ -423,6 +428,7 @@ const useSessionContextState = (): SessionContextState => {
     setHaltSession,
     setHideCategorized,
     setHideDismissed,
+    setHideSubstituteGroup,
     setIconPositions: setAndUpdateIconPositions,
     setIconZoomLevel,
     setRunHistory,

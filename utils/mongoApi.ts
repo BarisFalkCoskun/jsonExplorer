@@ -65,6 +65,7 @@ export const LISTING_PROJECTION = {
   name: 1,
   oldImages: 1,
   productImages: 1,
+  substituteGroup: 1,
 };
 
 export const SAFE_FILTER_OPERATORS = new Set([

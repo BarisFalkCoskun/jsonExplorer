@@ -80,7 +80,7 @@ const FileManager: FC<FileManagerProps> = ({
   skipSorting,
   url,
 }) => {
-  const { hideCategorized, hideDismissed, iconZoomLevel, setHideCategorized, setHideDismissed, setIconZoomLevel, views, setViews } = useSession();
+  const { hideCategorized, hideDismissed, hideSubstituteGroup, iconZoomLevel, setHideCategorized, setHideDismissed, setHideSubstituteGroup, setIconZoomLevel, views, setViews } = useSession();
   const { showToast } = useToast();
   const view = useMemo(() => {
     if (isDesktop) return "icon";
@@ -161,10 +161,15 @@ const FileManager: FC<FileManagerProps> = ({
         updateFiles();
       }
     } else if (allFilesRef.current?.key === url) {
-      if (hideDismissed) {
-        const dismissedNames = mongoFs.getCachedDismissedNames(mongoCollection.database, mongoCollection.collection);
+      if (hideDismissed || hideSubstituteGroup) {
+        const dismissedNames = hideDismissed
+          ? mongoFs.getCachedDismissedNames(mongoCollection.database, mongoCollection.collection)
+          : undefined;
+        const substituteGroupNames = hideSubstituteGroup
+          ? mongoFs.getCachedSubstituteGroupNames(mongoCollection.database, mongoCollection.collection)
+          : undefined;
 
-        if (dismissedNames) {
+        if (dismissedNames || substituteGroupNames) {
           setFiles(() => {
             const source = allFilesRef.current?.files;
 
@@ -175,7 +180,10 @@ const FileManager: FC<FileManagerProps> = ({
             for (const [name, stat] of Object.entries(source)) {
               const docName = name.replace(/\.json$/, "");
 
-              if (!dismissedNames.has(docName)) {
+              if (
+                !(dismissedNames?.has(docName) ?? false) &&
+                !(substituteGroupNames?.has(docName) ?? false)
+              ) {
                 filtered[name] = stat;
               }
             }
@@ -194,7 +202,7 @@ const FileManager: FC<FileManagerProps> = ({
       allFilesRef.current = undefined;
       updateFiles();
     }
-  }, [hideCategorized, hideDismissed, mongoCollection, mongoFs, setFiles, setHideCategorized, updateFiles, url]);
+  }, [hideCategorized, hideDismissed, hideSubstituteGroup, mongoCollection, mongoFs, setFiles, setHideCategorized, updateFiles, url]);
   const handleToggleHideDismissed = useCallback(() => {
     if (!mongoFs) return;
 
@@ -228,10 +236,15 @@ const FileManager: FC<FileManagerProps> = ({
         updateFiles();
       }
     } else if (allFilesRef.current?.key === url) {
-      if (hideCategorized) {
-        const categorizedNames = mongoFs.getCachedDocumentNames(mongoCollection.database, mongoCollection.collection);
+      if (hideCategorized || hideSubstituteGroup) {
+        const categorizedNames = hideCategorized
+          ? mongoFs.getCachedDocumentNames(mongoCollection.database, mongoCollection.collection)
+          : undefined;
+        const substituteGroupNames = hideSubstituteGroup
+          ? mongoFs.getCachedSubstituteGroupNames(mongoCollection.database, mongoCollection.collection)
+          : undefined;
 
-        if (categorizedNames) {
+        if (categorizedNames || substituteGroupNames) {
           setFiles(() => {
             const source = allFilesRef.current?.files;
 
@@ -242,7 +255,10 @@ const FileManager: FC<FileManagerProps> = ({
             for (const [name, stat] of Object.entries(source)) {
               const docName = name.replace(/\.json$/, "");
 
-              if (!categorizedNames.has(docName)) {
+              if (
+                !(categorizedNames?.has(docName) ?? false) &&
+                !(substituteGroupNames?.has(docName) ?? false)
+              ) {
                 filtered[name] = stat;
               }
             }
@@ -261,7 +277,82 @@ const FileManager: FC<FileManagerProps> = ({
       allFilesRef.current = undefined;
       updateFiles();
     }
-  }, [hideCategorized, hideDismissed, mongoCollection, mongoFs, setFiles, setHideDismissed, updateFiles, url]);
+  }, [hideCategorized, hideDismissed, hideSubstituteGroup, mongoCollection, mongoFs, setFiles, setHideDismissed, updateFiles, url]);
+  const handleToggleHideSubstituteGroup = useCallback(() => {
+    if (!mongoFs) return;
+
+    const newHidden = !hideSubstituteGroup;
+    setHideSubstituteGroup(newHidden);
+
+    if (newHidden) {
+      const cachedDocs = mongoFs.getCachedSubstituteGroupNames(mongoCollection.database, mongoCollection.collection);
+
+      if (cachedDocs) {
+        setFiles((currentFiles) => {
+          if (!currentFiles) return currentFiles;
+
+          if (!allFilesRef.current) {
+            allFilesRef.current = { files: { ...currentFiles }, key: url };
+          }
+
+          const filtered: typeof currentFiles = {};
+
+          for (const [name, stat] of Object.entries(currentFiles)) {
+            const docName = name.replace(/\.json$/, "");
+
+            if (!cachedDocs.has(docName)) {
+              filtered[name] = stat;
+            }
+          }
+
+          return filtered;
+        });
+      } else {
+        updateFiles();
+      }
+    } else if (allFilesRef.current?.key === url) {
+      if (hideCategorized || hideDismissed) {
+        const categorizedNames = hideCategorized
+          ? mongoFs.getCachedDocumentNames(mongoCollection.database, mongoCollection.collection)
+          : undefined;
+        const dismissedNames = hideDismissed
+          ? mongoFs.getCachedDismissedNames(mongoCollection.database, mongoCollection.collection)
+          : undefined;
+
+        if (categorizedNames || dismissedNames) {
+          setFiles(() => {
+            const source = allFilesRef.current?.files;
+
+            if (!source) return {};
+
+            const filtered: typeof source = {};
+
+            for (const [name, stat] of Object.entries(source)) {
+              const docName = name.replace(/\.json$/, "");
+
+              if (
+                !(categorizedNames?.has(docName) ?? false) &&
+                !(dismissedNames?.has(docName) ?? false)
+              ) {
+                filtered[name] = stat;
+              }
+            }
+
+            return filtered;
+          });
+        } else {
+          allFilesRef.current = undefined;
+          updateFiles();
+        }
+      } else {
+        setFiles(allFilesRef.current.files);
+        allFilesRef.current = undefined;
+      }
+    } else {
+      allFilesRef.current = undefined;
+      updateFiles();
+    }
+  }, [hideCategorized, hideDismissed, hideSubstituteGroup, mongoCollection, mongoFs, setFiles, setHideSubstituteGroup, updateFiles, url]);
   const handleDismiss = useCallback(
     async (entries: string[]) => {
       if (!mongoFs || !mountUrl) return;
@@ -428,7 +519,8 @@ const FileManager: FC<FileManagerProps> = ({
     isMongoFS ? handleSetCategory : undefined,
     isMongoFS ? handleQuickLook : undefined,
     isMongoFS ? handleDismiss : undefined,
-    isMongoFS ? handleToggleHideDismissed : undefined
+    isMongoFS ? handleToggleHideDismissed : undefined,
+    isMongoFS ? handleToggleHideSubstituteGroup : undefined
   );
   const [permission, setPermission] = useState<PermissionState>("prompt");
   const requestingPermissions = useRef(false);
@@ -568,7 +660,7 @@ const FileManager: FC<FileManagerProps> = ({
 
   // Re-apply active filters when files change (e.g. after readdir refresh)
   useEffect(() => {
-    if (!mongoFs || (!hideCategorized && !hideDismissed)) return;
+    if (!mongoFs || (!hideCategorized && !hideDismissed && !hideSubstituteGroup)) return;
 
     const { database, collection } = mongoCollection;
     const categorizedNames = hideCategorized
@@ -577,8 +669,11 @@ const FileManager: FC<FileManagerProps> = ({
     const dismissedNames = hideDismissed
       ? mongoFs.getCachedDismissedNames(database, collection)
       : undefined;
+    const substituteGroupNames = hideSubstituteGroup
+      ? mongoFs.getCachedSubstituteGroupNames(database, collection)
+      : undefined;
 
-    if (!categorizedNames && !dismissedNames) return;
+    if (!categorizedNames && !dismissedNames && !substituteGroupNames) return;
 
     setFiles((currentFiles) => {
       if (!currentFiles) return currentFiles;
@@ -606,7 +701,8 @@ const FileManager: FC<FileManagerProps> = ({
         const docName = name.replace(/\.json$/, "");
         const shouldHide =
           (categorizedNames?.has(docName) ?? false) ||
-          (dismissedNames?.has(docName) ?? false);
+          (dismissedNames?.has(docName) ?? false) ||
+          (substituteGroupNames?.has(docName) ?? false);
 
         if (shouldHide) {
           changed = true;
@@ -708,8 +804,10 @@ const FileManager: FC<FileManagerProps> = ({
             ? {
                 hideCategorized,
                 hideDismissed,
+                hideSubstituteGroup,
                 onToggleHideCategorized: handleToggleHideCategorized,
                 onToggleHideDismissed: handleToggleHideDismissed,
+                onToggleHideSubstituteGroup: handleToggleHideSubstituteGroup,
               }
             : {})}
           iconZoomLevel={iconZoomLevel}

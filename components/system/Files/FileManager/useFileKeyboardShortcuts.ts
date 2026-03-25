@@ -41,7 +41,8 @@ const useFileKeyboardShortcuts = (
   onSetCategory?: (entries: string[]) => void,
   onQuickLook?: (entry: string) => void,
   onDismiss?: (entries: string[]) => void,
-  onToggleHideDismissed?: () => void
+  onToggleHideDismissed?: () => void,
+  onToggleHideSubstituteGroup?: () => void
 ): KeyboardShortcutEntry => {
   const { copyEntries, deletePath, moveEntries } = useFileSystem();
   const { open, url: changeUrl } = useProcesses();
@@ -155,6 +156,12 @@ const useFileKeyboardShortcuts = (
                 onDismiss(focusedEntries);
               } else {
                 onDelete();
+              }
+              break;
+            case "g":
+              if (onToggleHideSubstituteGroup) {
+                haltEvent(event);
+                onToggleHideSubstituteGroup();
               }
               break;
             case "h":
@@ -355,6 +362,7 @@ const useFileKeyboardShortcuts = (
       onSetCategory,
       onToggleHideCategorized,
       onToggleHideDismissed,
+      onToggleHideSubstituteGroup,
       open,
       pasteToFolder,
       setIconPositions,

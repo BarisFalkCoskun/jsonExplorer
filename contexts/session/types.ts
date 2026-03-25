@@ -44,6 +44,7 @@ export type SessionData = {
   cursor: string | undefined;
   hideCategorized: boolean;
   hideDismissed: boolean;
+  hideSubstituteGroup: boolean;
   iconPositions: IconPositions;
   iconZoomLevel: number;
   lazySheep?: boolean;
@@ -69,6 +70,7 @@ export type SessionContextState = SessionData & {
   setHaltSession: React.Dispatch<React.SetStateAction<boolean>>;
   setHideCategorized: React.Dispatch<React.SetStateAction<boolean>>;
   setHideDismissed: React.Dispatch<React.SetStateAction<boolean>>;
+  setHideSubstituteGroup: React.Dispatch<React.SetStateAction<boolean>>;
   setIconPositions: React.Dispatch<React.SetStateAction<IconPositions>>;
   setIconZoomLevel: React.Dispatch<React.SetStateAction<number>>;
   setRunHistory: React.Dispatch<React.SetStateAction<string[]>>;

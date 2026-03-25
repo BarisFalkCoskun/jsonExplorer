@@ -397,7 +397,7 @@ const handleImages = async (
   let validImages: string[];
 
   if (productImages === undefined) {
-    // Fallback: use images/oldImages
+    // No productImages: use images/oldImages
     const images: unknown[] = [];
 
     if (Array.isArray(docWithImages.images)) {
