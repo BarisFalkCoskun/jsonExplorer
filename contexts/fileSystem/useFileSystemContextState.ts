@@ -18,6 +18,10 @@ import {
 } from "components/system/Files/FileManager/functions";
 import { type NewPath } from "components/system/Files/FileManager/useFolder";
 import {
+  DEFAULT_MONGO_IMAGE_SOURCE,
+  normalizeMongoImageSource,
+} from "utils/mongoApi";
+import {
   getFileSystemHandles,
   hasIndexedDB,
   isMountedFolder,
@@ -731,9 +735,14 @@ const useFileSystemContextState = (): FileSystemContextState => {
         const defaultConnection = {
           alias: "Local",
           connectionString: "mongodb://localhost:27017",
+          imageSource: DEFAULT_MONGO_IMAGE_SOURCE,
         };
 
-        let connections: { alias: string, connectionString: string; }[];
+        let connections: {
+          alias: string;
+          connectionString: string;
+          imageSource?: unknown;
+        }[];
 
         if (savedConnections) {
           try {
@@ -759,7 +768,7 @@ const useFileSystemContextState = (): FileSystemContextState => {
 
         let mounted = false;
 
-        for (const { connectionString, alias } of connections) {
+        for (const { connectionString, alias, imageSource } of connections) {
           // eslint-disable-next-line no-continue
           if (!connectionString || !alias) continue;
 
@@ -771,7 +780,12 @@ const useFileSystemContextState = (): FileSystemContextState => {
           try {
             // eslint-disable-next-line no-await-in-loop, no-loop-func
             await new Promise<void>((resolve, reject) => {
-              Create({ connectionString }, (createError, mongoFS) => {
+              Create(
+                {
+                  connectionString,
+                  imageSource: normalizeMongoImageSource(imageSource),
+                },
+                (createError, mongoFS) => {
                 if (createError || !mongoFS) {
                   reject(createError || new Error("Failed to create MongoDBFS"));
                   return;
@@ -784,7 +798,8 @@ const useFileSystemContextState = (): FileSystemContextState => {
                 } catch (mountError) {
                   reject(mountError instanceof Error ? mountError : new Error(String(mountError)));
                 }
-              });
+                }
+              );
             });
           } catch (connError) {
             // eslint-disable-next-line no-console

@@ -58,4 +58,17 @@ describe("meta thumbnail post-processing", () => {
     expect(result.thumbnail).toBe("old.jpg");
     expect(result.imageCount).toBe(1);
   });
+
+  it("ignores productImages when images source is explicitly requested", () => {
+    const doc = {
+      _id: "7",
+      images: ["remote.jpg"],
+      name: "test",
+      productImages: ["beepr/local.jpg"],
+    };
+    const result = addThumbnailFields(doc, "images");
+
+    expect(result.thumbnail).toBe("remote.jpg");
+    expect(result.imageCount).toBe(1);
+  });
 });

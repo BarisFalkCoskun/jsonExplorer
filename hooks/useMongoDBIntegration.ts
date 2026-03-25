@@ -1,10 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { useFileSystem } from "contexts/fileSystem";
+import {
+  DEFAULT_MONGO_IMAGE_SOURCE,
+  normalizeMongoImageSource,
+  type MongoImageSource,
+} from "utils/mongoApi";
 import { DESKTOP_PATH } from "utils/constants";
 
 interface MongoDBConnection {
   alias: string;
   connectionString: string;
+  imageSource: MongoImageSource;
   isConnected: boolean;
 }
 
@@ -42,7 +48,11 @@ export const useMongoDBIntegration = () => {
     }
   }, []);
 
-  const addConnection = useCallback(async (connectionString: string, alias: string) => {
+  const addConnection = useCallback(async (
+    connectionString: string,
+    alias: string,
+    imageSource: MongoImageSource = DEFAULT_MONGO_IMAGE_SOURCE
+  ) => {
     // eslint-disable-next-line unicorn/no-null
     setState(prev => ({ ...prev, error: null, isLoading: true }));
 
@@ -63,7 +73,7 @@ export const useMongoDBIntegration = () => {
 
       // eslint-disable-next-line @typescript-eslint/return-await, consistent-return
       return new Promise<void>((resolve, reject) => {
-        Create({ connectionString }, (error, mongoFS) => {
+        Create({ connectionString, imageSource }, (error, mongoFS) => {
           if (error || !mongoFS) {
             setState(prev => ({
               ...prev,
@@ -97,6 +107,7 @@ export const useMongoDBIntegration = () => {
             const newConnection: MongoDBConnection = {
               alias,
               connectionString,
+              imageSource,
               isConnected: true,
             };
 
@@ -170,12 +181,18 @@ export const useMongoDBIntegration = () => {
       const raw = localStorage.getItem("mongodbConnections");
       if (!raw) return;
 
-      const parsed = JSON.parse(raw) as MongoDBConnection[];
+      const parsed = JSON.parse(raw) as (
+        Omit<MongoDBConnection, "isConnected"> & { imageSource?: unknown }
+      )[];
       if (!Array.isArray(parsed) || parsed.length === 0) return;
 
       setState(prev => ({
         ...prev,
-        connections: parsed.map((c) => ({ ...c, isConnected: false })),
+        connections: parsed.map((c) => ({
+          ...c,
+          imageSource: normalizeMongoImageSource(c.imageSource),
+          isConnected: false,
+        })),
       }));
     } catch {
       // Ignore parse errors — useFileSystemContextState will normalize

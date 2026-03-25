@@ -6,6 +6,10 @@ export type MongoImage = {
   small?: string;
 };
 
+export type MongoImageSource = "images" | "productImages";
+
+export const DEFAULT_MONGO_IMAGE_SOURCE: MongoImageSource = "productImages";
+
 const PRODUCT_IMAGE_BASE_URL = "http://localhost:8100/imgs/";
 
 export const normalizeImageUrl = (img: unknown): string => {
@@ -28,39 +32,52 @@ export const normalizeProductImageUrl = (path: unknown): string => {
   return "";
 };
 
-export const addThumbnailFields = (
-  doc: Record<string, unknown>
-): Record<string, unknown> => {
+export const normalizeMongoImageSource = (
+  value: unknown
+): MongoImageSource =>
+  value === "images" ? "images" : DEFAULT_MONGO_IMAGE_SOURCE;
+
+export const getMongoDocumentImageUrls = (
+  doc: Record<string, unknown>,
+  imageSource: MongoImageSource = DEFAULT_MONGO_IMAGE_SOURCE
+): string[] => {
+  const images = Array.isArray(doc.images) ? (doc.images as unknown[]) : [];
+  const oldImages = Array.isArray(doc.oldImages)
+    ? (doc.oldImages as unknown[])
+    : [];
+
+  if (imageSource === "images") {
+    return [...images, ...oldImages]
+      .map((img) => normalizeImageUrl(img))
+      .filter((url): url is string => url.length > 0);
+  }
+
   const productImages = Array.isArray(doc.productImages)
     ? (doc.productImages as unknown[])
     : undefined;
 
-  let firstUrl: string;
-  let imageCount: number;
-
   if (productImages === undefined) {
-    // Fallback: use images/oldImages
-    const images = Array.isArray(doc.images) ? (doc.images as unknown[]) : [];
-    const oldImages = Array.isArray(doc.oldImages)
-      ? (doc.oldImages as unknown[])
-      : [];
-    const allImages = [...images, ...oldImages];
-    firstUrl = allImages.length > 0 ? normalizeImageUrl(allImages[0]) : "";
-    imageCount = allImages.length;
-  } else {
-    // productImages exists: use it as primary source (empty array = no images)
-    firstUrl =
-      productImages.length > 0
-        ? normalizeProductImageUrl(productImages[0])
-        : "";
-    imageCount = productImages.length;
+    return [...images, ...oldImages]
+      .map((img) => normalizeImageUrl(img))
+      .filter((url): url is string => url.length > 0);
   }
+
+  return productImages
+    .map((path) => normalizeProductImageUrl(path))
+    .filter((url): url is string => url.length > 0);
+};
+
+export const addThumbnailFields = (
+  doc: Record<string, unknown>,
+  imageSource: MongoImageSource = DEFAULT_MONGO_IMAGE_SOURCE
+): Record<string, unknown> => {
+  const imageUrls = getMongoDocumentImageUrls(doc, imageSource);
 
   const result = { ...doc };
   delete result.__sortId;
   delete result.__sortLabel;
-  result.thumbnail = firstUrl || undefined;
-  result.imageCount = imageCount;
+  result.thumbnail = imageUrls[0] || undefined;
+  result.imageCount = imageUrls.length;
   delete result.productImages;
   delete result.images;
   delete result.oldImages;
@@ -93,6 +110,7 @@ const nonEmptyStringField = (fieldPath: string): Record<string, unknown> => ({
           ],
         },
         "$$value",
+        // eslint-disable-next-line unicorn/no-null -- Mongo aggregation null sentinel
         null,
       ],
     },

@@ -6,6 +6,11 @@ import { type FileSystem } from "browserfs/dist/node/core/file_system";
 import { type ApiError } from "browserfs/dist/node/core/api_error";
 import type Stats from "browserfs/dist/node/core/node_fs_stats";
 import { getPreferredMongoDocumentLabel } from "utils/mongoDocument";
+import {
+  DEFAULT_MONGO_IMAGE_SOURCE,
+  normalizeMongoImageSource,
+  type MongoImageSource,
+} from "utils/mongoApi";
 
 interface MongoDocument {
   [key: string]: unknown;
@@ -85,6 +90,8 @@ export class MongoDBFileSystem implements FileSystem {
 
   private readonly connectionString: string;
 
+  private readonly imageSource: MongoImageSource;
+
   private readonly collectionEntriesCache = new Map<
     string,
     CachedCollectionEntries
@@ -92,8 +99,12 @@ export class MongoDBFileSystem implements FileSystem {
 
   private readonly documentsListCache = new Map<string, CachedDocumentsList>();
 
-  public constructor(connectionString = "mongodb://localhost:27017") {
+  public constructor(
+    connectionString = "mongodb://localhost:27017",
+    imageSource: MongoImageSource = DEFAULT_MONGO_IMAGE_SOURCE
+  ) {
     this.connectionString = connectionString;
+    this.imageSource = normalizeMongoImageSource(imageSource);
   }
 
   public getName(): string {
@@ -274,8 +285,11 @@ export class MongoDBFileSystem implements FileSystem {
           },
           getImages: async (documentId: string) => {
             if (!dbName) return [];
+            const params = new URLSearchParams({
+              imageSource: this.imageSource,
+            });
             const response = await MongoDBFileSystem.fetchWithTimeout(
-              `/api/mongodb/images/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}/${encodeURIComponent(documentId)}`,
+              `/api/mongodb/images/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}/${encodeURIComponent(documentId)}?${params.toString()}`,
               {
                 headers: {
                   "x-mongodb-connection": this.connectionString,
@@ -458,8 +472,9 @@ export class MongoDBFileSystem implements FileSystem {
           drop: () => Promise.resolve({ ok: 1 }),
           find: () => ({
             toArray: () => {
-              if (!dbName || !mockData[dbName]?.[collectionName])
+              if (!dbName || !mockData[dbName]?.[collectionName]) {
                 return Promise.resolve([]);
+              }
               return Promise.resolve(mockData[dbName][collectionName]);
             },
           }),
@@ -566,7 +581,11 @@ export class MongoDBFileSystem implements FileSystem {
 
     if (cached) return cached;
 
-    const url = `/api/mongodb/documents/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}?meta=1`;
+    const params = new URLSearchParams({
+      imageSource: this.imageSource,
+      meta: "1",
+    });
+    const url = `/api/mongodb/documents/${encodeURIComponent(dbName)}/${encodeURIComponent(collectionName)}?${params.toString()}`;
 
     const response = await MongoDBFileSystem.fetchWithTimeout(url, {
       headers: {
@@ -1056,7 +1075,7 @@ export class MongoDBFileSystem implements FileSystem {
     };
   }
 
-  private createStats(isDir: boolean, size = 0, displayName?: string): Stats {
+  private createStats(isDir: boolean, displayName?: string, size = 0): Stats {
     return {
       atime: new Date(),
       birthtime: new Date(),
@@ -1092,7 +1111,7 @@ export class MongoDBFileSystem implements FileSystem {
       } = this.parsePath(statPath);
 
       if (!database) {
-        cb(null, this.createStats(true, 0)); // eslint-disable-line unicorn/no-null
+        cb(null, this.createStats(true, undefined, 0)); // eslint-disable-line unicorn/no-null
         return;
       }
 
@@ -1109,15 +1128,15 @@ export class MongoDBFileSystem implements FileSystem {
 
         if (cachedEntries?.has(encodeURIComponent(documentName))) {
           cb(
-            null,
+            null, // eslint-disable-line unicorn/no-null -- BrowserFS callbacks use null for success
             this.createStats(
               false,
-              UNKNOWN_DOCUMENT_SIZE,
               cachedDocument
                 ? getPreferredMongoDocumentLabel(cachedDocument)
-                : documentName
+                : documentName,
+              UNKNOWN_DOCUMENT_SIZE
             )
-          ); // eslint-disable-line unicorn/no-null
+          );
           return;
         }
       }
@@ -1143,7 +1162,7 @@ export class MongoDBFileSystem implements FileSystem {
           ? getPreferredMongoDocumentLabel(entry.data)
           : undefined;
 
-      cb(null, this.createStats(isDir, entrySize, displayName)); // eslint-disable-line unicorn/no-null
+      cb(null, this.createStats(isDir, displayName, entrySize)); // eslint-disable-line unicorn/no-null
     } catch (caughtError) {
       const apiError = new Error(String(caughtError)) as ApiError;
       apiError.code = "EIO";
@@ -1224,7 +1243,10 @@ export class MongoDBFileSystem implements FileSystem {
       });
     }
 
-    const params = new URLSearchParams({ limit: String(limit) });
+    const params = new URLSearchParams({
+      imageSource: this.imageSource,
+      limit: String(limit),
+    });
     if (cursor) {
       params.set("afterId", cursor.afterId);
       params.set("afterLabel", cursor.afterLabel);
@@ -1815,11 +1837,14 @@ export class MongoDBFileSystem implements FileSystem {
 
 // Factory function for BrowserFS integration
 export function Create(
-  options: { connectionString?: string },
+  options: { connectionString?: string; imageSource?: MongoImageSource },
   callback: (error: Error | undefined, fs?: MongoDBFileSystem) => void
 ): void {
   try {
-    const mongoFS = new MongoDBFileSystem(options.connectionString);
+    const mongoFS = new MongoDBFileSystem(
+      options.connectionString,
+      options.imageSource
+    );
     callback(undefined, mongoFS);
   } catch (error) {
     callback(error instanceof Error ? error : new Error(String(error)));

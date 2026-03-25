@@ -1,6 +1,6 @@
 import { type NextApiRequest, type NextApiResponse } from 'next';
 import { MongoClient } from 'mongodb';
-import { addThumbnailFields, ALLOWED_METHODS, getDocumentFilters, LISTING_PROJECTION, normalizeImageUrl, normalizeProductImageUrl, PREFERRED_DOCUMENT_LABEL_AGGREGATION, sanitizeFilter } from "utils/mongoApi";
+import { addThumbnailFields, ALLOWED_METHODS, getDocumentFilters, getMongoDocumentImageUrls, LISTING_PROJECTION, normalizeMongoImageSource, PREFERRED_DOCUMENT_LABEL_AGGREGATION, sanitizeFilter } from "utils/mongoApi";
 
 type MongoClientCacheEntry = {
   client?: MongoClient;
@@ -180,6 +180,7 @@ const handleDocuments = async (
   const db = client.db(dbName);
   const collection = db.collection(collectionName);
   const metaOnly = req.query.meta === '1' || req.query.meta === 'true';
+  const imageSource = normalizeMongoImageSource(req.query.imageSource);
   let filter: Record<string, unknown> = {};
 
   if (typeof req.query.filter === 'string') {
@@ -258,7 +259,11 @@ const handleDocuments = async (
   const documents = await collection.aggregate(pipeline).toArray();
 
   if (metaOnly) {
-    res.json(documents.map((doc) => addThumbnailFields(doc as Record<string, unknown>)));
+    res.json(
+      documents.map((doc) =>
+        addThumbnailFields(doc as Record<string, unknown>, imageSource)
+      )
+    );
     return;
   }
 
@@ -275,7 +280,9 @@ const handleDocuments = async (
     : null;
 
   res.json({
-    documents: documents.map((doc) => addThumbnailFields(doc as Record<string, unknown>)),
+    documents: documents.map((doc) =>
+      addThumbnailFields(doc as Record<string, unknown>, imageSource)
+    ),
     hasMore,
     nextCursor,
   });
@@ -395,6 +402,7 @@ const handleDocument = async (
 const handleImages = async (
   client: MongoClient,
   operationParams: string[],
+  req: NextApiRequest,
   res: NextApiResponse
 ): Promise<void> => {
   const [dbName, collectionName, ...documentIdParts] = operationParams;
@@ -407,6 +415,7 @@ const handleImages = async (
 
   const db = client.db(dbName);
   const collection = db.collection(collectionName);
+  const imageSource = normalizeMongoImageSource(req.query.imageSource);
 
   const docWithImages = await collection.findOne({
     $or: getDocumentFilters(documentId),
@@ -417,33 +426,10 @@ const handleImages = async (
     return;
   }
 
-  const productImages = Array.isArray(docWithImages.productImages)
-    ? (docWithImages.productImages as unknown[])
-    : undefined;
-
-  let validImages: string[];
-
-  if (productImages === undefined) {
-    // No productImages: use images/oldImages
-    const images: unknown[] = [];
-
-    if (Array.isArray(docWithImages.images)) {
-      images.push(...(docWithImages.images as unknown[]));
-    }
-
-    if (Array.isArray(docWithImages.oldImages)) {
-      images.push(...(docWithImages.oldImages as unknown[]));
-    }
-
-    validImages = images
-      .map((img) => normalizeImageUrl(img))
-      .filter((url): url is string => url.length > 0);
-  } else {
-    // productImages exists: use as primary source (empty array = no images)
-    validImages = productImages
-      .map((path) => normalizeProductImageUrl(path))
-      .filter((url): url is string => url.length > 0);
-  }
+  const validImages = getMongoDocumentImageUrls(
+    docWithImages as Record<string, unknown>,
+    imageSource
+  );
 
   res.json({
     document: {
@@ -556,7 +542,7 @@ export default async function handler(
         await handleDocument(client, operationParams, req, res);
         break;
       case 'images':
-        await handleImages(client, operationParams, res);
+        await handleImages(client, operationParams, req, res);
         break;
       case 'mkdir':
         await handleMkdir(client, operationParams, res);

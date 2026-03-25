@@ -1,10 +1,14 @@
-import { useState, useCallback , type FC } from "react";
+import { useState, useCallback, type FC } from "react";
 import styled from "styled-components";
 import Button from "styles/common/Button";
 import { useMongoDBIntegration } from "hooks/useMongoDBIntegration";
 import { type ComponentProcessProps } from "components/system/Apps/RenderComponent";
 import { useProcesses } from "contexts/process";
 import { maskConnectionString } from "utils/functions";
+import {
+  DEFAULT_MONGO_IMAGE_SOURCE,
+  type MongoImageSource,
+} from "utils/mongoApi";
 
 const StyledMongoDBDialog = styled.div`
   display: flex;
@@ -24,6 +28,19 @@ const StyledMongoDBDialog = styled.div`
     }
 
     input {
+      padding: 8px 12px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 14px;
+
+      &:focus {
+        outline: none;
+        border-color: #0078d4;
+        box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.2);
+      }
+    }
+
+    select {
       padding: 8px 12px;
       border: 1px solid #ccc;
       border-radius: 4px;
@@ -132,6 +149,7 @@ const MongoDBDialog: FC<ComponentProcessProps> = ({ id }) => {
   const [formData, setFormData] = useState({
     alias: "",
     connectionString: "mongodb://localhost:27017",
+    imageSource: DEFAULT_MONGO_IMAGE_SOURCE,
   });
 
   const [testingConnection, setTestingConnection] = useState(false);
@@ -163,8 +181,16 @@ const MongoDBDialog: FC<ComponentProcessProps> = ({ id }) => {
     if (!formData.connectionString.trim() || !formData.alias.trim()) return;
 
     try {
-      await addConnection(formData.connectionString, formData.alias);
-      setFormData({ alias: "", connectionString: "mongodb://localhost:27017" });
+      await addConnection(
+        formData.connectionString,
+        formData.alias,
+        formData.imageSource
+      );
+      setFormData({
+        alias: "",
+        connectionString: "mongodb://localhost:27017",
+        imageSource: DEFAULT_MONGO_IMAGE_SOURCE,
+      });
       setTestResult({ success: false, tested: false });
     } catch {
       // Error handling is done in the hook
@@ -197,6 +223,23 @@ const MongoDBDialog: FC<ComponentProcessProps> = ({ id }) => {
           type="text"
           value={formData.alias}
         />
+      </div>
+
+      <div className="form-group">
+        <label htmlFor="imageSource">Image Source:</label>
+        <select
+          id="imageSource"
+          onChange={(e) =>
+            handleInputChange(
+              "imageSource",
+              e.target.value as MongoImageSource
+            )
+          }
+          value={formData.imageSource}
+        >
+          <option value="productImages">Local productImages (default)</option>
+          <option value="images">Remote images/oldImages</option>
+        </select>
       </div>
 
       {testResult.tested && (
@@ -234,6 +277,11 @@ const MongoDBDialog: FC<ComponentProcessProps> = ({ id }) => {
               <div className="connection-info">
                 <div className="alias">{connection.alias}</div>
                 <div className="connection-string">{maskConnectionString(connection.connectionString)}</div>
+                <div className="status">
+                  {connection.imageSource === "images"
+                    ? "Image source: images/oldImages"
+                    : "Image source: productImages"}
+                </div>
                 <div className={`status ${connection.isConnected ? "connected" : "disconnected"}`}>
                   {connection.isConnected ? "Connected" : "Disconnected"}
                 </div>

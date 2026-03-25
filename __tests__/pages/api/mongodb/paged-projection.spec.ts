@@ -50,6 +50,24 @@ describe("paged listing projection", () => {
     expect(result).toHaveProperty("imageCount", 0);
   });
 
+  it("can explicitly prefer images over productImages", () => {
+    const doc = {
+      _id: "doc4",
+      images: ["https://example.com/remote.jpg"],
+      name: "apple",
+      oldImages: ["https://example.com/old.jpg"],
+      productImages: ["beepr/abc123.jpg"],
+    };
+
+    const result = addThumbnailFields(doc, "images");
+
+    expect(result).toHaveProperty(
+      "thumbnail",
+      "https://example.com/remote.jpg"
+    );
+    expect(result).toHaveProperty("imageCount", 2);
+  });
+
   it("handles docs with no image fields at all", () => {
     const doc = {
       __sortId: "doc4",
