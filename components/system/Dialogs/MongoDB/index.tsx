@@ -151,6 +151,7 @@ const MongoDBDialog: FC<ComponentProcessProps> = ({ id }) => {
     connectionString: "mongodb://localhost:27017",
     imageSource: DEFAULT_MONGO_IMAGE_SOURCE,
   });
+  const [editingAlias, setEditingAlias] = useState<string>();
 
   const [testingConnection, setTestingConnection] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; tested: boolean }>({
@@ -191,11 +192,33 @@ const MongoDBDialog: FC<ComponentProcessProps> = ({ id }) => {
         connectionString: "mongodb://localhost:27017",
         imageSource: DEFAULT_MONGO_IMAGE_SOURCE,
       });
+      setEditingAlias(undefined);
       setTestResult({ success: false, tested: false });
     } catch {
       // Error handling is done in the hook
     }
   }, [formData, addConnection]);
+  const handleEditConnection = useCallback(
+    (connection: (typeof connections)[number]) => {
+      setFormData({
+        alias: connection.alias,
+        connectionString: connection.connectionString,
+        imageSource: connection.imageSource,
+      });
+      setEditingAlias(connection.alias);
+      setTestResult({ success: false, tested: false });
+    },
+    []
+  );
+  const handleCancelEdit = useCallback(() => {
+    setFormData({
+      alias: "",
+      connectionString: "mongodb://localhost:27017",
+      imageSource: DEFAULT_MONGO_IMAGE_SOURCE,
+    });
+    setEditingAlias(undefined);
+    setTestResult({ success: false, tested: false });
+  }, []);
 
   const isFormValid = formData.connectionString.trim() && formData.alias.trim() && (!testResult.tested || testResult.success);
 
@@ -217,6 +240,7 @@ const MongoDBDialog: FC<ComponentProcessProps> = ({ id }) => {
       <div className="form-group">
         <label htmlFor="alias">Display Name:</label>
         <input
+          disabled={Boolean(editingAlias)}
           id="alias"
           onChange={(e) => handleInputChange("alias", e.target.value)}
           placeholder="My MongoDB"
@@ -249,6 +273,11 @@ const MongoDBDialog: FC<ComponentProcessProps> = ({ id }) => {
       )}
 
       <div className="buttons">
+        {editingAlias && (
+          <Button onClick={handleCancelEdit}>
+            Cancel Edit
+          </Button>
+        )}
         <Button
           disabled={!formData.connectionString.trim() || testingConnection}
           onClick={handleTestConnection}
@@ -259,7 +288,13 @@ const MongoDBDialog: FC<ComponentProcessProps> = ({ id }) => {
           disabled={!isFormValid || isLoading}
           onClick={handleAddConnection}
         >
-          {isLoading ? "Adding..." : "Add Connection"}
+          {isLoading
+            ? editingAlias
+              ? "Updating..."
+              : "Adding..."
+            : editingAlias
+              ? "Update Connection"
+              : "Add Connection"}
         </Button>
       </div>
 
@@ -275,8 +310,10 @@ const MongoDBDialog: FC<ComponentProcessProps> = ({ id }) => {
           connections.map((connection) => (
             <div key={connection.alias} className="connection-item">
               <div className="connection-info">
-                <div className="alias">{connection.alias}</div>
-                <div className="connection-string">{maskConnectionString(connection.connectionString)}</div>
+                <div className="alias">{connection.alias || "(unnamed connection)"}</div>
+                <div className="connection-string">
+                  URI: {maskConnectionString(connection.connectionString)}
+                </div>
                 <div className="status">
                   {connection.imageSource === "images"
                     ? "Image source: images/oldImages"
@@ -287,6 +324,9 @@ const MongoDBDialog: FC<ComponentProcessProps> = ({ id }) => {
                 </div>
               </div>
               <div className="connection-actions">
+                <Button onClick={() => handleEditConnection(connection)}>
+                  Edit
+                </Button>
                 <Button onClick={() => removeConnection(connection.alias)}>
                   Remove
                 </Button>
