@@ -32,10 +32,7 @@ import { type SelectionRect } from "components/system/Files/FileManager/Selectio
 import { type FileStat } from "components/system/Files/FileManager/functions";
 import useFileDrop from "components/system/Files/FileManager/useFileDrop";
 import { type FocusEntryFunctions } from "components/system/Files/FileManager/useFocusableEntries";
-import {
-  type FileActions,
-  type Files,
-} from "components/system/Files/FileManager/useFolder";
+import { type FileActions, type Files } from "components/system/Files/FileManager/useFolder";
 import { ICON_ZOOM_LEVELS } from "components/system/Files/FileManager/constants";
 import {
   type FileManagerViewNames,
@@ -366,14 +363,7 @@ const FileEntry: FC<FileEntryProps> = ({
     if (isMongoDocument && hasNavigationArrows) {
       setShowImageNavigation(true);
     }
-  }, [
-    createTooltip,
-    isDirectory,
-    listView,
-    preloadImages,
-    isMongoDocument,
-    hasNavigationArrows,
-  ]);
+  }, [createTooltip, isDirectory, listView, preloadImages, isMongoDocument, hasNavigationArrows]);
 
   const onMouseLeaveButton = useCallback(() => {
     setShowImageNavigation(false);
@@ -635,7 +625,6 @@ const FileEntry: FC<FileEntryProps> = ({
       <Button
         ref={buttonRef}
         aria-label={name}
-        data-file-id={fileName}
         onMouseLeave={onMouseLeaveButton}
         onMouseOverCapture={onMouseOverButton}
         title={tooltip}
@@ -670,7 +659,7 @@ const FileEntry: FC<FileEntryProps> = ({
             role: "heading",
           })}
         >
-          <div style={{ position: "relative" }}>
+          <div style={{ position: 'relative' }}>
             <Icon
               ref={iconRef}
               $eager={loadIconImmediately}

@@ -287,7 +287,9 @@ const useFolder = (
           if (
             !skipSorting &&
             (!sortOrder ||
-              sortOrder?.some((entry, index) => newSortOrder[index] !== entry))
+              sortOrder?.some(
+                (entry, index) => newSortOrder[index] !== entry
+              ))
           ) {
             window.requestAnimationFrame(() =>
               setSortOrder(directory, newSortOrder)
@@ -314,15 +316,10 @@ const useFolder = (
             const mongoEffectiveSortOrder =
               (!skipSorting && sortBy && sortBy !== "name" && sortOrder) || [];
             mongoMountPointRef.current = mountPoint;
-            const relativePath =
-              directory === mountPoint
-                ? "/"
-                : directory.slice(mountPoint.length);
-            const result = await mongoFs.readdirPaged(
-              relativePath,
-              undefined,
-              BATCH_SIZE
-            );
+            const relativePath = directory === mountPoint
+              ? "/"
+              : directory.slice(mountPoint.length);
+            const result = await mongoFs.readdirPaged(relativePath, undefined, BATCH_SIZE);
 
             if (result.entries.length === 0) {
               setFiles({});
@@ -384,9 +381,7 @@ const useFolder = (
           allEntriesRef.current = dirContents;
 
           const firstBatch = dirContents.slice(0, BATCH_SIZE);
-          const firstResults = await Promise.all(
-            firstBatch.map((file) => statFile(file))
-          );
+          const firstResults = await Promise.all(firstBatch.map((file) => statFile(file)));
 
           const firstFiles = sortContents(
             buildFilesObject(firstResults),
@@ -474,10 +469,7 @@ const useFolder = (
                 // eslint-disable-next-line unicorn/no-null -- filter sentinel
                 if (hideFolders && fileStats.isDirectory()) return null;
 
-                const statsWithInfo = await statsWithShortcutInfo(
-                  file,
-                  fileStats
-                );
+                const statsWithInfo = await statsWithShortcutInfo(file, fileStats);
                 return { file, stats: statsWithInfo };
               } catch {
                 // eslint-disable-next-line unicorn/no-null -- filter sentinel
@@ -737,8 +729,9 @@ const useFolder = (
       const filePaths = await Promise.all(
         allPaths.map((path) => getFile(path))
       );
-      const { addEntryToZippable, createZippable } =
-        await import("utils/zipFunctions");
+      const { addEntryToZippable, createZippable } = await import(
+        "utils/zipFunctions"
+      );
 
       return filePaths
         .filter(Boolean)
@@ -895,10 +888,7 @@ const useFolder = (
   );
   const pasteToFolder = useCallback(
     (event?: CaptureTriggerEvent): void => {
-      const parentDirs = new Set([
-        directory,
-        ...getParentDirectories(directory),
-      ]);
+      const parentDirs = new Set([directory, ...getParentDirectories(directory)]);
       const cleanedPasteList = Object.fromEntries(
         Object.entries(pasteList).filter(([key]) => !parentDirs.has(key))
       );
