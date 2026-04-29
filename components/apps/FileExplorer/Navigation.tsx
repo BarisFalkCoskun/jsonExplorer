@@ -25,8 +25,8 @@ import useResizeObserver from "hooks/useResizeObserver";
 type NavigationProps = {
   addressBarRef: React.RefObject<HTMLInputElement | null>;
   id: string;
-  searchTerm: string;
   searchBarRef: React.RefObject<HTMLInputElement | null>;
+  searchTerm: string;
   setSearchTerm: React.Dispatch<React.SetStateAction<string>>;
 };
 
@@ -35,8 +35,8 @@ const CONTEXT_MENU_OFFSET = 3;
 const Navigation: FC<NavigationProps> = ({
   id,
   addressBarRef,
-  searchTerm,
   searchBarRef,
+  searchTerm,
   setSearchTerm,
 }) => {
   const {

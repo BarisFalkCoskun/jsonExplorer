@@ -106,7 +106,7 @@ const FileExplorer: FC<ComponentProcessProps> = ({ id }) => {
 
   useEffect(() => {
     setSearchTerm("");
-  }, [url]);
+  }, [/* effect dep */ url]);
 
   useEffect(() => {
     if (componentWindow && !closing && !url) {
@@ -131,8 +131,8 @@ const FileExplorer: FC<ComponentProcessProps> = ({ id }) => {
       <Navigation
         addressBarRef={addressBarRef}
         id={id}
-        searchTerm={searchTerm}
         searchBarRef={searchBarRef}
+        searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
       />
       <FileManager id={id} searchTerm={searchTerm} url={url} showStatusBar />

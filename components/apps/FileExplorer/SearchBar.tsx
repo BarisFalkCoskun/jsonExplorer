@@ -11,23 +11,21 @@ const SearchBar: FCWithRef<HTMLInputElement, SearchBarProps> = ({
   ref: searchBarRef,
   searchTerm,
   setSearchTerm,
-}) => {
-  return (
-    <StyledSearch>
-      <input
-        aria-label="Filter items in this folder"
-        ref={searchBarRef}
-        onChange={({ target }) => {
-          setSearchTerm(target.value);
-        }}
-        placeholder="Filter this folder"
-        spellCheck={false}
-        type="search"
-        value={searchTerm}
-      />
-      <Search />
-    </StyledSearch>
-  );
-};
+}) => (
+  <StyledSearch>
+    <input
+      ref={searchBarRef}
+      aria-label="Filter items in this folder"
+      onChange={({ target }) => {
+        setSearchTerm(target.value);
+      }}
+      placeholder="Filter this folder"
+      spellCheck={false}
+      type="search"
+      value={searchTerm}
+    />
+    <Search />
+  </StyledSearch>
+);
 
 export default memo(SearchBar);
