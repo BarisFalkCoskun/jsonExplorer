@@ -24,6 +24,17 @@ import {
 
 type KeyboardShortcutEntry = (file?: string) => React.KeyboardEventHandler;
 
+type BackspaceShortcutAction = "delete" | "navigateUp" | "none";
+
+export const getBackspaceShortcutAction = (
+  focusedEntries: string[],
+  id?: string
+): BackspaceShortcutAction => {
+  if (focusedEntries.length > 0) return "delete";
+
+  return id ? "navigateUp" : "none";
+};
+
 const useFileKeyboardShortcuts = (
   files: Files,
   url: string,
@@ -221,7 +232,9 @@ const useFileKeyboardShortcuts = (
               onDelete();
               break;
             case "Backspace":
-              if (id) {
+              if (getBackspaceShortcutAction(focusedEntries, id) === "delete") {
+                onDelete();
+              } else if (id) {
                 haltEvent(event);
                 changeUrl(id, dirname(url));
               }
