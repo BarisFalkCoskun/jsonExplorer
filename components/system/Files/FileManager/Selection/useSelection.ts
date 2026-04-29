@@ -6,6 +6,7 @@ import { type Size } from "components/system/Window/RndWindow/useResizable";
 import { useMenu } from "contexts/menu";
 import { type MenuState } from "contexts/menu/useMenuContextState";
 import { ONE_TIME_PASSIVE_EVENT } from "utils/constants";
+import { getPerfDuration, getPerfNow, logPerf } from "utils/perfDiagnostics";
 
 export type SelectionRect = Partial<Position> & Partial<Size>;
 
@@ -35,11 +36,15 @@ const useSelection = (
   const { height: h, width: w } = size;
   const animationRequestId = useRef(0);
   const sizeRef = useRef(size);
+  const selectionStartedAtRef = useRef(0);
+  const selectionMoveCountRef = useRef(0);
   const onMouseMove: React.MouseEventHandler<HTMLElement> = ({
     clientX,
     clientY,
   }) => {
     if (animationRequestId.current) return;
+
+    selectionMoveCountRef.current += 1;
 
     const { scrollLeft = 0, scrollTop = 0 } = containerRef.current || {};
     const { x: targetX = 0, y: targetY = 0 } =
@@ -71,6 +76,12 @@ const useSelection = (
       x: clientX - targetX + scrollLeft,
       y: clientY - targetY + scrollTop,
     });
+    selectionStartedAtRef.current = getPerfNow();
+    selectionMoveCountRef.current = 0;
+    logPerf("selection-start", {
+      focusedCount: focusedEntries.length,
+      isDesktop: Boolean(isDesktop),
+    });
 
     if (menu && Object.keys(menu).length > 0) {
       setMenu(Object.create(null) as MenuState);
@@ -90,6 +101,13 @@ const useSelection = (
 
   if (hasPosition) {
     const resetSelection = (): void => {
+      logPerf("selection-end", {
+        durationMs: getPerfDuration(selectionStartedAtRef.current),
+        finalFocusedCount: focusedEntries.length,
+        finalHeight: h,
+        finalWidth: w,
+        moveFrames: selectionMoveCountRef.current,
+      });
       setSize(Object.create(null) as Size);
       setPosition(Object.create(null) as Position);
     };

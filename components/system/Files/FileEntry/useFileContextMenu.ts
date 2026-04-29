@@ -9,7 +9,10 @@ import {
 } from "components/system/Files/FileEntry/functions";
 import useFile from "components/system/Files/FileEntry/useFile";
 import { type FocusEntryFunctions } from "components/system/Files/FileManager/useFocusableEntries";
-import { type FileActions, type Files } from "components/system/Files/FileManager/useFolder";
+import {
+  type FileActions,
+  type Files,
+} from "components/system/Files/FileManager/useFolder";
 import { useFileSystem } from "contexts/fileSystem";
 import { useMenu } from "contexts/menu";
 import {
@@ -60,6 +63,7 @@ import useTransferDialog, {
 import { getMountUrl, isMountedFolder } from "contexts/fileSystem/core";
 import { type MongoDBFileSystem } from "contexts/fileSystem/MongoDBFS";
 import { runMongoPatchBatch } from "utils/mongoMutations";
+import { getPerfDuration, getPerfNow, logPerf } from "utils/perfDiagnostics";
 import { useToast } from "components/system/Toast/useToast";
 
 const useFileContextMenu = (
@@ -176,7 +180,10 @@ const useFileContextMenu = (
           const mountedFs = mountUrl ? rootFs?.mntMap[mountUrl] : undefined;
           const isMongoDocument =
             mountedFs?.getName() === "MongoDBFS" &&
-            path.replace(mountUrl || "", "").split("/").filter(Boolean).length >= 3;
+            path
+              .replace(mountUrl || "", "")
+              .split("/")
+              .filter(Boolean).length >= 3;
 
           menuItems.push(
             {
@@ -185,7 +192,36 @@ const useFileContextMenu = (
                   saveUnpositionedDesktopIcons(setIconPositions);
                 }
 
-                absoluteEntries().forEach((entry) => deleteLocalPath(entry));
+                const entries = absoluteEntries();
+                const startedAt = getPerfNow();
+                let completed = 0;
+                let failed = 0;
+
+                logPerf("context-delete-start", {
+                  count: entries.length,
+                  url,
+                });
+
+                entries.forEach((entry) => {
+                  deleteLocalPath(entry)
+                    .catch((error: unknown) => {
+                      failed += 1;
+                      console.error("Delete failed:", error);
+                    })
+                    .finally(() => {
+                      completed += 1;
+
+                      if (completed === entries.length) {
+                        logPerf("context-delete-complete", {
+                          count: entries.length,
+                          failed,
+                          succeeded: entries.length - failed,
+                          totalMs: getPerfDuration(startedAt),
+                          url,
+                        });
+                      }
+                    });
+                });
               },
               label: "Delete",
             },
@@ -199,214 +235,322 @@ const useFileContextMenu = (
                   const mongoCol = mongoParts[1] || "";
 
                   return [
-                  MENU_SEPERATOR,
-                  {
-                    action: async () => {
-                      const entries = absoluteEntries();
-                      const categories = entries.map((e) =>
-                        mongoFs.getCachedDocumentCategory(basename(e, ".json"), mongoDb, mongoCol)
-                      );
-                      const first = categories[0];
-                      const allSame =
-                        first !== null &&
-                        categories.every(
-                          (c) => c !== null && c.toLowerCase() === first.toLowerCase()
+                    MENU_SEPERATOR,
+                    {
+                      action: async () => {
+                        const entries = absoluteEntries();
+                        const categories = entries.map((e) =>
+                          mongoFs.getCachedDocumentCategory(
+                            basename(e, ".json"),
+                            mongoDb,
+                            mongoCol
+                          )
                         );
-                      const defaultValue = allSame ? first : "";
-                      const raw = window.prompt("Enter category (comma-separated for multiple):", defaultValue); // eslint-disable-line no-alert -- user-facing category input
-                      if (raw) {
-                        const newLabels = raw.toLowerCase().split(",").map((l) => l.trim()).filter(Boolean);
-                        const { succeeded, failed } = await runMongoPatchBatch(
-                          entries.map((entry) => () => {
-                            const existing = mongoFs.getCachedDocumentCategory(basename(entry, ".json"), mongoDb, mongoCol);
-                            const existingLabels = existing ? existing.split(",").map((l) => l.trim().toLowerCase()) : [];
-                            const labelsToAdd = newLabels.filter((l) => !existingLabels.includes(l));
-                            if (labelsToAdd.length === 0) return Promise.resolve();
-                            const merged = [...existingLabels, ...labelsToAdd].join(", ");
-                            const relativePath = entry.replace(
-                              `${mountUrl}/`,
-                              ""
+                        const first = categories[0];
+                        const allSame =
+                          first !== null &&
+                          categories.every(
+                            (c) =>
+                              c !== null &&
+                              c.toLowerCase() === first.toLowerCase()
+                          );
+                        const defaultValue = allSame ? first : "";
+                        // eslint-disable-next-line no-alert -- user-facing category input
+                        const raw = window.prompt(
+                          "Enter category (comma-separated for multiple):",
+                          defaultValue
+                        );
+                        if (raw) {
+                          const newLabels = raw
+                            .toLowerCase()
+                            .split(",")
+                            .map((l) => l.trim())
+                            .filter(Boolean);
+                          const { succeeded, failed } =
+                            await runMongoPatchBatch(
+                              entries.map((entry) => () => {
+                                const existing =
+                                  mongoFs.getCachedDocumentCategory(
+                                    basename(entry, ".json"),
+                                    mongoDb,
+                                    mongoCol
+                                  );
+                                const existingLabels = existing
+                                  ? existing
+                                      .split(",")
+                                      .map((l) => l.trim().toLowerCase())
+                                  : [];
+                                const labelsToAdd = newLabels.filter(
+                                  (l) => !existingLabels.includes(l)
+                                );
+                                if (labelsToAdd.length === 0) {
+                                  return Promise.resolve();
+                                }
+                                const merged = [
+                                  ...existingLabels,
+                                  ...labelsToAdd,
+                                ].join(", ");
+                                const relativePath = entry.replace(
+                                  `${mountUrl}/`,
+                                  ""
+                                );
+                                return mongoFs.patchDocument(relativePath, {
+                                  category: merged,
+                                });
+                              })
                             );
-                            return mongoFs.patchDocument(relativePath, { category: merged });
-                          })
-                        );
-                        if (failed > 0) {
-                          showToast(`${failed} of ${entries.length} items failed to save.`, "error");
-                        } else if (succeeded > 0) {
-                          showToast(`Category set for ${succeeded} item(s).`, "success");
-                        }
-                        if (succeeded > 0 && hideCategorized && setFiles) {
-                          setFiles((currentFiles) => {
-                            if (!currentFiles) return currentFiles;
-                            const updated = { ...currentFiles };
-                            for (const entry of entries) {
-                              delete updated[basename(entry)];
-                            }
-                            return updated;
-                          });
-                        }
-                      }
-                    },
-                    label: "Set Category",
-                  },
-                  {
-                    action: async () => {
-                      const entries = absoluteEntries();
-                      const { succeeded, failed } = await runMongoPatchBatch(
-                        entries.map((entry) => () => {
-                          const relativePath = entry.replace(
-                            `${mountUrl}/`,
-                            ""
-                          );
-                          // eslint-disable-next-line unicorn/no-null -- MongoDB $unset requires null
-                          return mongoFs.patchDocument(relativePath, { category: null });
-                        })
-                      );
-                      if (failed > 0) {
-                        showToast(`${failed} of ${entries.length} items failed to update.`, "error");
-                      } else if (succeeded > 0) {
-                        showToast(`Category removed from ${succeeded} item(s).`, "success");
-                      }
-                    },
-                    label: "Remove Category",
-                  },
-                  MENU_SEPERATOR,
-                  {
-                    action: async () => {
-                      const entries = absoluteEntries();
-                      const groups = entries.map((e) =>
-                        mongoFs.getCachedDocumentSubstituteGroup(basename(e, ".json"), mongoDb, mongoCol)
-                      );
-                      const first = groups[0];
-                      const allSame =
-                        first !== null &&
-                        groups.every(
-                          (g) => g !== null && g.toLowerCase() === first.toLowerCase()
-                        );
-                      const defaultValue = allSame ? first : "";
-                      const raw = window.prompt("Enter substitute group name:", defaultValue); // eslint-disable-line no-alert -- user-facing substitute group input
-                      if (raw) {
-                        const groupName = raw.trim().toLowerCase();
-                        if (groupName) {
-                          const { succeeded, failed } = await runMongoPatchBatch(
-                            entries.map((entry) => () => {
-                              const relativePath = entry.replace(
-                                `${mountUrl}/`,
-                                ""
-                              );
-                              return mongoFs.patchDocument(relativePath, { substituteGroup: groupName });
-                            })
-                          );
                           if (failed > 0) {
-                            showToast(`${failed} of ${entries.length} items failed to save.`, "error");
+                            showToast(
+                              `${failed} of ${entries.length} items failed to save.`,
+                              "error"
+                            );
                           } else if (succeeded > 0) {
-                            showToast(`Substitute group set for ${succeeded} item(s).`, "success");
+                            showToast(
+                              `Category set for ${succeeded} item(s).`,
+                              "success"
+                            );
                           }
-                        }
-                      }
-                    },
-                    label: "Set Substitute Group",
-                  },
-                  {
-                    action: async () => {
-                      const entries = absoluteEntries();
-                      const { succeeded, failed } = await runMongoPatchBatch(
-                        entries.map((entry) => () => {
-                          const relativePath = entry.replace(
-                            `${mountUrl}/`,
-                            ""
-                          );
-                          // eslint-disable-next-line unicorn/no-null -- MongoDB $unset requires null
-                          return mongoFs.patchDocument(relativePath, { substituteGroup: null });
-                        })
-                      );
-                      if (failed > 0) {
-                        showToast(`${failed} of ${entries.length} items failed to update.`, "error");
-                      } else if (succeeded > 0) {
-                        showToast(`Substitute group removed from ${succeeded} item(s).`, "success");
-                      }
-                    },
-                    label: "Remove Substitute Group",
-                  },
-                  MENU_SEPERATOR,
-                  ...(() => {
-                    const entries = absoluteEntries();
-                    const someDismissed = entries.some((entry) =>
-                      mongoFs.isCachedDismissed(basename(entry, ".json"), mongoDb, mongoCol)
-                    );
-                    const someNotDismissed = entries.some(
-                      (entry) =>
-                        !mongoFs.isCachedDismissed(basename(entry, ".json"), mongoDb, mongoCol)
-                    );
-                    const items: MenuItem[] = [];
-
-                    if (someNotDismissed) {
-                      items.push({
-                        action: async () => {
-                          const toDismiss = entries.filter(
-                            (entry) =>
-                              !mongoFs.isCachedDismissed(basename(entry, ".json"), mongoDb, mongoCol)
-                          );
-                          const dismissedEntries: string[] = [];
-                          const { succeeded, failed } = await runMongoPatchBatch(
-                            toDismiss.map((entry) => async () => {
-                              const relativePath = entry.replace(
-                                `${mountUrl}/`,
-                                ""
-                              );
-                              await mongoFs.patchDocument(relativePath, { dismissed: true });
-                              dismissedEntries.push(entry);
-                            })
-                          );
-                          if (failed > 0) {
-                            showToast(`${failed} of ${toDismiss.length} items failed to dismiss.`, "error");
-                          } else if (succeeded > 0) {
-                            showToast(`${succeeded} item(s) dismissed.`, "success");
-                          }
-                          if (dismissedEntries.length > 0 && hideDismissed && setFiles) {
+                          if (succeeded > 0 && hideCategorized && setFiles) {
                             setFiles((currentFiles) => {
                               if (!currentFiles) return currentFiles;
                               const updated = { ...currentFiles };
-                              for (const entry of dismissedEntries) {
+                              for (const entry of entries) {
                                 delete updated[basename(entry)];
                               }
                               return updated;
                             });
                           }
-                        },
-                        label: "Dismiss",
-                      });
-                    }
-
-                    if (someDismissed) {
-                      items.push({
-                        action: async () => {
-                          const toUndismiss = entries.filter(
-                            (entry) =>
-                              mongoFs.isCachedDismissed(basename(entry, ".json"), mongoDb, mongoCol)
+                        }
+                      },
+                      label: "Set Category",
+                    },
+                    {
+                      action: async () => {
+                        const entries = absoluteEntries();
+                        const { succeeded, failed } = await runMongoPatchBatch(
+                          entries.map((entry) => () => {
+                            const relativePath = entry.replace(
+                              `${mountUrl}/`,
+                              ""
+                            );
+                            return mongoFs.patchDocument(relativePath, {
+                              category: null, // eslint-disable-line unicorn/no-null -- MongoDB $unset requires null
+                            });
+                          })
+                        );
+                        if (failed > 0) {
+                          showToast(
+                            `${failed} of ${entries.length} items failed to update.`,
+                            "error"
                           );
-                          const { succeeded, failed } = await runMongoPatchBatch(
-                            toUndismiss.map((entry) => () => {
-                              const relativePath = entry.replace(
-                                `${mountUrl}/`,
-                                ""
+                        } else if (succeeded > 0) {
+                          showToast(
+                            `Category removed from ${succeeded} item(s).`,
+                            "success"
+                          );
+                        }
+                      },
+                      label: "Remove Category",
+                    },
+                    MENU_SEPERATOR,
+                    {
+                      action: async () => {
+                        const entries = absoluteEntries();
+                        const groups = entries.map((e) =>
+                          mongoFs.getCachedDocumentSubstituteGroup(
+                            basename(e, ".json"),
+                            mongoDb,
+                            mongoCol
+                          )
+                        );
+                        const first = groups[0];
+                        const allSame =
+                          first !== null &&
+                          groups.every(
+                            (g) =>
+                              g !== null &&
+                              g.toLowerCase() === first.toLowerCase()
+                          );
+                        const defaultValue = allSame ? first : "";
+                        // eslint-disable-next-line no-alert -- user-facing substitute group input
+                        const raw = window.prompt(
+                          "Enter substitute group name:",
+                          defaultValue
+                        );
+                        if (raw) {
+                          const groupName = raw.trim().toLowerCase();
+                          if (groupName) {
+                            const { succeeded, failed } =
+                              await runMongoPatchBatch(
+                                entries.map((entry) => () => {
+                                  const relativePath = entry.replace(
+                                    `${mountUrl}/`,
+                                    ""
+                                  );
+                                  return mongoFs.patchDocument(relativePath, {
+                                    substituteGroup: groupName,
+                                  });
+                                })
                               );
-                              // eslint-disable-next-line unicorn/no-null -- MongoDB $unset requires null
-                              return mongoFs.patchDocument(relativePath, { dismissed: null });
-                            })
-                          );
-                          if (failed > 0) {
-                            showToast(`${failed} of ${toUndismiss.length} items failed to undismiss.`, "error");
-                          } else if (succeeded > 0) {
-                            showToast(`${succeeded} item(s) undismissed.`, "success");
+                            if (failed > 0) {
+                              showToast(
+                                `${failed} of ${entries.length} items failed to save.`,
+                                "error"
+                              );
+                            } else if (succeeded > 0) {
+                              showToast(
+                                `Substitute group set for ${succeeded} item(s).`,
+                                "success"
+                              );
+                            }
                           }
-                        },
-                        label: "Undismiss",
-                      });
-                    }
+                        }
+                      },
+                      label: "Set Substitute Group",
+                    },
+                    {
+                      action: async () => {
+                        const entries = absoluteEntries();
+                        const { succeeded, failed } = await runMongoPatchBatch(
+                          entries.map((entry) => () => {
+                            const relativePath = entry.replace(
+                              `${mountUrl}/`,
+                              ""
+                            );
+                            return mongoFs.patchDocument(relativePath, {
+                              substituteGroup: null, // eslint-disable-line unicorn/no-null -- MongoDB $unset requires null
+                            });
+                          })
+                        );
+                        if (failed > 0) {
+                          showToast(
+                            `${failed} of ${entries.length} items failed to update.`,
+                            "error"
+                          );
+                        } else if (succeeded > 0) {
+                          showToast(
+                            `Substitute group removed from ${succeeded} item(s).`,
+                            "success"
+                          );
+                        }
+                      },
+                      label: "Remove Substitute Group",
+                    },
+                    MENU_SEPERATOR,
+                    ...(() => {
+                      const entries = absoluteEntries();
+                      const someDismissed = entries.some((entry) =>
+                        mongoFs.isCachedDismissed(
+                          basename(entry, ".json"),
+                          mongoDb,
+                          mongoCol
+                        )
+                      );
+                      const someNotDismissed = entries.some(
+                        (entry) =>
+                          !mongoFs.isCachedDismissed(
+                            basename(entry, ".json"),
+                            mongoDb,
+                            mongoCol
+                          )
+                      );
+                      const items: MenuItem[] = [];
 
-                    return items;
-                  })(),
+                      if (someNotDismissed) {
+                        items.push({
+                          action: async () => {
+                            const toDismiss = entries.filter(
+                              (entry) =>
+                                !mongoFs.isCachedDismissed(
+                                  basename(entry, ".json"),
+                                  mongoDb,
+                                  mongoCol
+                                )
+                            );
+                            const dismissedEntries: string[] = [];
+                            const { succeeded, failed } =
+                              await runMongoPatchBatch(
+                                toDismiss.map((entry) => async () => {
+                                  const relativePath = entry.replace(
+                                    `${mountUrl}/`,
+                                    ""
+                                  );
+                                  await mongoFs.patchDocument(relativePath, {
+                                    dismissed: true,
+                                  });
+                                  dismissedEntries.push(entry);
+                                })
+                              );
+                            if (failed > 0) {
+                              showToast(
+                                `${failed} of ${toDismiss.length} items failed to dismiss.`,
+                                "error"
+                              );
+                            } else if (succeeded > 0) {
+                              showToast(
+                                `${succeeded} item(s) dismissed.`,
+                                "success"
+                              );
+                            }
+                            if (
+                              dismissedEntries.length > 0 &&
+                              hideDismissed &&
+                              setFiles
+                            ) {
+                              setFiles((currentFiles) => {
+                                if (!currentFiles) return currentFiles;
+                                const updated = { ...currentFiles };
+                                for (const entry of dismissedEntries) {
+                                  delete updated[basename(entry)];
+                                }
+                                return updated;
+                              });
+                            }
+                          },
+                          label: "Dismiss",
+                        });
+                      }
+
+                      if (someDismissed) {
+                        items.push({
+                          action: async () => {
+                            const toUndismiss = entries.filter((entry) =>
+                              mongoFs.isCachedDismissed(
+                                basename(entry, ".json"),
+                                mongoDb,
+                                mongoCol
+                              )
+                            );
+                            const { succeeded, failed } =
+                              await runMongoPatchBatch(
+                                toUndismiss.map((entry) => () => {
+                                  const relativePath = entry.replace(
+                                    `${mountUrl}/`,
+                                    ""
+                                  );
+                                  return mongoFs.patchDocument(relativePath, {
+                                    dismissed: null, // eslint-disable-line unicorn/no-null -- MongoDB $unset requires null
+                                  });
+                                })
+                              );
+                            if (failed > 0) {
+                              showToast(
+                                `${failed} of ${toUndismiss.length} items failed to undismiss.`,
+                                "error"
+                              );
+                            } else if (succeeded > 0) {
+                              showToast(
+                                `${succeeded} item(s) undismissed.`,
+                                "success"
+                              );
+                            }
+                          },
+                          label: "Undismiss",
+                        });
+                      }
+
+                      return items;
+                    })(),
                   ];
                 })()
               : []),
@@ -602,9 +746,8 @@ const useFileContextMenu = (
                             absoluteEntry,
                             extname(absoluteEntry)
                           )}.${extension}`;
-                          const { convertSheet } = await import(
-                            "utils/sheetjs"
-                          );
+                          const { convertSheet } =
+                            await import("utils/sheetjs");
                           const workBook = await convertSheet(
                             await readFile(absoluteEntry),
                             extension

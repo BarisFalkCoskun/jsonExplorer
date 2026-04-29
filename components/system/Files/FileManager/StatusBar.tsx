@@ -18,6 +18,7 @@ import { getFormattedSize, haltEvent, label } from "utils/functions";
 import { UNKNOWN_SIZE } from "contexts/fileSystem/core";
 import Icon from "styles/common/Icon";
 import Button from "styles/common/Button";
+import { getPerfDuration, getPerfNow, logPerf } from "utils/perfDiagnostics";
 
 type StatusBarProps = {
   count: number;
@@ -72,29 +73,51 @@ const StatusBar: FC<StatusBarProps> = ({
   const statusBarRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    const updateSelectedSize = async (): Promise<void> =>
-      setSelectedSize(
-        await selected.reduce(async (totalSize, file) => {
-          const currentSize = await totalSize;
+    const startedAt = getPerfNow();
+    let existsChecks = 0;
+    let lstatChecks = 0;
+    let statChecks = 0;
 
-          if (currentSize === UNCALCULATED_SIZE) return UNCALCULATED_SIZE;
+    const updateSelectedSize = async (): Promise<void> => {
+      const size = await selected.reduce(async (totalSize, file) => {
+        const currentSize = await totalSize;
 
-          const path = join(directory, file);
+        if (currentSize === UNCALCULATED_SIZE) return UNCALCULATED_SIZE;
 
-          try {
-            if (await exists(path)) {
-              return (await lstat(path)).isDirectory()
-                ? UNCALCULATED_SIZE
-                : (currentSize === UNKNOWN_SIZE ? 0 : currentSize) +
-                    (await stat(path)).size;
+        const path = join(directory, file);
+
+        try {
+          existsChecks += 1;
+          if (await exists(path)) {
+            lstatChecks += 1;
+            if ((await lstat(path)).isDirectory()) {
+              return UNCALCULATED_SIZE;
             }
-          } catch {
-            // Ignore errors getting file sizes
-          }
 
-          return totalSize;
-        }, Promise.resolve(UNKNOWN_SIZE))
-      );
+            statChecks += 1;
+            return (
+              (currentSize === UNKNOWN_SIZE ? 0 : currentSize) +
+              (await stat(path)).size
+            );
+          }
+        } catch {
+          // Ignore errors getting file sizes
+        }
+
+        return totalSize;
+      }, Promise.resolve(UNKNOWN_SIZE));
+
+      setSelectedSize(size);
+      logPerf("status-selected-size", {
+        directory,
+        durationMs: getPerfDuration(startedAt),
+        existsChecks,
+        lstatChecks,
+        selectedCount: selected.length,
+        size,
+        statChecks,
+      });
+    };
 
     updateSelectedSize();
   }, [directory, exists, lstat, selected, stat]);
@@ -143,7 +166,9 @@ const StatusBar: FC<StatusBarProps> = ({
           </Button>
         </div>
       )}
-      {(onToggleHideCategorized || onToggleHideDismissed || onToggleHideSubstituteGroup) && (
+      {(onToggleHideCategorized ||
+        onToggleHideDismissed ||
+        onToggleHideSubstituteGroup) && (
         <div className="hide-toggles">
           {onToggleHideCategorized && (
             <Button

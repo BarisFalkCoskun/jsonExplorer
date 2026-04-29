@@ -21,6 +21,7 @@ import {
   saveUnpositionedDesktopIcons,
   sendMouseClick,
 } from "utils/functions";
+import { getPerfDuration, getPerfNow, logPerf } from "utils/perfDiagnostics";
 
 type KeyboardShortcutEntry = (file?: string) => React.KeyboardEventHandler;
 
@@ -120,18 +121,48 @@ const useFileKeyboardShortcuts = (
         const onDelete = async (): Promise<void> => {
           if (focusedEntries.length > 0) {
             haltEvent(event);
+            const deleteStartedAt = getPerfNow();
+            const entriesToDelete = [...focusedEntries];
 
             if (url === DESKTOP_PATH) {
               saveUnpositionedDesktopIcons(setIconPositions);
             }
 
             const results = await Promise.allSettled(
-              focusedEntries.map(async (entry) => {
+              entriesToDelete.map(async (entry) => {
                 const path = join(url, entry);
+                const entryDeleteStartedAt = getPerfNow();
+                const deleted = await deletePath(path);
+                const deleteMs = getPerfDuration(entryDeleteStartedAt);
+                let updateMs = 0;
 
-                if (await deletePath(path)) updateFiles(undefined, path);
+                if (deleted) {
+                  const updateStartedAt = getPerfNow();
+                  await Promise.resolve(updateFiles(undefined, path));
+                  updateMs = getPerfDuration(updateStartedAt);
+                }
+
+                return { deleteMs, deleted, updateMs };
               })
             );
+            const fulfilled = results.filter(
+              (
+                result
+              ): result is PromiseFulfilledResult<{
+                deleteMs: number;
+                deleted: boolean;
+                updateMs: number;
+              }> => result.status === "fulfilled"
+            );
+            const deleteDurations = fulfilled.map(
+              ({ value }) => value.deleteMs
+            );
+            const updateDurations = fulfilled.map(
+              ({ value }) => value.updateMs
+            );
+            const succeeded = fulfilled.filter(
+              ({ value }) => value.deleted
+            ).length;
 
             for (const result of results) {
               if (result.status === "rejected") {
@@ -139,6 +170,35 @@ const useFileKeyboardShortcuts = (
               }
             }
 
+            logPerf("keyboard-delete", {
+              avgDeleteMs:
+                deleteDurations.length > 0
+                  ? Number(
+                      (
+                        deleteDurations.reduce((sum, ms) => sum + ms, 0) /
+                        deleteDurations.length
+                      ).toFixed(1)
+                    )
+                  : 0,
+              avgUpdateMs:
+                updateDurations.length > 0
+                  ? Number(
+                      (
+                        updateDurations.reduce((sum, ms) => sum + ms, 0) /
+                        updateDurations.length
+                      ).toFixed(1)
+                    )
+                  : 0,
+              count: entriesToDelete.length,
+              failed: results.length - fulfilled.length,
+              maxDeleteMs:
+                deleteDurations.length > 0 ? Math.max(...deleteDurations) : 0,
+              maxUpdateMs:
+                updateDurations.length > 0 ? Math.max(...updateDurations) : 0,
+              succeeded,
+              totalMs: getPerfDuration(deleteStartedAt),
+              url,
+            });
             blurEntry();
           }
         };

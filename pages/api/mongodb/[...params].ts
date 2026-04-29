@@ -1,6 +1,20 @@
-import { type NextApiRequest, type NextApiResponse } from 'next';
-import { MongoClient } from 'mongodb';
-import { addThumbnailFields, ALLOWED_METHODS, getDocumentFilters, getMongoDocumentImageUrls, LISTING_PROJECTION, normalizeMongoImageSource, PREFERRED_DOCUMENT_LABEL_AGGREGATION, sanitizeFilter } from "utils/mongoApi";
+import { type NextApiRequest, type NextApiResponse } from "next";
+import { MongoClient } from "mongodb";
+import {
+  addThumbnailFields,
+  ALLOWED_METHODS,
+  getDocumentFilters,
+  getMongoDocumentImageUrls,
+  LISTING_PROJECTION,
+  normalizeMongoImageSource,
+  PREFERRED_DOCUMENT_LABEL_AGGREGATION,
+  sanitizeFilter,
+} from "utils/mongoApi";
+import {
+  getPerfDuration,
+  getPerfNow,
+  logServerPerf,
+} from "utils/perfDiagnostics";
 
 type MongoClientCacheEntry = {
   client?: MongoClient;
@@ -43,7 +57,9 @@ const evictOldestClient = (): void => {
   }
 };
 
-async function connectToMongoDB(connectionString: string): Promise<MongoClient> {
+async function connectToMongoDB(
+  connectionString: string
+): Promise<MongoClient> {
   evictStaleClients();
 
   const cachedEntry = clientCache.get(connectionString);
@@ -129,8 +145,7 @@ const handleDatabases = async (
       return;
     }
   } catch (listDatabasesError) {
-    const fallback =
-      extractDatabaseNameFromConnectionString(connectionString);
+    const fallback = extractDatabaseNameFromConnectionString(connectionString);
 
     if (fallback) {
       res.json([fallback]);
@@ -154,7 +169,7 @@ const handleCollections = async (
   const [dbName] = operationParams;
 
   if (!dbName) {
-    res.status(400).json({ error: 'Database name required' });
+    res.status(400).json({ error: "Database name required" });
     return;
   }
 
@@ -170,24 +185,25 @@ const handleDocuments = async (
   req: NextApiRequest,
   res: NextApiResponse
 ): Promise<void> => {
+  const startedAt = getPerfNow();
   const [dbName, collectionName] = operationParams;
 
   if (!dbName || !collectionName) {
-    res.status(400).json({ error: 'Database and collection name required' });
+    res.status(400).json({ error: "Database and collection name required" });
     return;
   }
 
   const db = client.db(dbName);
   const collection = db.collection(collectionName);
-  const metaOnly = req.query.meta === '1' || req.query.meta === 'true';
+  const metaOnly = req.query.meta === "1" || req.query.meta === "true";
   const imageSource = normalizeMongoImageSource(req.query.imageSource);
   let filter: Record<string, unknown> = {};
 
-  if (typeof req.query.filter === 'string') {
+  if (typeof req.query.filter === "string") {
     try {
       filter = JSON.parse(req.query.filter) as Record<string, unknown>;
     } catch {
-      res.status(400).json({ error: 'Invalid filter JSON' });
+      res.status(400).json({ error: "Invalid filter JSON" });
       return;
     }
   }
@@ -195,17 +211,24 @@ const handleDocuments = async (
   try {
     sanitizeFilter(filter);
   } catch (sanitizeError) {
-    res.status(400).json({ error: sanitizeError instanceof Error ? sanitizeError.message : 'Invalid filter' });
+    res.status(400).json({
+      error:
+        sanitizeError instanceof Error
+          ? sanitizeError.message
+          : "Invalid filter",
+    });
     return;
   }
 
   const limit = Math.min(Number(req.query.limit) || 500, 2000);
-  const afterLabel = typeof req.query.afterLabel === 'string'
-    ? req.query.afterLabel
-    : typeof req.query.afterName === 'string'
-      ? req.query.afterName
-      : undefined;
-  const afterId = typeof req.query.afterId === 'string' ? req.query.afterId : undefined;
+  const afterLabel =
+    typeof req.query.afterLabel === "string"
+      ? req.query.afterLabel
+      : typeof req.query.afterName === "string"
+        ? req.query.afterName
+        : undefined;
+  const afterId =
+    typeof req.query.afterId === "string" ? req.query.afterId : undefined;
   const pipeline: Record<string, unknown>[] = [];
 
   if (Object.keys(filter).length > 0) {
@@ -214,7 +237,7 @@ const handleDocuments = async (
 
   pipeline.push({
     $addFields: {
-      __sortId: { $toString: '$_id' },
+      __sortId: { $toString: "$_id" },
       __sortLabel: PREFERRED_DOCUMENT_LABEL_AGGREGATION,
     },
   });
@@ -259,11 +282,19 @@ const handleDocuments = async (
   const documents = await collection.aggregate(pipeline).toArray();
 
   if (metaOnly) {
-    res.json(
-      documents.map((doc) =>
-        addThumbnailFields(doc as Record<string, unknown>, imageSource)
-      )
+    const metaThumbnailStartedAt = getPerfNow();
+    const metaResponseDocuments = documents.map((doc) =>
+      addThumbnailFields(doc as Record<string, unknown>, imageSource)
     );
+    logServerPerf("mongodb-documents", {
+      collectionName,
+      count: metaResponseDocuments.length,
+      dbName,
+      durationMs: getPerfDuration(startedAt),
+      metaOnly,
+      thumbnailMs: getPerfDuration(metaThumbnailStartedAt),
+    });
+    res.json(metaResponseDocuments);
     return;
   }
 
@@ -271,18 +302,31 @@ const handleDocuments = async (
   if (hasMore) documents.pop();
 
   const lastDoc = documents.at(-1);
-  const nextCursor = hasMore && lastDoc
-    ? {
-        afterId: String(lastDoc.__sortId ?? lastDoc._id ?? ''),
-        afterLabel: String(lastDoc.__sortLabel ?? ''),
-      }
-    // eslint-disable-next-line unicorn/no-null -- JSON response needs explicit null, not undefined (which is dropped)
-    : null;
+  const nextCursor =
+    hasMore && lastDoc
+      ? {
+          afterId: String(lastDoc.__sortId ?? lastDoc._id ?? ""),
+          afterLabel: String(lastDoc.__sortLabel ?? ""),
+        }
+      : // eslint-disable-next-line unicorn/no-null -- JSON response needs explicit null, not undefined (which is dropped)
+        null;
+
+  const pageThumbnailStartedAt = getPerfNow();
+  const pageResponseDocuments = documents.map((doc) =>
+    addThumbnailFields(doc as Record<string, unknown>, imageSource)
+  );
+  logServerPerf("mongodb-documents", {
+    collectionName,
+    count: pageResponseDocuments.length,
+    dbName,
+    durationMs: getPerfDuration(startedAt),
+    hasMore,
+    metaOnly,
+    thumbnailMs: getPerfDuration(pageThumbnailStartedAt),
+  });
 
   res.json({
-    documents: documents.map((doc) =>
-      addThumbnailFields(doc as Record<string, unknown>, imageSource)
-    ),
+    documents: pageResponseDocuments,
     hasMore,
     nextCursor,
   });
@@ -295,28 +339,30 @@ const handleDocument = async (
   res: NextApiResponse
 ): Promise<void> => {
   const [dbName, collectionName, ...documentIdParts] = operationParams;
-  const documentId = documentIdParts.join('/');
+  const documentId = documentIdParts.join("/");
 
   if (!dbName || !collectionName || !documentId) {
-    res.status(400).json({ error: 'Database, collection, and document ID required' });
+    res
+      .status(400)
+      .json({ error: "Database, collection, and document ID required" });
     return;
   }
 
   const db = client.db(dbName);
   const collection = db.collection(collectionName);
 
-  if (req.method === 'GET') {
+  if (req.method === "GET") {
     const doc = await collection.findOne({
       $or: getDocumentFilters(documentId),
     });
 
     if (!doc) {
-      res.status(404).json({ error: 'Document not found' });
+      res.status(404).json({ error: "Document not found" });
       return;
     }
 
     res.json(doc);
-  } else if (req.method === 'PATCH') {
+  } else if (req.method === "PATCH") {
     const updates = req.body as Record<string, unknown> | undefined;
 
     if (!updates || typeof updates !== "object") {
@@ -359,8 +405,11 @@ const handleDocument = async (
       updateOps
     );
 
-    res.json({ matchedCount: result.matchedCount, modifiedCount: result.modifiedCount });
-  } else if (req.method === 'PUT') {
+    res.json({
+      matchedCount: result.matchedCount,
+      modifiedCount: result.modifiedCount,
+    });
+  } else if (req.method === "PUT") {
     const updateDoc = req.body as Record<string, unknown> | undefined;
 
     if (!updateDoc || typeof updateDoc !== "object") {
@@ -380,22 +429,30 @@ const handleDocument = async (
     );
 
     if (result.matchedCount === 0) {
-      const insertDoc = typeof rawId === "string"
-        ? { _id: rawId as any, ...docWithoutId }
-        : docWithoutId;
+      const insertDoc =
+        typeof rawId === "string"
+          ? { _id: rawId as any, ...docWithoutId }
+          : docWithoutId;
       await collection.insertOne(insertDoc as any);
     }
     /* eslint-enable @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment */
 
     res.json({ success: true });
-  } else if (req.method === 'DELETE') {
+  } else if (req.method === "DELETE") {
+    const deleteStartedAt = getPerfNow();
     const result = await collection.deleteOne({
       $or: getDocumentFilters(documentId),
+    });
+    logServerPerf("mongodb-document-delete", {
+      collectionName,
+      dbName,
+      deletedCount: result.deletedCount,
+      durationMs: getPerfDuration(deleteStartedAt),
     });
 
     res.json({ deletedCount: result.deletedCount });
   } else {
-    res.status(405).json({ error: 'Method not allowed' });
+    res.status(405).json({ error: "Method not allowed" });
   }
 };
 
@@ -405,11 +462,14 @@ const handleImages = async (
   req: NextApiRequest,
   res: NextApiResponse
 ): Promise<void> => {
+  const startedAt = getPerfNow();
   const [dbName, collectionName, ...documentIdParts] = operationParams;
-  const documentId = documentIdParts.join('/');
+  const documentId = documentIdParts.join("/");
 
   if (!dbName || !collectionName || !documentId) {
-    res.status(400).json({ error: 'Database, collection, and document ID required' });
+    res
+      .status(400)
+      .json({ error: "Database, collection, and document ID required" });
     return;
   }
 
@@ -422,7 +482,7 @@ const handleImages = async (
   });
 
   if (!docWithImages) {
-    res.status(404).json({ error: 'Document not found' });
+    res.status(404).json({ error: "Document not found" });
     return;
   }
 
@@ -430,6 +490,12 @@ const handleImages = async (
     docWithImages as Record<string, unknown>,
     imageSource
   );
+  logServerPerf("mongodb-images", {
+    collectionName,
+    count: validImages.length,
+    dbName,
+    durationMs: getPerfDuration(startedAt),
+  });
 
   res.json({
     document: {
@@ -448,14 +514,12 @@ const handleMkdir = async (
   const [mkdirDb, mkdirCollection] = operationParams;
 
   if (!mkdirDb) {
-    res.status(400).json({ error: 'Database name required' });
+    res.status(400).json({ error: "Database name required" });
     return;
   }
 
   // MongoDB databases only exist while they have collections
-  await client
-    .db(mkdirDb)
-    .createCollection(mkdirCollection || '_placeholder');
+  await client.db(mkdirDb).createCollection(mkdirCollection || "_placeholder");
 
   res.json({ success: true });
 };
@@ -468,7 +532,7 @@ const handleDropCollection = async (
   const [dbName, collectionName] = operationParams;
 
   if (!dbName || !collectionName) {
-    res.status(400).json({ error: 'Database and collection name required' });
+    res.status(400).json({ error: "Database and collection name required" });
     return;
   }
 
@@ -484,7 +548,7 @@ const handleDropDatabase = async (
   const [dbName] = operationParams;
 
   if (!dbName) {
-    res.status(400).json({ error: 'Database name required' });
+    res.status(400).json({ error: "Database name required" });
     return;
   }
 
@@ -497,7 +561,7 @@ const handleTest = async (
   res: NextApiResponse
 ): Promise<void> => {
   await client.db().admin().ping();
-  res.json({ message: 'Connected to MongoDB', success: true });
+  res.json({ message: "Connected to MongoDB", success: true });
 };
 
 export default async function handler(
@@ -509,19 +573,23 @@ export default async function handler(
 
   const allowed = ALLOWED_METHODS[operation];
   if (!allowed) {
-    res.status(400).json({ error: 'Unknown operation' });
+    res.status(400).json({ error: "Unknown operation" });
     return;
   }
-  if (!allowed.includes(req.method ?? '')) {
-    res.setHeader('Allow', allowed.join(', '));
-    res.status(405).json({ error: `Method ${req.method} not allowed for ${operation}` });
+  if (!allowed.includes(req.method ?? "")) {
+    res.setHeader("Allow", allowed.join(", "));
+    res
+      .status(405)
+      .json({ error: `Method ${req.method} not allowed for ${operation}` });
     return;
   }
 
-  const connectionString = req.headers['x-mongodb-connection'] as string | undefined;
+  const connectionString = req.headers["x-mongodb-connection"] as
+    | string
+    | undefined;
 
   if (!connectionString) {
-    res.status(400).json({ error: 'Missing x-mongodb-connection header' });
+    res.status(400).json({ error: "Missing x-mongodb-connection header" });
     return;
   }
 
@@ -529,41 +597,41 @@ export default async function handler(
     const client = await connectToMongoDB(connectionString);
 
     switch (operation) {
-      case 'databases':
+      case "databases":
         await handleDatabases(client, connectionString, res);
         break;
-      case 'collections':
+      case "collections":
         await handleCollections(client, operationParams, res);
         break;
-      case 'documents':
+      case "documents":
         await handleDocuments(client, operationParams, req, res);
         break;
-      case 'document':
+      case "document":
         await handleDocument(client, operationParams, req, res);
         break;
-      case 'images':
+      case "images":
         await handleImages(client, operationParams, req, res);
         break;
-      case 'mkdir':
+      case "mkdir":
         await handleMkdir(client, operationParams, res);
         break;
-      case 'drop-collection':
+      case "drop-collection":
         await handleDropCollection(client, operationParams, res);
         break;
-      case 'drop-database':
+      case "drop-database":
         await handleDropDatabase(client, operationParams, res);
         break;
-      case 'test':
+      case "test":
         await handleTest(client, res);
         break;
       default:
-        res.status(400).json({ error: 'Unknown operation' });
+        res.status(400).json({ error: "Unknown operation" });
     }
   } catch (error) {
-    console.error('MongoDB API Error:', error);
+    console.error("MongoDB API Error:", error);
     res.status(500).json({
-      details: error instanceof Error ? error.message : 'Unknown error',
-      error: 'Database operation failed',
+      details: error instanceof Error ? error.message : "Unknown error",
+      error: "Database operation failed",
     });
   }
 }

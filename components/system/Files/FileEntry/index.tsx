@@ -32,7 +32,10 @@ import { type SelectionRect } from "components/system/Files/FileManager/Selectio
 import { type FileStat } from "components/system/Files/FileManager/functions";
 import useFileDrop from "components/system/Files/FileManager/useFileDrop";
 import { type FocusEntryFunctions } from "components/system/Files/FileManager/useFocusableEntries";
-import { type FileActions, type Files } from "components/system/Files/FileManager/useFolder";
+import {
+  type FileActions,
+  type Files,
+} from "components/system/Files/FileManager/useFolder";
 import { ICON_ZOOM_LEVELS } from "components/system/Files/FileManager/constants";
 import {
   type FileManagerViewNames,
@@ -70,6 +73,12 @@ import {
   isYouTubeUrl,
   preloadImage,
 } from "utils/functions";
+import {
+  getPerfDuration,
+  getPerfNow,
+  isPerfDiagnosticsEnabled,
+  logPerf,
+} from "utils/perfDiagnostics";
 import { spotlightEffect } from "utils/spotlightEffect";
 import { useIsVisible } from "hooks/useIsVisible";
 import { UNKNOWN_SIZE } from "contexts/fileSystem/core";
@@ -136,6 +145,70 @@ const truncateName = (
 
 const NO_MANAGER_ID = "__no-manager-id__";
 const focusingMap = new Map<string, string[]>();
+
+type SelectionFrameDiagnostics = {
+  blurred: number;
+  checks: number;
+  focused: number;
+  focusedCount: number;
+  geometryMs: number;
+  managerId?: string;
+  selected: number;
+  startedAt: number;
+};
+
+let selectionFrameDiagnostics: SelectionFrameDiagnostics | undefined;
+let selectionFrameLogRequest = 0;
+
+const recordSelectionIntersectionDiagnostics = ({
+  blurred,
+  focused,
+  focusedCount,
+  geometryMs,
+  managerId,
+  selected,
+}: Omit<SelectionFrameDiagnostics, "checks" | "startedAt">): void => {
+  if (!isPerfDiagnosticsEnabled() || typeof window === "undefined") return;
+
+  selectionFrameDiagnostics ??= {
+    blurred: 0,
+    checks: 0,
+    focused: 0,
+    focusedCount,
+    geometryMs: 0,
+    managerId,
+    selected: 0,
+    startedAt: getPerfNow(),
+  };
+
+  selectionFrameDiagnostics.blurred += blurred;
+  selectionFrameDiagnostics.checks += 1;
+  selectionFrameDiagnostics.focused += focused;
+  selectionFrameDiagnostics.focusedCount = focusedCount;
+  selectionFrameDiagnostics.geometryMs += geometryMs;
+  selectionFrameDiagnostics.managerId = managerId;
+  selectionFrameDiagnostics.selected += selected;
+
+  if (selectionFrameLogRequest) return;
+
+  selectionFrameLogRequest = window.requestAnimationFrame(() => {
+    if (selectionFrameDiagnostics) {
+      logPerf("selection-intersections", {
+        blurred: selectionFrameDiagnostics.blurred,
+        checks: selectionFrameDiagnostics.checks,
+        durationMs: getPerfDuration(selectionFrameDiagnostics.startedAt),
+        focused: selectionFrameDiagnostics.focused,
+        focusedCount: selectionFrameDiagnostics.focusedCount,
+        geometryMs: Number(selectionFrameDiagnostics.geometryMs.toFixed(1)),
+        managerId: selectionFrameDiagnostics.managerId,
+        selected: selectionFrameDiagnostics.selected,
+      });
+    }
+
+    selectionFrameDiagnostics = undefined;
+    selectionFrameLogRequest = 0;
+  });
+};
 
 const getFocusing = (id?: string): string[] => {
   const key = id ?? NO_MANAGER_ID;
@@ -363,7 +436,14 @@ const FileEntry: FC<FileEntryProps> = ({
     if (isMongoDocument && hasNavigationArrows) {
       setShowImageNavigation(true);
     }
-  }, [createTooltip, isDirectory, listView, preloadImages, isMongoDocument, hasNavigationArrows]);
+  }, [
+    createTooltip,
+    isDirectory,
+    listView,
+    preloadImages,
+    isMongoDocument,
+    hasNavigationArrows,
+  ]);
 
   const onMouseLeaveButton = useCallback(() => {
     setShowImageNavigation(false);
@@ -587,12 +667,16 @@ const FileEntry: FC<FileEntryProps> = ({
       }
 
       if (selectionRect) {
+        const geometryStartedAt = getPerfNow();
+        const buttonRect = buttonRef.current.getBoundingClientRect();
+        const managerRect = fileManagerRef.current.getBoundingClientRect();
         const selected = isSelectionIntersecting(
-          buttonRef.current.getBoundingClientRect(),
-          fileManagerRef.current.getBoundingClientRect(),
+          buttonRect,
+          managerRect,
           selectionRect,
           fileManagerRef.current.scrollTop
         );
+        const geometryMs = getPerfNow() - geometryStartedAt;
 
         if (selected && !isFocused) {
           currentFocusing.push(fileName);
@@ -601,6 +685,15 @@ const FileEntry: FC<FileEntryProps> = ({
         } else if (!selected && isFocused) {
           blurEntry(fileName);
         }
+
+        recordSelectionIntersectionDiagnostics({
+          blurred: !selected && isFocused ? 1 : 0,
+          focused: selected && !isFocused ? 1 : 0,
+          focusedCount: focusedEntries.length,
+          geometryMs,
+          managerId: fileManagerId,
+          selected: selected ? 1 : 0,
+        });
       } else if (
         isFocused &&
         buttonRef.current !== document.activeElement &&
@@ -659,7 +752,7 @@ const FileEntry: FC<FileEntryProps> = ({
             role: "heading",
           })}
         >
-          <div style={{ position: 'relative' }}>
+          <div style={{ position: "relative" }}>
             <Icon
               ref={iconRef}
               $eager={loadIconImmediately}
