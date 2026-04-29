@@ -27,12 +27,15 @@ type StatusBarProps = {
   hideDismissed?: boolean;
   hideSubstituteGroup?: boolean;
   iconZoomLevel: number;
+  localImages?: boolean;
   onToggleHideCategorized?: () => void;
   onToggleHideDismissed?: () => void;
   onToggleHideSubstituteGroup?: () => void;
+  onToggleImageSource?: () => void;
   selected: string[];
   setIconZoomLevel: React.Dispatch<React.SetStateAction<number>>;
   setView: (view: FileManagerViewNames) => void;
+  totalCount?: number;
   view: FileManagerViewNames;
 };
 
@@ -46,12 +49,15 @@ const StatusBar: FC<StatusBarProps> = ({
   hideDismissed,
   hideSubstituteGroup,
   iconZoomLevel,
+  localImages,
   onToggleHideCategorized,
   onToggleHideDismissed,
   onToggleHideSubstituteGroup,
+  onToggleImageSource,
   selected,
   setIconZoomLevel,
   setView,
+  totalCount,
   view,
 }) => {
   const { exists, lstat, stat } = useFileSystem();
@@ -114,7 +120,9 @@ const StatusBar: FC<StatusBarProps> = ({
       {...fileDrop}
     >
       <div {...label("Total item count")}>
-        {count} item{count === 1 ? "" : "s"}
+        {typeof totalCount === "number" && totalCount !== count
+          ? `${count} of ${totalCount} items`
+          : `${count} item${count === 1 ? "" : "s"}`}
       </div>
       {showSelected && selected.length > 0 && (
         <div className="selected" {...label("Selected item count and size")}>
@@ -122,6 +130,17 @@ const StatusBar: FC<StatusBarProps> = ({
           {selectedSize !== UNKNOWN_SIZE && selectedSize !== UNCALCULATED_SIZE
             ? `\u00A0\u00A0${getFormattedSize(selectedSize)}`
             : ""}
+        </div>
+      )}
+      {onToggleImageSource && (
+        <div className="hide-toggles">
+          <Button
+            className={`hide-toggle${localImages ? " active" : ""}`}
+            onClick={onToggleImageSource}
+            {...label("Toggle between local and external image loading")}
+          >
+            {localImages ? "Local Imgs" : "External Imgs"}
+          </Button>
         </div>
       )}
       {(onToggleHideCategorized || onToggleHideDismissed || onToggleHideSubstituteGroup) && (

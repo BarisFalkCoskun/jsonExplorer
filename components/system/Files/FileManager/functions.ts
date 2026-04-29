@@ -32,8 +32,25 @@ type FileStats = [string, FileStat];
 
 type SortFunction = (a: FileStats, b: FileStats) => number;
 
-const getEntrySortName = ([name, { displayName }]: FileStats): string =>
+export const getDisplayName = (name: string, { displayName }: FileStat): string =>
   displayName || name;
+
+export const matchesFileFilter = (
+  name: string,
+  stats: FileStat,
+  searchTerm: string
+): boolean => {
+  const normalizedSearchTerm = searchTerm.trim().toLocaleLowerCase();
+
+  if (!normalizedSearchTerm) return true;
+
+  return [getDisplayName(name, stats), name].some((value) =>
+    value.toLocaleLowerCase().includes(normalizedSearchTerm)
+  );
+};
+
+const getEntrySortName = ([name, stats]: FileStats): string =>
+  getDisplayName(name, stats);
 
 const sortByName = (a: FileStats, b: FileStats): number => {
   const diff = getEntrySortName(a).localeCompare(getEntrySortName(b), "en", {

@@ -7,6 +7,7 @@ import {
   DEFAULT_COLUMNS,
   type Columns as ColumnsObject,
 } from "components/system/Files/FileManager/Columns/constants";
+import { matchesFileFilter } from "components/system/Files/FileManager/functions";
 import FileEntry from "components/system/Files/FileEntry";
 import StyledSelection from "components/system/Files/FileManager/Selection/StyledSelection";
 import useSelection from "components/system/Files/FileManager/Selection/useSelection";
@@ -56,6 +57,7 @@ type FileManagerProps = {
   isStartMenu?: boolean;
   loadIconsImmediately?: boolean;
   readOnly?: boolean;
+  searchTerm?: string;
   showStatusBar?: boolean;
   skipFsWatcher?: boolean;
   skipSorting?: boolean;
@@ -75,6 +77,7 @@ const FileManager: FC<FileManagerProps> = ({
   isStartMenu,
   loadIconsImmediately,
   readOnly,
+  searchTerm = "",
   showStatusBar,
   skipFsWatcher,
   skipSorting,
@@ -353,6 +356,37 @@ const FileManager: FC<FileManagerProps> = ({
       updateFiles();
     }
   }, [hideCategorized, hideDismissed, hideSubstituteGroup, mongoCollection, mongoFs, setFiles, setHideSubstituteGroup, updateFiles, url]);
+  const [localImages, setLocalImages] = useState(() => mongoFs?.imageSource === "productImages");
+  useEffect(() => {
+    if (mongoFs) setLocalImages(mongoFs.imageSource === "productImages");
+  }, [mongoFs]);
+  const handleToggleImageSource = useCallback(() => {
+    if (!mongoFs || !mountUrl) return;
+
+    const newSource = mongoFs.imageSource === "productImages" ? "images" : "productImages";
+    mongoFs.setImageSource(newSource);
+    setLocalImages(newSource === "productImages");
+
+    // Persist to localStorage connections
+    try {
+      const raw = localStorage.getItem("mongodbConnections");
+
+      if (raw) {
+        const connections = JSON.parse(raw) as { connectionString: string; imageSource?: string }[];
+        const updated = connections.map((c) =>
+          c.connectionString === mongoFs.getConnectionString()
+            ? { ...c, imageSource: newSource }
+            : c
+        );
+        localStorage.setItem("mongodbConnections", JSON.stringify(updated));
+      }
+    } catch {
+      // Ignore localStorage errors
+    }
+
+    allFilesRef.current = undefined;
+    updateFiles();
+  }, [mongoFs, mountUrl, updateFiles]);
   const handleDismiss = useCallback(
     async (entries: string[]) => {
       if (!mongoFs || !mountUrl) return;
@@ -502,8 +536,21 @@ const FileManager: FC<FileManagerProps> = ({
     [setViews, url]
   );
   const isIconView = useMemo(() => view === "icon", [view]);
+  const totalFileCount = useMemo(() => Object.keys(files).length, [files]);
+  const filteredFiles = useMemo(() => {
+    const trimmedSearchTerm = searchTerm.trim();
+
+    if (!trimmedSearchTerm) return files;
+
+    return Object.fromEntries(
+      Object.entries(files).filter(([file, stats]) =>
+        matchesFileFilter(file, stats, trimmedSearchTerm)
+      )
+    );
+  }, [files, searchTerm]);
+  const fileKeys = useMemo(() => Object.keys(filteredFiles), [filteredFiles]);
   const keyShortcuts = useFileKeyboardShortcuts(
-    files,
+    filteredFiles,
     url,
     focusedEntries,
     setRenaming,
@@ -529,14 +576,14 @@ const FileManager: FC<FileManagerProps> = ({
     () => (renaming === "" ? keyShortcuts() : undefined),
     [keyShortcuts, renaming]
   );
-  const fileKeys = useMemo(() => Object.keys(files), [files]);
   const getEntryLabel = useCallback(
     (file: string): string =>
+      filteredFiles[file]?.displayName ||
       files[file]?.displayName ||
       (isMongoFS
         ? MongoDBFileSystem.decodeDocumentIdentifier(basename(file, ".json"))
         : basename(file, SHORTCUT_EXTENSION)),
-    [files, isMongoFS]
+    [files, filteredFiles, isMongoFS]
   );
   const quickLookLabels = useMemo(
     () =>
@@ -544,9 +591,19 @@ const FileManager: FC<FileManagerProps> = ({
     [fileKeys, getEntryLabel]
   );
   const isEmptyFolder = useMemo(
-    () => !isDesktop && !isStartMenu && !loading && fileKeys.length === 0,
-    [fileKeys.length, isDesktop, isStartMenu, loading]
+    () => !isDesktop && !isStartMenu && !loading && totalFileCount === 0,
+    [isDesktop, isStartMenu, loading, totalFileCount]
   );
+
+  useEffect(() => {
+    if (!searchTerm.trim() || focusedEntries.length === 0) return;
+
+    const visibleEntries = new Set(fileKeys);
+
+    focusedEntries
+      .filter((entry) => !visibleEntries.has(entry))
+      .forEach((entry) => focusFunctions.blurEntry(entry));
+  }, [fileKeys, focusedEntries, focusFunctions.blurEntry, searchTerm]);
 
   useEffect(() => {
     if (
@@ -750,13 +807,13 @@ const FileManager: FC<FileManagerProps> = ({
         {...FOCUSABLE_ELEMENT}
       >
         {isDetailsView && columns && (
-          <Columns
-            columns={columns}
-            directory={url}
-            files={files}
-            setColumns={setColumns}
-          />
-        )}
+            <Columns
+              columns={columns}
+              directory={url}
+              files={filteredFiles}
+              setColumns={setColumns}
+            />
+          )}
         {!loading && (
           <>
             {isSelecting && <StyledSelection style={selectionStyling} />}
@@ -782,7 +839,7 @@ const FileManager: FC<FileManagerProps> = ({
                   hideShortcutIcon={hideShortcutIcons}
                   iconZoomLevel={isIconView && !isDesktop ? iconZoomLevel : undefined}
                   isDesktop={isDesktop}
-                  isHeading={isDesktop && files[file].systemShortcut}
+                  isHeading={isDesktop && filteredFiles[file].systemShortcut}
                   isLoadingFileManager={isLoading}
                   loadIconImmediately={loadIconsImmediately}
                   name={getEntryLabel(file)}
@@ -792,7 +849,7 @@ const FileManager: FC<FileManagerProps> = ({
                   selectionRect={selectionRect}
                   setFiles={isMongoFS ? setFiles : undefined}
                   setRenaming={setRenaming}
-                  stats={files[file]}
+                  stats={filteredFiles[file]}
                   view={view}
                 />
               </StyledFileEntry>
@@ -819,15 +876,18 @@ const FileManager: FC<FileManagerProps> = ({
                 hideCategorized,
                 hideDismissed,
                 hideSubstituteGroup,
+                localImages,
                 onToggleHideCategorized: handleToggleHideCategorized,
                 onToggleHideDismissed: handleToggleHideDismissed,
                 onToggleHideSubstituteGroup: handleToggleHideSubstituteGroup,
+                onToggleImageSource: handleToggleImageSource,
               }
             : {})}
           iconZoomLevel={iconZoomLevel}
           selected={focusedEntries}
           setIconZoomLevel={setIconZoomLevel}
           setView={setView}
+          totalCount={loading ? 0 : totalFileCount}
           view={view}
         />
       )}

@@ -27,6 +27,7 @@ const FileExplorer: FC<ComponentProcessProps> = ({ id }) => {
   const { componentWindow, closing, icon = "", url = "" } = process || {};
   const { fs, rootFs } = useFileSystem();
   const [currentUrl, setCurrentUrl] = useState(url);
+  const [searchTerm, setSearchTerm] = useState("");
   const addressBarRef = useRef<HTMLInputElement | null>(null);
   const searchBarRef = useRef<HTMLInputElement | null>(null);
   const directoryName = basename(url);
@@ -104,6 +105,10 @@ const FileExplorer: FC<ComponentProcessProps> = ({ id }) => {
   ]);
 
   useEffect(() => {
+    setSearchTerm("");
+  }, [url]);
+
+  useEffect(() => {
     if (componentWindow && !closing && !url) {
       setProcessUrl(id, "/");
       setProcessIcon(id, "/System/Icons/pc.webp");
@@ -125,11 +130,12 @@ const FileExplorer: FC<ComponentProcessProps> = ({ id }) => {
     <StyledFileExplorer>
       <Navigation
         addressBarRef={addressBarRef}
-        hideSearch={Boolean(mountUrl)}
         id={id}
+        searchTerm={searchTerm}
         searchBarRef={searchBarRef}
+        setSearchTerm={setSearchTerm}
       />
-      <FileManager id={id} url={url} showStatusBar />
+      <FileManager id={id} searchTerm={searchTerm} url={url} showStatusBar />
     </StyledFileExplorer>
   ) : // eslint-disable-next-line unicorn/no-null
   null;

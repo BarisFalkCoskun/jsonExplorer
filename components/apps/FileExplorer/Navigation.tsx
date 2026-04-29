@@ -24,18 +24,20 @@ import useResizeObserver from "hooks/useResizeObserver";
 
 type NavigationProps = {
   addressBarRef: React.RefObject<HTMLInputElement | null>;
-  hideSearch: boolean;
   id: string;
+  searchTerm: string;
   searchBarRef: React.RefObject<HTMLInputElement | null>;
+  setSearchTerm: React.Dispatch<React.SetStateAction<string>>;
 };
 
 const CONTEXT_MENU_OFFSET = 3;
 
 const Navigation: FC<NavigationProps> = ({
-  hideSearch,
   id,
   addressBarRef,
+  searchTerm,
   searchBarRef,
+  setSearchTerm,
 }) => {
   const {
     url: changeUrl,
@@ -68,7 +70,7 @@ const Navigation: FC<NavigationProps> = ({
   const [removeSearch, setRemoveSearch] = useState(false);
   const resizeCallback = useCallback<ResizeObserverCallback>(
     ([{ contentRect }]) => {
-      const tooSmallForSearch = contentRect.width < 260;
+      const tooSmallForSearch = contentRect.width < 260 && !searchTerm;
 
       if (removeSearch && !tooSmallForSearch) {
         setRemoveSearch(false);
@@ -76,7 +78,7 @@ const Navigation: FC<NavigationProps> = ({
         setRemoveSearch(true);
       }
     },
-    [removeSearch]
+    [removeSearch, searchTerm]
   );
 
   useEffect(() => {
@@ -153,7 +155,13 @@ const Navigation: FC<NavigationProps> = ({
         <Up />
       </Button>
       <AddressBar ref={addressBarRef} id={id} />
-      {!hideSearch && !removeSearch && <SearchBar ref={searchBarRef} id={id} />}
+      {!removeSearch && (
+        <SearchBar
+          ref={searchBarRef}
+          searchTerm={searchTerm}
+          setSearchTerm={setSearchTerm}
+        />
+      )}
     </StyledNavigation>
   );
 };

@@ -90,7 +90,7 @@ export class MongoDBFileSystem implements FileSystem {
 
   private readonly connectionString: string;
 
-  private readonly imageSource: MongoImageSource;
+  private _imageSource: MongoImageSource;
 
   private readonly collectionEntriesCache = new Map<
     string,
@@ -104,7 +104,24 @@ export class MongoDBFileSystem implements FileSystem {
     imageSource: MongoImageSource = DEFAULT_MONGO_IMAGE_SOURCE
   ) {
     this.connectionString = connectionString;
-    this.imageSource = normalizeMongoImageSource(imageSource);
+    this._imageSource = normalizeMongoImageSource(imageSource);
+  }
+
+  public get imageSource(): MongoImageSource {
+    return this._imageSource;
+  }
+
+  public getConnectionString(): string {
+    return this.connectionString;
+  }
+
+  public setImageSource(source: MongoImageSource): void {
+    const normalized = normalizeMongoImageSource(source);
+
+    if (normalized === this._imageSource) return;
+
+    this._imageSource = normalized;
+    this.documentsListCache.clear();
   }
 
   public getName(): string {

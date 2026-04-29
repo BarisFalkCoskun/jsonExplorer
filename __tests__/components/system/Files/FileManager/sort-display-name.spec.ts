@@ -1,4 +1,7 @@
-import { sortFiles } from "components/system/Files/FileManager/functions";
+import {
+  matchesFileFilter,
+  sortFiles,
+} from "components/system/Files/FileManager/functions";
 
 const createFileStat = (displayName?: string) =>
   ({
@@ -20,5 +23,17 @@ describe("Mongo-style display name sorting", () => {
       "z-id.json",
       "a-id.json",
     ]);
+  });
+
+  it("matches folder filters against displayName before falling back to the file key", () => {
+    expect(
+      matchesFileFilter("internal-honey.json", createFileStat("Wildflower Honey"), "flower")
+    ).toBe(true);
+    expect(
+      matchesFileFilter("internal-honey.json", createFileStat("Wildflower Honey"), "internal")
+    ).toBe(true);
+    expect(
+      matchesFileFilter("internal-honey.json", createFileStat("Wildflower Honey"), "maple")
+    ).toBe(false);
   });
 });
