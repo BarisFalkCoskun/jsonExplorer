@@ -1,6 +1,11 @@
+import { getDocumentFilters } from "utils/mongoApi";
+
 describe("PATCH $set/$unset split logic", () => {
   it("puts non-null values in $set", () => {
-    const updates: Record<string, unknown> = { category: "fruit", name: "apple" };
+    const updates: Record<string, unknown> = {
+      category: "fruit",
+      name: "apple",
+    };
     const setFields: Record<string, unknown> = {};
     const unsetFields: Record<string, string> = {};
 
@@ -17,8 +22,12 @@ describe("PATCH $set/$unset split logic", () => {
   });
 
   it("puts null values in $unset", () => {
-    // eslint-disable-next-line unicorn/no-null -- testing MongoDB $unset split logic requires null
-    const updates: Record<string, unknown> = { category: null, dismissed: null };
+    const updates: Record<string, unknown> = {
+      // eslint-disable-next-line unicorn/no-null -- testing MongoDB $unset split logic requires null
+      category: null,
+      // eslint-disable-next-line unicorn/no-null -- testing MongoDB $unset split logic requires null
+      dismissed: null,
+    };
     const setFields: Record<string, unknown> = {};
     const unsetFields: Record<string, string> = {};
 
@@ -35,8 +44,12 @@ describe("PATCH $set/$unset split logic", () => {
   });
 
   it("splits mixed updates correctly", () => {
-    // eslint-disable-next-line unicorn/no-null -- testing MongoDB $unset split logic requires null
-    const updates: Record<string, unknown> = { category: "fruit", dismissed: null, name: "apple" };
+    const updates: Record<string, unknown> = {
+      category: "fruit",
+      // eslint-disable-next-line unicorn/no-null -- testing MongoDB $unset split logic requires null
+      dismissed: null,
+      name: "apple",
+    };
     const setFields: Record<string, unknown> = {};
     const unsetFields: Record<string, string> = {};
 
@@ -79,6 +92,17 @@ describe("PATCH $set/$unset split logic", () => {
   });
 });
 
+describe("document patch filters", () => {
+  it("matches canonical numeric MongoDB _id values", () => {
+    expect(getDocumentFilters("123")).toContainEqual({ _id: 123 });
+    expect(getDocumentFilters("-42")).toContainEqual({ _id: -42 });
+  });
+
+  it("does not coerce padded string ids into numbers", () => {
+    expect(getDocumentFilters("00123")).not.toContainEqual({ _id: 123 });
+  });
+});
+
 describe("PATCH field validation", () => {
   it("rejects empty update object", () => {
     const updates: Record<string, unknown> = {};
@@ -93,7 +117,8 @@ describe("PATCH field validation", () => {
       }
     }
 
-    const hasUpdates = Object.keys(setFields).length > 0 || Object.keys(unsetFields).length > 0;
+    const hasUpdates =
+      Object.keys(setFields).length > 0 || Object.keys(unsetFields).length > 0;
     expect(hasUpdates).toBe(false);
   });
 

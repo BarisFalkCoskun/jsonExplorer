@@ -681,4 +681,48 @@ describe("PATCH cache invalidation", () => {
     expect(entries).not.toBeNull();
     expect(entries?.has("doc1")).toBe(true);
   });
+
+  it("removes unset fields from the in-memory cache after patchDocument", async () => {
+    const fs = createFS();
+
+    fs.setCachedDocumentsList("testdb", "products", [
+      { _id: "doc1", dismissed: true, name: "doc1" } as MongoDocument,
+    ]);
+
+    global.fetch = jest.fn().mockResolvedValue({
+      json: () => Promise.resolve({ matchedCount: 1, modifiedCount: 1 }),
+      ok: true,
+    });
+
+    await fs.patchDocument("testdb/products/doc1", {
+      // eslint-disable-next-line unicorn/no-null -- MongoDB $unset uses null
+      dismissed: null,
+    });
+
+    const cached = fs.documentsListCache.get("testdb/products");
+    expect(cached?.documents[0]).not.toHaveProperty("dismissed");
+    expect(cached?.documentIndex.get("doc1")).not.toHaveProperty("dismissed");
+  });
+
+  it("rejects patchDocument when MongoDB reports no matching document", async () => {
+    const fs = createFS();
+    const warnSpy = jest.spyOn(console, "warn").mockImplementation();
+
+    global.fetch = jest.fn().mockResolvedValue({
+      json: () => Promise.resolve({ matchedCount: 0, modifiedCount: 0 }),
+      ok: true,
+    });
+
+    await expect(
+      fs.patchDocument("testdb/products/missing", { dismissed: true })
+    ).rejects.toThrow("No MongoDB document matched patch path");
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[MongoDBFS] patchDocument matched no documents",
+      expect.objectContaining({
+        documentName: "missing",
+        patchPath: "testdb/products/missing",
+        updates: { dismissed: true },
+      })
+    );
+  });
 });

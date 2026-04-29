@@ -182,6 +182,15 @@ export const getDocumentFilters = (documentId: string): object[] => {
     filters.push({ _id: new ObjectId(documentId) });
   }
 
+  const numericId = Number(documentId);
+  if (
+    Number.isFinite(numericId) &&
+    String(numericId) === documentId &&
+    documentId.trim() !== ""
+  ) {
+    filters.push({ _id: numericId });
+  }
+
   filters.push({ name: documentId });
 
   return filters;

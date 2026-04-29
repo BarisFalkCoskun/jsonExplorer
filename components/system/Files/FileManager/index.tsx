@@ -391,13 +391,15 @@ const FileManager: FC<FileManagerProps> = ({
     async (entries: string[]) => {
       if (!mongoFs || !mountUrl) return;
 
+      const dismissedEntries: string[] = [];
       const { succeeded, failed } = await runMongoPatchBatch(
-        entries.map((entry) => () => {
+        entries.map((entry) => async () => {
           const relativePath = `${url.replace(`${mountUrl}/`, "")}/${entry}`.replace(
             /\.json$/,
             ""
           );
-          return mongoFs.patchDocument(relativePath, { dismissed: true });
+          await mongoFs.patchDocument(relativePath, { dismissed: true });
+          dismissedEntries.push(entry);
         })
       );
 
@@ -407,14 +409,14 @@ const FileManager: FC<FileManagerProps> = ({
         showToast(`${succeeded} item(s) dismissed.`, "success");
       }
 
-      if (hideDismissed) {
+      if (hideDismissed && dismissedEntries.length > 0) {
         setFiles((currentFiles) => {
           if (!currentFiles) return currentFiles;
 
           const filtered: typeof currentFiles = {};
 
           for (const [name, stat] of Object.entries(currentFiles)) {
-            if (!entries.includes(name)) {
+            if (!dismissedEntries.includes(name)) {
               filtered[name] = stat;
             }
           }
@@ -603,6 +605,7 @@ const FileManager: FC<FileManagerProps> = ({
     focusedEntries
       .filter((entry) => !visibleEntries.has(entry))
       .forEach((entry) => focusFunctions.blurEntry(entry));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- focusFunctions is a rest object; blurEntry is the stable dependency
   }, [fileKeys, focusedEntries, focusFunctions.blurEntry, searchTerm]);
 
   useEffect(() => {
@@ -730,7 +733,9 @@ const FileManager: FC<FileManagerProps> = ({
 
   // Re-apply active filters when files change (e.g. after readdir refresh)
   useEffect(() => {
-    if (!mongoFs || (!hideCategorized && !hideDismissed && !hideSubstituteGroup)) return;
+    if (!mongoFs || (!hideCategorized && !hideDismissed && !hideSubstituteGroup)) {
+      return;
+    }
 
     const { database, collection } = mongoCollection;
     const categorizedNames = hideCategorized

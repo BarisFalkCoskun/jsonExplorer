@@ -347,13 +347,15 @@ const useFileContextMenu = (
                             (entry) =>
                               !mongoFs.isCachedDismissed(basename(entry, ".json"), mongoDb, mongoCol)
                           );
+                          const dismissedEntries: string[] = [];
                           const { succeeded, failed } = await runMongoPatchBatch(
-                            toDismiss.map((entry) => () => {
+                            toDismiss.map((entry) => async () => {
                               const relativePath = entry.replace(
                                 `${mountUrl}/`,
                                 ""
                               );
-                              return mongoFs.patchDocument(relativePath, { dismissed: true });
+                              await mongoFs.patchDocument(relativePath, { dismissed: true });
+                              dismissedEntries.push(entry);
                             })
                           );
                           if (failed > 0) {
@@ -361,11 +363,11 @@ const useFileContextMenu = (
                           } else if (succeeded > 0) {
                             showToast(`${succeeded} item(s) dismissed.`, "success");
                           }
-                          if (succeeded > 0 && hideDismissed && setFiles) {
+                          if (dismissedEntries.length > 0 && hideDismissed && setFiles) {
                             setFiles((currentFiles) => {
                               if (!currentFiles) return currentFiles;
                               const updated = { ...currentFiles };
-                              for (const entry of toDismiss) {
+                              for (const entry of dismissedEntries) {
                                 delete updated[basename(entry)];
                               }
                               return updated;

@@ -830,7 +830,15 @@ export class MongoDBFileSystem implements FileSystem {
     };
 
     // Only mutate cache if server confirmed the document was found
-    if (result.matchedCount === 0) return;
+    if (result.matchedCount === 0) {
+      // eslint-disable-next-line no-console -- diagnostic for mutations that did not persist
+      console.warn("[MongoDBFS] patchDocument matched no documents", {
+        documentName,
+        patchPath,
+        updates,
+      });
+      throw new Error(`No MongoDB document matched patch path: ${patchPath}`);
+    }
 
     // Update the in-memory documents cache in-place so that
     // getCachedDocumentCategory returns the new value immediately.
@@ -842,7 +850,7 @@ export class MongoDBFileSystem implements FileSystem {
 
       if (doc) {
         for (const [k, v] of Object.entries(updates)) {
-          if (v === undefined) {
+          if (v === null || v === undefined) {
             const mutableDoc = doc as Record<string, unknown>;
             delete mutableDoc[k];
           } else {
