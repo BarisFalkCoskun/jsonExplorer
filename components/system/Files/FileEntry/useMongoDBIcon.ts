@@ -3,6 +3,10 @@ import { useFileSystem } from "contexts/fileSystem";
 import { MongoDBFileSystem } from "contexts/fileSystem/MongoDBFS";
 import { type RootFileSystem } from "contexts/fileSystem/useAsyncFs";
 import {
+  getProductImagePathExtension,
+  isLikelyNonImageProductAsset,
+} from "utils/mongoApi";
+import {
   getPerfDuration,
   getPerfNow,
   isPerfDiagnosticsEnabled,
@@ -156,6 +160,14 @@ export const useMongoDBIcon = (path: string, visible = false) => {
       durationMs: getPerfNow() - startedAt,
       imageCount,
     });
+    if (thumbnail && isLikelyNonImageProductAsset(thumbnail)) {
+      logPerf("mongo-thumbnail-non-image", {
+        extension: getProductImagePathExtension(thumbnail),
+        imageCount,
+        path: mongoData.relativePath,
+        thumbnail,
+      });
+    }
 
     // Only mark as loaded if cache had data; otherwise allow retry
     if (thumbnail || imageCount > 0) {
@@ -194,6 +206,24 @@ export const useMongoDBIcon = (path: string, visible = false) => {
         durationMs: getPerfDuration(startedAt),
         path: mongoData.relativePath,
       });
+      const nonImageImages = images.filter((image) =>
+        isLikelyNonImageProductAsset(image)
+      );
+
+      if (nonImageImages.length > 0) {
+        logPerf("mongo-images-non-image", {
+          count: nonImageImages.length,
+          extensions: [
+            ...new Set(
+              nonImageImages
+                .map((image) => getProductImagePathExtension(image))
+                .filter(Boolean)
+            ),
+          ],
+          path: mongoData.relativePath,
+          samples: nonImageImages.slice(0, 5),
+        });
+      }
 
       hasFullImagesRef.current = true;
       isLoadingRef.current = false;

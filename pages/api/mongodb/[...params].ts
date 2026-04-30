@@ -5,10 +5,12 @@ import {
   ALLOWED_METHODS,
   getDocumentFilters,
   getMongoDocumentImageUrls,
+  getMongoProductImageDiagnostics,
   LISTING_PROJECTION,
   normalizeMongoImageSource,
   PREFERRED_DOCUMENT_LABEL_AGGREGATION,
   sanitizeFilter,
+  summarizeMongoProductImageDiagnostics,
 } from "utils/mongoApi";
 import {
   getPerfDuration,
@@ -286,6 +288,15 @@ const handleDocuments = async (
     const metaResponseDocuments = documents.map((doc) =>
       addThumbnailFields(doc as Record<string, unknown>, imageSource)
     );
+    logServerPerf("mongodb-product-images", {
+      collectionName,
+      dbName,
+      imageSource,
+      metaOnly,
+      ...summarizeMongoProductImageDiagnostics(
+        documents as Record<string, unknown>[]
+      ),
+    });
     logServerPerf("mongodb-documents", {
       collectionName,
       count: metaResponseDocuments.length,
@@ -317,6 +328,15 @@ const handleDocuments = async (
   const pageResponseDocuments = documents.map((doc) =>
     addThumbnailFields(doc as Record<string, unknown>, imageSource)
   );
+  logServerPerf("mongodb-product-images", {
+    collectionName,
+    dbName,
+    imageSource,
+    metaOnly,
+    ...summarizeMongoProductImageDiagnostics(
+      documents as Record<string, unknown>[]
+    ),
+  });
   logServerPerf("mongodb-documents", {
     collectionName,
     count: pageResponseDocuments.length,
@@ -494,6 +514,17 @@ const handleImages = async (
     docWithImages as Record<string, unknown>,
     imageSource
   );
+  const productImageDiagnostics =
+    getMongoProductImageDiagnostics(docWithImages as Record<string, unknown>) ??
+    {};
+  logServerPerf("mongodb-product-images-document", {
+    collectionName,
+    dbName,
+    documentId,
+    imageSource,
+    returnedImageCount: validImages.length,
+    ...productImageDiagnostics,
+  });
   logServerPerf("mongodb-images", {
     collectionName,
     count: validImages.length,

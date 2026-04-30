@@ -11,6 +11,158 @@ export type MongoImageSource = "images" | "productImages";
 export const DEFAULT_MONGO_IMAGE_SOURCE: MongoImageSource = "productImages";
 
 const PRODUCT_IMAGE_BASE_URL = "http://localhost:8100/imgs/";
+const PRODUCT_IMAGE_DIAGNOSTIC_SAMPLE_LIMIT = 5;
+const PRODUCT_IMAGE_LIKELY_NON_IMAGE_EXTENSIONS = new Set([
+  ".doc",
+  ".docx",
+  ".html",
+  ".htm",
+  ".json",
+  ".pdf",
+  ".txt",
+  ".xls",
+  ".xlsx",
+]);
+
+export type MongoProductImageDiagnostics = {
+  firstExtension: string;
+  firstIsLikelyNonImage: boolean;
+  firstPath: string;
+  likelyNonImageCount: number;
+  likelyNonImageExtensions: string[];
+  likelyNonImageSamples: string[];
+  productImageCount: number;
+};
+
+export type MongoProductImageDiagnosticsSummary = {
+  docsWithFirstLikelyNonImage: number;
+  docsWithLikelyNonImage: number;
+  documentCount: number;
+  likelyNonImageExtensions: string[];
+  productImageDocs: number;
+  samples: {
+    _id: string;
+    firstExtension: string;
+    firstPath: string;
+    likelyNonImageSamples: string[];
+    name: string;
+  }[];
+};
+
+export const getProductImagePathExtension = (path: string): string => {
+  const [pathWithoutQuery = ""] = path.split(/[?#]/);
+  const fileName = pathWithoutQuery.slice(pathWithoutQuery.lastIndexOf("/") + 1);
+  const dotIndex = fileName.lastIndexOf(".");
+
+  return dotIndex === -1 ? "" : fileName.slice(dotIndex).toLowerCase();
+};
+
+export const isLikelyNonImageProductAsset = (path: string): boolean =>
+  PRODUCT_IMAGE_LIKELY_NON_IMAGE_EXTENSIONS.has(
+    getProductImagePathExtension(path)
+  );
+
+const getDiagnosticsString = (value: unknown): string => {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (value instanceof ObjectId) return value.toHexString();
+
+  return "";
+};
+
+export const getMongoProductImageDiagnostics = (
+  doc: Record<string, unknown>
+): MongoProductImageDiagnostics | undefined => {
+  const productImages = Array.isArray(doc.productImages)
+    ? (doc.productImages as unknown[])
+    : undefined;
+
+  if (productImages === undefined) return undefined;
+
+  const normalizedProductImages = productImages
+    .filter(
+      (path): path is string =>
+        typeof path === "string" && path.trim().length > 0
+    )
+    .map((path) => path.trim());
+  const firstPath = normalizedProductImages[0] || "";
+  const likelyNonImages = normalizedProductImages.filter((path) =>
+    isLikelyNonImageProductAsset(path)
+  );
+  const likelyNonImageSamples = likelyNonImages.slice(
+    0,
+    PRODUCT_IMAGE_DIAGNOSTIC_SAMPLE_LIMIT
+  );
+
+  return {
+    firstExtension: getProductImagePathExtension(firstPath),
+    firstIsLikelyNonImage: isLikelyNonImageProductAsset(firstPath),
+    firstPath,
+    likelyNonImageCount: likelyNonImages.length,
+    likelyNonImageExtensions: [
+      ...new Set(
+        likelyNonImages
+          .map((path) => getProductImagePathExtension(path))
+          .filter(Boolean)
+      ),
+    ],
+    likelyNonImageSamples,
+    productImageCount: normalizedProductImages.length,
+  };
+};
+
+export const summarizeMongoProductImageDiagnostics = (
+  docs: Record<string, unknown>[]
+): MongoProductImageDiagnosticsSummary => {
+  const likelyNonImageExtensions = new Set<string>();
+  const samples: MongoProductImageDiagnosticsSummary["samples"] = [];
+  let docsWithFirstLikelyNonImage = 0;
+  let docsWithLikelyNonImage = 0;
+  let productImageDocs = 0;
+
+  for (const doc of docs) {
+    const diagnostics = getMongoProductImageDiagnostics(doc);
+
+    if (diagnostics) {
+      productImageDocs += 1;
+
+      if (diagnostics.likelyNonImageCount > 0) {
+        docsWithLikelyNonImage += 1;
+        diagnostics.likelyNonImageExtensions.forEach((extension) =>
+          likelyNonImageExtensions.add(extension)
+        );
+      }
+
+      if (diagnostics.firstIsLikelyNonImage) {
+        docsWithFirstLikelyNonImage += 1;
+      }
+
+      if (
+        diagnostics.likelyNonImageCount > 0 &&
+        samples.length < PRODUCT_IMAGE_DIAGNOSTIC_SAMPLE_LIMIT
+      ) {
+        samples.push({
+          _id: getDiagnosticsString(doc._id),
+          firstExtension: diagnostics.firstExtension,
+          firstPath: diagnostics.firstPath,
+          likelyNonImageSamples: diagnostics.likelyNonImageSamples,
+          name: getDiagnosticsString(doc.name) || getDiagnosticsString(doc.title),
+        });
+      }
+    }
+  }
+
+  return {
+    docsWithFirstLikelyNonImage,
+    docsWithLikelyNonImage,
+    documentCount: docs.length,
+    likelyNonImageExtensions: [...likelyNonImageExtensions],
+    productImageDocs,
+    samples,
+  };
+};
 
 export const normalizeImageUrl = (img: unknown): string => {
   if (typeof img === "string" && img.trim().length > 0) {
