@@ -291,6 +291,8 @@ const handleDocuments = async (
       count: metaResponseDocuments.length,
       dbName,
       durationMs: getPerfDuration(startedAt),
+      filterApplied: Object.keys(filter).length > 0,
+      filterKeys: Object.keys(filter).sort((a, b) => a.localeCompare(b)),
       metaOnly,
       thumbnailMs: getPerfDuration(metaThumbnailStartedAt),
     });
@@ -320,6 +322,8 @@ const handleDocuments = async (
     count: pageResponseDocuments.length,
     dbName,
     durationMs: getPerfDuration(startedAt),
+    filterApplied: Object.keys(filter).length > 0,
+    filterKeys: Object.keys(filter).sort((a, b) => a.localeCompare(b)),
     hasMore,
     metaOnly,
     thumbnailMs: getPerfDuration(pageThumbnailStartedAt),

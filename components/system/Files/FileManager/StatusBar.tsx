@@ -29,6 +29,11 @@ type StatusBarProps = {
   hideSubstituteGroup?: boolean;
   iconZoomLevel: number;
   localImages?: boolean;
+  mongoTagExcludeCount?: number;
+  mongoTagIncludeCount?: number;
+  onClearMongoTagFilters?: () => void;
+  onSetMongoTagExcludeFilter?: () => void;
+  onSetMongoTagIncludeFilter?: () => void;
   onToggleHideCategorized?: () => void;
   onToggleHideDismissed?: () => void;
   onToggleHideSubstituteGroup?: () => void;
@@ -51,6 +56,11 @@ const StatusBar: FC<StatusBarProps> = ({
   hideSubstituteGroup,
   iconZoomLevel,
   localImages,
+  mongoTagExcludeCount = 0,
+  mongoTagIncludeCount = 0,
+  onClearMongoTagFilters,
+  onSetMongoTagExcludeFilter,
+  onSetMongoTagIncludeFilter,
   onToggleHideCategorized,
   onToggleHideDismissed,
   onToggleHideSubstituteGroup,
@@ -71,6 +81,8 @@ const StatusBar: FC<StatusBarProps> = ({
     [sizes.fileExplorer.minimumStatusBarWidth]
   );
   const statusBarRef = useRef<HTMLDivElement | null>(null);
+  const hasMongoTagFilters =
+    mongoTagIncludeCount > 0 || mongoTagExcludeCount > 0;
 
   useEffect(() => {
     const startedAt = getPerfNow();
@@ -168,8 +180,41 @@ const StatusBar: FC<StatusBarProps> = ({
       )}
       {(onToggleHideCategorized ||
         onToggleHideDismissed ||
-        onToggleHideSubstituteGroup) && (
+        onToggleHideSubstituteGroup ||
+        onSetMongoTagIncludeFilter ||
+        onSetMongoTagExcludeFilter) && (
         <div className="hide-toggles">
+          {onSetMongoTagIncludeFilter && (
+            <Button
+              className={`hide-toggle${mongoTagIncludeCount > 0 ? " active" : ""}`}
+              onClick={onSetMongoTagIncludeFilter}
+              {...label("Include documents with any matching tag")}
+            >
+              {mongoTagIncludeCount > 0
+                ? `Include ${mongoTagIncludeCount}`
+                : "Include Tags"}
+            </Button>
+          )}
+          {onSetMongoTagExcludeFilter && (
+            <Button
+              className={`hide-toggle${mongoTagExcludeCount > 0 ? " active" : ""}`}
+              onClick={onSetMongoTagExcludeFilter}
+              {...label("Exclude documents with any matching tag")}
+            >
+              {mongoTagExcludeCount > 0
+                ? `Exclude ${mongoTagExcludeCount}`
+                : "Exclude Tags"}
+            </Button>
+          )}
+          {hasMongoTagFilters && onClearMongoTagFilters && (
+            <Button
+              className="hide-toggle"
+              onClick={onClearMongoTagFilters}
+              {...label("Clear tag filters")}
+            >
+              Clear Tags
+            </Button>
+          )}
           {onToggleHideCategorized && (
             <Button
               className={`hide-toggle${hideCategorized ? " active" : ""}`}

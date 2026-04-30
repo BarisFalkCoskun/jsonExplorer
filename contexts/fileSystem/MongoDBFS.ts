@@ -11,6 +11,7 @@ import {
   normalizeMongoImageSource,
   type MongoImageSource,
 } from "utils/mongoApi";
+import { getPerfDuration, getPerfNow, logPerf } from "utils/perfDiagnostics";
 
 interface MongoDocument {
   [key: string]: unknown;
@@ -20,6 +21,7 @@ interface MongoDocument {
   images?: string[];
   name?: string;
   oldImages?: string[];
+  tags?: string[];
   thumbnail?: string;
   title?: string;
 }
@@ -596,8 +598,17 @@ export class MongoDBFileSystem implements FileSystem {
   ): Promise<MongoDocument[]> {
     const cached = this.getCachedDocumentsList(dbName, collectionName);
 
-    if (cached) return cached;
+    if (cached) {
+      logPerf("mongo-documents-list", {
+        collection: collectionName,
+        count: cached.length,
+        database: dbName,
+        source: "client-cache",
+      });
+      return cached;
+    }
 
+    const startedAt = getPerfNow();
     const params = new URLSearchParams({
       imageSource: this.imageSource,
       meta: "1",
@@ -617,6 +628,14 @@ export class MongoDBFileSystem implements FileSystem {
     const documents = (await response.json()) as MongoDocument[];
 
     this.setCachedDocumentsList(dbName, collectionName, documents);
+
+    logPerf("mongo-documents-list", {
+      collection: collectionName,
+      count: documents.length,
+      database: dbName,
+      durationMs: getPerfDuration(startedAt),
+      source: "api",
+    });
 
     return documents;
   }
@@ -1247,12 +1266,15 @@ export class MongoDBFileSystem implements FileSystem {
   public async readdirPaged(
     pagedPath: string,
     cursor?: { afterId: string; afterLabel: string },
-    limit = 500
+    limit?: number,
+    filter?: Record<string, unknown>
   ): Promise<{
     entries: string[];
     hasMore: boolean;
     nextCursor?: { afterId: string; afterLabel: string };
   }> {
+    const startedAt = getPerfNow();
+    const pageLimit = limit ?? 500;
     const { collection, database } = this.parsePath(pagedPath);
 
     if (!database || !collection) {
@@ -1270,11 +1292,14 @@ export class MongoDBFileSystem implements FileSystem {
 
     const params = new URLSearchParams({
       imageSource: this.imageSource,
-      limit: String(limit),
+      limit: String(pageLimit),
     });
     if (cursor) {
       params.set("afterId", cursor.afterId);
       params.set("afterLabel", cursor.afterLabel);
+    }
+    if (filter && Object.keys(filter).length > 0) {
+      params.set("filter", JSON.stringify(filter));
     }
 
     const url = `/api/mongodb/documents/${encodeURIComponent(database)}/${encodeURIComponent(collection)}?${params}`;
@@ -1297,6 +1322,18 @@ export class MongoDBFileSystem implements FileSystem {
     const pagedEntries = result.documents.map(
       (doc) => `${this.getDocumentIdentifier(doc)}.json`
     );
+
+    logPerf("mongo-readdir-paged", {
+      collection,
+      database,
+      durationMs: getPerfDuration(startedAt),
+      entries: pagedEntries.length,
+      filterApplied: Boolean(filter && Object.keys(filter).length > 0),
+      hasMore: result.hasMore,
+      limit: pageLimit,
+      path: pagedPath,
+      source: "api",
+    });
 
     return {
       entries: pagedEntries,

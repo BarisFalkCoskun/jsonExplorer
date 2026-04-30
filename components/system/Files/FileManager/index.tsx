@@ -23,7 +23,9 @@ import useDraggableEntries from "components/system/Files/FileManager/useDraggabl
 import useFileDrop from "components/system/Files/FileManager/useFileDrop";
 import useFileKeyboardShortcuts from "components/system/Files/FileManager/useFileKeyboardShortcuts";
 import useFocusableEntries from "components/system/Files/FileManager/useFocusableEntries";
-import useFolder from "components/system/Files/FileManager/useFolder";
+import useFolder, {
+  type Files,
+} from "components/system/Files/FileManager/useFolder";
 import useFolderContextMenu from "components/system/Files/FileManager/useFolderContextMenu";
 import {
   type FileManagerViewNames,
@@ -43,6 +45,11 @@ import { useSession } from "contexts/session";
 import { getMountUrl } from "contexts/fileSystem/core";
 import { MongoDBFileSystem } from "contexts/fileSystem/MongoDBFS";
 import { runMongoPatchBatch } from "utils/mongoMutations";
+import {
+  buildMongoTagsFilter,
+  normalizeMongoTagFilters,
+  type MongoTagFilters,
+} from "utils/mongoApi";
 import { isPerfDiagnosticsEnabled, logPerf } from "utils/perfDiagnostics";
 import { useToast } from "components/system/Toast/useToast";
 
@@ -74,6 +81,12 @@ type FileManagerProps = {
 };
 
 const DEFAULT_VIEW = "icon";
+
+const parseMongoTagPrompt = (raw: string): string[] =>
+  raw
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean);
 
 const FileManager: FC<FileManagerProps> = ({
   allowMovingDraggableEntries,
@@ -118,6 +131,10 @@ const FileManager: FC<FileManagerProps> = ({
   const [currentUrl, setCurrentUrl] = useState(url);
   const [renaming, setRenaming] = useState("");
   const [mounted, setMounted] = useState<boolean>(false);
+  const [mongoTagFilters, setMongoTagFilters] = useState<MongoTagFilters>({
+    exclude: [],
+    include: [],
+  });
   const fileManagerRef = useRef<HTMLOListElement | null>(null);
   const isFileExplorerIconView = useMemo(
     () => !isStartMenu && !isDesktop && !isDetailsView,
@@ -125,25 +142,9 @@ const FileManager: FC<FileManagerProps> = ({
   );
   const { focusedEntries, focusableEntry, ...focusFunctions } =
     useFocusableEntries(fileManagerRef, isFileExplorerIconView);
-  const {
-    fileActions,
-    files,
-    folderActions,
-    hasMore,
-    isLoading,
-    loadMore,
-    setFiles,
-    updateFiles,
-  } = useFolder(url, setRenaming, focusFunctions, {
-    hideFolders,
-    hideLoading,
-    isDesktop,
-    skipFsWatcher,
-    skipSorting,
-  });
-  const allFilesRef = useRef<
-    { files: NonNullable<typeof files>; key: string } | undefined
-  >(undefined);
+  const allFilesRef = useRef<{ files: Files; key: string } | undefined>(
+    undefined
+  );
   const { lstat, mountFs, rootFs } = useFileSystem();
   const { mountUrl, isMongoFS, mongoFs } = useMemo(() => {
     const mUrl = rootFs?.mntMap ? getMountUrl(url, rootFs.mntMap) : undefined;
@@ -161,6 +162,96 @@ const FileManager: FC<FileManagerProps> = ({
     const parts = relativePath.split("/").filter(Boolean);
     return { collection: parts[1] || "", database: parts[0] || "" };
   }, [isMongoFS, mountUrl, url]);
+  const isMongoCollection = Boolean(
+    isMongoFS && mongoCollection.database && mongoCollection.collection
+  );
+  const mongoDocumentFilter = useMemo(() => {
+    const normalizedFilters = normalizeMongoTagFilters(mongoTagFilters);
+    const filter = buildMongoTagsFilter(normalizedFilters);
+
+    return Object.keys(filter).length > 0 ? filter : undefined;
+  }, [mongoTagFilters]);
+  const mongoTagFilterKey = useMemo(
+    () => JSON.stringify(normalizeMongoTagFilters(mongoTagFilters)),
+    [mongoTagFilters]
+  );
+  const {
+    fileActions,
+    files,
+    folderActions,
+    hasMore,
+    isLoading,
+    loadMore,
+    setFiles,
+    updateFiles,
+  } = useFolder(url, setRenaming, focusFunctions, {
+    hideFolders,
+    hideLoading,
+    isDesktop,
+    mongoDocumentFilter: isMongoCollection ? mongoDocumentFilter : undefined,
+    skipFsWatcher,
+    skipSorting,
+  });
+  const previousMongoTagFilterKey = useRef(mongoTagFilterKey);
+  useEffect(() => {
+    if (previousMongoTagFilterKey.current === mongoTagFilterKey) return;
+
+    previousMongoTagFilterKey.current = mongoTagFilterKey;
+    allFilesRef.current = undefined;
+
+    if (!isMongoCollection) return;
+
+    logPerf("mongo-tag-filter-change", {
+      collection: mongoCollection.collection,
+      database: mongoCollection.database,
+      excludeCount: mongoTagFilters.exclude.length,
+      includeCount: mongoTagFilters.include.length,
+      url,
+    });
+    updateFiles();
+  }, [
+    isMongoCollection,
+    mongoCollection,
+    mongoTagFilterKey,
+    mongoTagFilters,
+    updateFiles,
+    url,
+  ]);
+  const handleSetMongoTagIncludeFilter = useCallback(() => {
+    // eslint-disable-next-line no-alert -- user-facing filter input
+    const raw = window.prompt(
+      "Include documents with any of these tags (comma-separated):",
+      mongoTagFilters.include.join(", ")
+    );
+
+    if (raw === null) return;
+
+    setMongoTagFilters((currentFilters) =>
+      normalizeMongoTagFilters({
+        ...currentFilters,
+        include: parseMongoTagPrompt(raw),
+      })
+    );
+  }, [mongoTagFilters.include]);
+  const handleSetMongoTagExcludeFilter = useCallback(() => {
+    // eslint-disable-next-line no-alert -- user-facing filter input
+    const raw = window.prompt(
+      "Exclude documents with any of these tags (comma-separated):",
+      mongoTagFilters.exclude.join(", ")
+    );
+
+    if (raw === null) return;
+
+    setMongoTagFilters((currentFilters) =>
+      normalizeMongoTagFilters({
+        ...currentFilters,
+        exclude: parseMongoTagPrompt(raw),
+      })
+    );
+  }, [mongoTagFilters.exclude]);
+  const handleClearMongoTagFilters = useCallback(() => {
+    setMongoTagFilters({ exclude: [], include: [] });
+  }, []);
   const handleToggleHideCategorized = useCallback(() => {
     if (!mongoFs) return;
 
@@ -1061,6 +1152,17 @@ const FileManager: FC<FileManagerProps> = ({
                 hideDismissed,
                 hideSubstituteGroup,
                 localImages,
+                mongoTagExcludeCount: mongoTagFilters.exclude.length,
+                mongoTagIncludeCount: mongoTagFilters.include.length,
+                onClearMongoTagFilters: isMongoCollection
+                  ? handleClearMongoTagFilters
+                  : undefined,
+                onSetMongoTagExcludeFilter: isMongoCollection
+                  ? handleSetMongoTagExcludeFilter
+                  : undefined,
+                onSetMongoTagIncludeFilter: isMongoCollection
+                  ? handleSetMongoTagIncludeFilter
+                  : undefined,
                 onToggleHideCategorized: handleToggleHideCategorized,
                 onToggleHideDismissed: handleToggleHideDismissed,
                 onToggleHideSubstituteGroup: handleToggleHideSubstituteGroup,

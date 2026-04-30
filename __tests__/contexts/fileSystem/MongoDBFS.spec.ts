@@ -56,7 +56,8 @@ type MongoDBFSTestable = {
   readdirPaged: (
     path: string,
     cursor?: { afterId: string; afterLabel: string },
-    limit?: number
+    limit?: number,
+    filter?: Record<string, unknown>
   ) => Promise<{
     entries: string[];
     hasMore: boolean;
@@ -559,6 +560,28 @@ describe("paged initial load contract", () => {
     const fetchUrl = (global.fetch as jest.Mock).mock.calls[0][0] as string;
     expect(fetchUrl).toContain("limit=200");
     expect(fetchUrl).not.toContain("meta=1");
+  });
+
+  it("readdirPaged passes Mongo filters through query params", async () => {
+    const fs = createFS();
+    const filter = { tags: { $in: ["Børnemad"] } };
+
+    global.fetch = jest.fn().mockResolvedValue({
+      json: () =>
+        Promise.resolve({
+          documents: [{ _id: "doc1", name: "doc1", tags: ["Børnemad"] }],
+          hasMore: false,
+        }),
+      ok: true,
+    });
+
+    await fs.readdirPaged("testdb/products", undefined, 200, filter);
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- accessing jest mock internals
+    const fetchUrl = (global.fetch as jest.Mock).mock.calls[0][0] as string;
+    const params = new URLSearchParams(fetchUrl.split("?")[1]);
+
+    expect(params.get("filter")).toBe(JSON.stringify(filter));
   });
 });
 

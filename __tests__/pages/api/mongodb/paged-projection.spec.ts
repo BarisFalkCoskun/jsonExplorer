@@ -1,4 +1,4 @@
-import { addThumbnailFields } from "utils/mongoApi";
+import { addThumbnailFields, LISTING_PROJECTION } from "utils/mongoApi";
 
 describe("paged listing projection", () => {
   it("uses productImages as primary source with localhost prefix", () => {
@@ -82,5 +82,9 @@ describe("paged listing projection", () => {
     expect(result).toHaveProperty("imageCount", 0);
     expect(result).not.toHaveProperty("__sortId");
     expect(result).not.toHaveProperty("__sortLabel");
+  });
+
+  it("keeps tags in the lightweight listing projection", () => {
+    expect(LISTING_PROJECTION).toHaveProperty("tags", 1);
   });
 });

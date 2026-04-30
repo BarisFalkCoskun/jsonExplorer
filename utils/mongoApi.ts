@@ -32,9 +32,7 @@ export const normalizeProductImageUrl = (path: unknown): string => {
   return "";
 };
 
-export const normalizeMongoImageSource = (
-  value: unknown
-): MongoImageSource =>
+export const normalizeMongoImageSource = (value: unknown): MongoImageSource =>
   value === "images" ? "images" : DEFAULT_MONGO_IMAGE_SOURCE;
 
 export const getMongoDocumentImageUrls = (
@@ -94,7 +92,44 @@ export const LISTING_PROJECTION = {
   oldImages: 1,
   productImages: 1,
   substituteGroup: 1,
+  tags: 1,
   title: 1,
+};
+
+export type MongoTagFilters = {
+  exclude: string[];
+  include: string[];
+};
+
+const normalizeMongoTags = (tags: string[]): string[] => [
+  ...new Set(tags.map((tag) => tag.trim()).filter(Boolean)),
+];
+
+export const normalizeMongoTagFilters = ({
+  exclude,
+  include,
+}: MongoTagFilters): MongoTagFilters => ({
+  exclude: normalizeMongoTags(exclude),
+  include: normalizeMongoTags(include),
+});
+
+export const buildMongoTagsFilter = (
+  tagFilters: MongoTagFilters
+): Record<string, unknown> => {
+  const { exclude, include } = normalizeMongoTagFilters(tagFilters);
+  const filters: Record<string, unknown>[] = [];
+
+  if (include.length > 0) {
+    filters.push({ tags: { $in: include } });
+  }
+
+  if (exclude.length > 0) {
+    filters.push({ tags: { $nin: exclude } });
+  }
+
+  if (filters.length === 0) return {};
+
+  return filters.length === 1 ? filters[0] : { $and: filters };
 };
 
 const nonEmptyStringField = (fieldPath: string): Record<string, unknown> => ({
